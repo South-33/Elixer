@@ -4,7 +4,7 @@ import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { Sidebar } from "./Sidebar";
 
 // Type for Convex message document
@@ -26,16 +26,47 @@ const CloseIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
 );
 
+function renderMessageContent(content: string): React.ReactNode {
+  const lines = content.split('\n');
+  const renderedLines: React.ReactNode[] = [];
 
-function renderMessageContent(content: string) {
-  const parts = content.split(/(\*[^*]+\*)/g);
-  return parts.map((part, index) => {
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <strong key={index} className="font-semibold">{part.slice(1, -1)}</strong>;
+  lines.forEach((line, lineIndex) => {
+    const lineKey = `line-${lineIndex}`;
+    let currentLineContent: React.ReactNode[] = [];
+    let remainingLine = line;
+
+    // Check for list item marker at the beginning of the line (* followed by a space)
+    if (remainingLine.startsWith('* ')) {
+      currentLineContent.push(<span key={`${lineKey}-bullet`} className="mr-1">•</span>);
+      remainingLine = remainingLine.substring(2); // Remove '* '
     }
-    return <span key={index}>{part}</span>;
+
+    // Process the remaining line for inline bolding (*word*)
+    const parts = remainingLine.split(/(\*[^*]+\*)/g).filter(part => part.length > 0);
+
+    parts.forEach((part, partIndex) => {
+      const partKey = `${lineKey}-part-${partIndex}`;
+      if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+        // If the part matches the emphasis pattern (*word*), render it as strong
+        // Ensure content between asterisks is not just whitespace
+        if (part.slice(1, -1).trim().length > 0) {
+          currentLineContent.push(<strong key={partKey} className="font-semibold">{part.slice(1, -1)}</strong>);
+        } else {
+          // Handle cases like * * or just ** within the line - render as plain text
+           currentLineContent.push(<React.Fragment key={partKey}>{part}</React.Fragment>);
+        }
+      } else {
+        // Otherwise, this part is plain text
+        currentLineContent.push(<React.Fragment key={partKey}>{part}</React.Fragment>);
+      }
+    });
+
+    renderedLines.push(<div key={lineKey}>{currentLineContent}</div>);
   });
+
+  return <>{renderedLines}</>;
 }
+
 
 const MemoizedChatMessage = React.memo(({ message, displayContent }: { message: MessageDoc, displayContent: string }) => {
   return (
@@ -54,7 +85,7 @@ const MemoizedChatMessage = React.memo(({ message, displayContent }: { message: 
         {message.role === "assistant" && message.isStreaming && displayContent === "" ? (
           <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
         ) : (
-          <p className="whitespace-pre-wrap leading-relaxed">{renderMessageContent(displayContent)}</p>
+          <div className="whitespace-pre-wrap leading-relaxed">{renderMessageContent(displayContent)}</div>
         )}
       </div>
     </div>
@@ -85,7 +116,7 @@ export default function App() {
           <Authenticated>
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400" // Removed md:hidden
+              className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400" 
               title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
               aria-expanded={isSidebarOpen}
               aria-controls="app-sidebar"
@@ -114,7 +145,7 @@ export default function App() {
         <Authenticated>
           <AuthenticatedContent
             isSidebarOpen={isSidebarOpen}
-            setIsSidebarOpen={setIsSidebarOpen} // Pass down setter for internal close if needed
+            setIsSidebarOpen={setIsSidebarOpen} 
           />
         </Authenticated>
       </div>
@@ -248,7 +279,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
                                tonePrompt !== savedPrompts.tonePrompt ||
                                policyPrompt !== savedPrompts.policyPrompt;
 
-    if ((savedPrompts.lawPrampt !== undefined || savedPrompts.tonePrompt !== undefined || savedPrompts.policyPrompt !== undefined) && promptsChangedByUser) {
+    if ((savedPrompts.lawPrompt !== undefined || savedPrompts.tonePrompt !== undefined || savedPrompts.policyPrompt !== undefined) && promptsChangedByUser) { // Corrected: lawPrampt to lawPrompt
         if (savePromptTimeoutRef.current !== null) {
             window.clearTimeout(savePromptTimeoutRef.current);
         }
@@ -279,6 +310,13 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
         setStreamingIntervalId(null);
     }
     setShowLocalPendingIndicator(true);
+
+    console.log("Sending message with prompts:", {
+      content: userMessageContent,
+      lawPrompt,
+      tonePrompt,
+      policyPrompt,
+    });
 
     try {
       await sendMessage({
@@ -316,7 +354,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
     <>
       <Sidebar
         isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)} // Sidebar's internal close button
+        onClose={() => setIsSidebarOpen(false)} 
         lawPrompt={lawPrompt}
         onLawPromptChange={setLawPrompt}
         tonePrompt={tonePrompt}
@@ -325,26 +363,25 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
         onPolicyPromptChange={setPolicyPrompt}
         onClearChat={handleClearChat}
         hasActivePrompts={hasActivePrompts}
-        id="app-sidebar"
+        // id="app-sidebar" // id was here, make sure it's associated with aria-controls if needed
       />
-      {isSidebarOpen && ( // Backdrop for overlay effect on smaller screens
+      {isSidebarOpen && ( 
         <div
           className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 md:hidden"
           onClick={() => setIsSidebarOpen(false)}
           aria-hidden="true"
         ></div>
       )}
-      {/* Main chat content area */}
       <main 
+        id="app-sidebar" // Moved id here for aria-controls if sidebar is controlled by header button
         className={`
           flex-1 flex flex-col bg-white overflow-hidden 
           md:my-4 md:mr-4 md:rounded-lg md:shadow-lg 
           transition-[margin-left] duration-300 ease-in-out
           ${isSidebarOpen ? 'md:ml-72 lg:ml-80' : 'ml-0'} 
           `}
-        /* The 'md:ml-72 lg:ml-80' values should match Sidebar's md and lg widths */
       >
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar"> {/* Added custom-scrollbar */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar"> 
           {messages.map((message) => (
             <MemoizedChatMessage
               key={message._id}

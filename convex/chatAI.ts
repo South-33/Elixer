@@ -45,10 +45,10 @@ export const getAIResponse = action({
 
     // Combine the separate prompts into a single system prompt
     const combinedSystemPrompt = [
-      stylingPrompt, // Add the backend-only styling prompt
       lawPrompt,
-      policyPrompt, // Assuming policy comes after laws
-      tonePrompt,   // Assuming tone comes last
+      policyPrompt,
+      tonePrompt,
+      stylingPrompt, // Place styling prompt at the end
     ]
       .filter(Boolean) // Remove any undefined or empty strings
       .join("\n\n"); // Separate prompts with double newlines
