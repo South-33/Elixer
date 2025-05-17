@@ -34,13 +34,14 @@ export const sendMessage = mutation({
 });
 
 export const getMessages = query({
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
+  args: { userId: v.id("users") }, // Add userId argument
+  handler: async (ctx, args) => { // Add args parameter
+    // const userId = await getAuthUserId(ctx); // No longer needed here
+    // if (!userId) return []; // No longer needed here
 
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_user", q => q.eq("userId", userId))
+      .withIndex("by_user", q => q.eq("userId", args.userId)) // Use the argument userId
       .order("desc")
       .collect();
 
