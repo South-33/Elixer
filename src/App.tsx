@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Dispatch, SetStateAction } from "react";
 import { Authenticated, Unauthenticated, useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { Sidebar } from "./Sidebar";
 
 // Type for Convex message document
@@ -22,10 +22,9 @@ type MessageDoc = {
 const MenuIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
 );
-const CloseIcon = () => ( 
+const CloseIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
 );
-
 
 function renderMessageContent(content: string) {
   const parts = content.split(/(\*[^*]+\*)/g);
@@ -51,6 +50,8 @@ const MemoizedChatMessage = React.memo(({ message, displayContent }: { message: 
             : "bg-slate-100 text-slate-800"
         }`}
       >
+        {/* Show typing indicator if it's an assistant message, actively streaming from DB, but liveStreamingContent is still empty */}
+        {/* OR if we are showing the local pending indicator (which implies liveStreamingContent is also empty for the new message) */}
         {message.role === "assistant" && message.isStreaming && displayContent === "" ? (
           <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
         ) : (
@@ -64,7 +65,6 @@ const MemoizedChatMessage = React.memo(({ message, displayContent }: { message: 
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Optional: Close sidebar on ESC key
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -77,7 +77,6 @@ export default function App() {
     };
   }, []);
 
-
   return (
     <div className="min-h-screen flex flex-col bg-gray-100 text-slate-800">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md p-3 sm:p-4 flex justify-between items-center border-b border-slate-200 h-16 shadow-sm">
@@ -85,7 +84,7 @@ export default function App() {
           <Authenticated>
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400" // Removed md:hidden
+              className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
               title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
               aria-expanded={isSidebarOpen}
               aria-controls="app-sidebar"
@@ -114,7 +113,7 @@ export default function App() {
         <Authenticated>
           <AuthenticatedContent
             isSidebarOpen={isSidebarOpen}
-            setIsSidebarOpen={setIsSidebarOpen} // Pass down setter for internal close if needed
+            setIsSidebarOpen={setIsSidebarOpen}
           />
         </Authenticated>
       </div>
@@ -124,32 +123,42 @@ export default function App() {
 }
 
 function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOpen: boolean, setIsSidebarOpen: (isOpen: boolean) => void }) {
-  const messages = useQuery(api.chat.getMessages) || [] as MessageDoc[];
+  const user = useQuery(api.auth.loggedInUser);
+
+  const messages = useQuery(
+    api.chat.getMessages,
+    user?._id ? { userId: user._id } : { skip: true }
+  ) || [] as MessageDoc[];
+
   const savedPrompts = useQuery(api.chat.getSystemPrompts) || { lawPrompt: "", tonePrompt: "", policyPrompt: "" };
-  
+
   const sendMessage = useMutation(api.chat.sendMessage)
     .withOptimisticUpdate(
       (optimisticStore, args: { content: string; lawPrompt?: string; tonePrompt?: string; policyPrompt?: string; }) => {
-        const currentMessages = optimisticStore.getQuery(api.chat.getMessages, {}) || [] as MessageDoc[];
-        const timestamp = Date.now();
-        const optimisticUserMessage: MessageDoc = {
-          _id: `optimistic-user-${timestamp}` as Id<"messages">,
-          _creationTime: timestamp,
-          role: "user",
-          content: args.content,
-          userId: "optimistic-user-id-placeholder" as Id<"users">,
-        };
-        optimisticStore.setQuery(api.chat.getMessages, {}, [...currentMessages, optimisticUserMessage]);
+        if (user?._id) {
+          const currentMessages = optimisticStore.getQuery(api.chat.getMessages, { userId: user._id }) || [] as MessageDoc[];
+          const timestamp = Date.now();
+          const optimisticUserMessage: MessageDoc = {
+            _id: `optimistic-user-${timestamp}` as Id<"messages">,
+            _creationTime: timestamp,
+            role: "user",
+            content: args.content,
+            userId: user._id,
+          };
+          optimisticStore.setQuery(api.chat.getMessages, { userId: user._id }, [...currentMessages, optimisticUserMessage]);
+        } else {
+          console.warn("Optimistic update for sendMessage skipped: user._id not available.");
+        }
       }
     );
   const saveSystemPrompt = useMutation(api.chat.saveSystemPrompt);
   const clearChat = useMutation(api.chat.clearChat);
-  
+
   const [newMessage, setNewMessage] = useState("");
   const [lawPrompt, setLawPrompt] = useState(savedPrompts.lawPrompt);
   const [tonePrompt, setTonePrompt] = useState(savedPrompts.tonePrompt);
   const [policyPrompt, setPolicyPrompt] = useState(savedPrompts.policyPrompt);
-    
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const savePromptTimeoutRef = useRef<number | null>(null);
 
@@ -159,30 +168,23 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
   const [showLocalPendingIndicator, setShowLocalPendingIndicator] = useState(false);
 
   useEffect(() => {
-    if (savedPrompts && (
-        lawPrompt !== savedPrompts.lawPrompt ||
-        tonePrompt !== savedPrompts.tonePrompt ||
-        policyPrompt !== savedPrompts.policyPrompt
-    )) {
-        if(savedPrompts.lawPrompt !== undefined || savedPrompts.tonePrompt !== undefined || savedPrompts.policyPrompt !== undefined){
-            setLawPrompt(savedPrompts.lawPrompt);
-            setTonePrompt(savedPrompts.tonePrompt);
-            setPolicyPrompt(savedPrompts.policyPrompt);
-        }
+    if (savedPrompts) {
+        if (savedPrompts.lawPrompt !== undefined) { setLawPrompt(savedPrompts.lawPrompt); }
+        if (savedPrompts.tonePrompt !== undefined) { setTonePrompt(savedPrompts.tonePrompt); }
+        if (savedPrompts.policyPrompt !== undefined) { setPolicyPrompt(savedPrompts.policyPrompt); }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedPrompts]);
-
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
-    const streamingDbMessage = messages.find(msg => msg.role === "assistant" && msg.isStreaming);
+    const streamingDbMessage = messages.find((msg: MessageDoc) => msg.role === "assistant" && msg.isStreaming);
 
     if (streamingDbMessage) {
-      setShowLocalPendingIndicator(false);
+      setShowLocalPendingIndicator(false); // DB stream started, hide local indicator
       const fullDbContent = streamingDbMessage.content || "";
       const currentlyDisplayedOrBufferedLength = liveStreamingContent.length + contentBuffer.current.length;
 
@@ -193,43 +195,53 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
       if (streamingIntervalId === null) {
         const id = window.setInterval(() => {
           if (contentBuffer.current.length > 0) {
-            const chunkSize = Math.max(1, Math.floor(contentBuffer.current.length / 10));
+            const chunkSize = Math.max(1, Math.floor(contentBuffer.current.length / 10)); // Dynamic chunk size
             const nextChunk = contentBuffer.current.substring(0, chunkSize);
             contentBuffer.current = contentBuffer.current.substring(chunkSize);
             setLiveStreamingContent(prev => prev + nextChunk);
           } else {
-            const latestDbMessageInstance = messages.find(m => m._id === streamingDbMessage._id);
+            const latestDbMessageInstance = messages.find((m: MessageDoc) => m._id === streamingDbMessage._id);
             if (!latestDbMessageInstance || !latestDbMessageInstance.isStreaming) {
               clearInterval(id);
               setStreamingIntervalId(null);
               if (latestDbMessageInstance) {
-                setLiveStreamingContent(latestDbMessageInstance.content || "");
+                setLiveStreamingContent(latestDbMessageInstance.content || ""); // Ensure final content is set
               }
             }
           }
-        }, 50); 
+        }, 50); // Interval for smoother animation
         setStreamingIntervalId(id);
       }
     } else {
+      // No message is currently marked as streaming in the database
       if (streamingIntervalId !== null) {
         clearInterval(streamingIntervalId);
         setStreamingIntervalId(null);
       }
-      const lastAssistantMessage = messages.filter(m => m.role === 'assistant').pop();
-      if (liveStreamingContent && lastAssistantMessage && !lastAssistantMessage.isStreaming) {
-         if (liveStreamingContent !== lastAssistantMessage.content) {
+      contentBuffer.current = ""; // Clear buffer if no longer streaming
+
+      // If we are NOT showing a local pending indicator (meaning a new message was NOT just sent and awaiting response)
+      // then try to sync liveStreamingContent with the last settled assistant message.
+      if (!showLocalPendingIndicator) {
+        const lastAssistantMessage = messages
+          .filter((m: MessageDoc) => m.role === 'assistant' && !m.isStreaming) // Only settled messages
+          .pop();
+
+        if (lastAssistantMessage) {
+          // If liveStreamingContent is different from the last settled assistant message, update it.
+          // This primarily handles the case where a stream just finished, and we need to ensure the final DB content is displayed.
+          if (liveStreamingContent !== (lastAssistantMessage.content || "")) {
             setLiveStreamingContent(lastAssistantMessage.content || "");
-         }
-      } else if (!messages.some(m => m.role === 'assistant' && m.isStreaming) && liveStreamingContent) {
-         if (lastAssistantMessage) { 
-            if (liveStreamingContent !== lastAssistantMessage.content) {
-                setLiveStreamingContent(lastAssistantMessage.content || ""); 
-            }
-         } else { 
-            setLiveStreamingContent(""); 
-         }
+          }
+        } else if (liveStreamingContent) {
+          // If there are no assistant messages at all (e.g., after clearing chat),
+          // and liveStreamingContent still has something, clear it.
+          setLiveStreamingContent("");
+        }
       }
-      contentBuffer.current = "";
+      // If showLocalPendingIndicator IS true, it means handleSend just ran,
+      // liveStreamingContent was set to "", and the local "..." indicator will be shown.
+      // So, no need to modify liveStreamingContent here in that specific sub-case.
     }
 
     return () => {
@@ -237,7 +249,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
         clearInterval(streamingIntervalId);
       }
     };
-  }, [messages, streamingIntervalId, liveStreamingContent]);
+  }, [messages, streamingIntervalId, liveStreamingContent, showLocalPendingIndicator]);
 
   useEffect(() => {
     scrollToBottom();
@@ -248,7 +260,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
                                tonePrompt !== savedPrompts.tonePrompt ||
                                policyPrompt !== savedPrompts.policyPrompt;
 
-    if ((savedPrompts.lawPrampt !== undefined || savedPrompts.tonePrompt !== undefined || savedPrompts.policyPrompt !== undefined) && promptsChangedByUser) {
+    if (savedPrompts && promptsChangedByUser) {
         if (savePromptTimeoutRef.current !== null) {
             window.clearTimeout(savePromptTimeoutRef.current);
         }
@@ -256,67 +268,80 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
             saveSystemPrompt({ lawPrompt, tonePrompt, policyPrompt });
         }, 1000);
     }
-
     return () => {
       if (savePromptTimeoutRef.current !== null) {
         window.clearTimeout(savePromptTimeoutRef.current);
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt]);
-
+  }, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, savedPrompts]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const userMessageContent = newMessage.trim();
-    if (!userMessageContent) return;
+    // Recalculate current streaming state accurately before deciding to send
+    const isCurrentlyStreaming = messages.some((msg: MessageDoc) => msg.isStreaming) || showLocalPendingIndicator;
+
+    if (!userMessageContent || isCurrentlyStreaming) return;
 
     setNewMessage("");
-    setLiveStreamingContent("");
+    setLiveStreamingContent(""); // CRITICAL: Clear for the new incoming response
     contentBuffer.current = "";
     if (streamingIntervalId !== null) {
         clearInterval(streamingIntervalId);
         setStreamingIntervalId(null);
     }
-    setShowLocalPendingIndicator(true);
+    setShowLocalPendingIndicator(true); // Show local pending state immediately
 
     try {
+      if (!user?._id) {
+        console.error("User not loaded, cannot send message.");
+        toast.error("User not loaded. Please wait a moment.");
+        setShowLocalPendingIndicator(false);
+        return;
+      }
       await sendMessage({
         content: userMessageContent,
         lawPrompt,
         tonePrompt,
         policyPrompt,
       });
+      // setShowLocalPendingIndicator(false) will be handled by the effect when DB stream starts or if an error occurs later
     } catch (error) {
       console.error("Failed to send message:", error);
       toast.error("Failed to send message. Please try again.");
-      setShowLocalPendingIndicator(false);
+      setShowLocalPendingIndicator(false); // Hide pending indicator on send error
     }
   };
 
   const handleClearChat = async () => {
     if (window.confirm("Are you sure you want to clear all messages? This action cannot be undone.")) {
-      await clearChat();
-      setLiveStreamingContent("");
-      contentBuffer.current = "";
-      if (streamingIntervalId !== null) {
-        clearInterval(streamingIntervalId);
-        setStreamingIntervalId(null);
+      try {
+        await clearChat();
+        setLiveStreamingContent("");
+        contentBuffer.current = "";
+        if (streamingIntervalId !== null) {
+          clearInterval(streamingIntervalId);
+          setStreamingIntervalId(null);
+        }
+        setShowLocalPendingIndicator(false);
+        toast.success("Chat history cleared.");
+      } catch (error) {
+        console.error("Failed to clear chat:", error);
+        toast.error("Failed to clear chat history.");
       }
-      setShowLocalPendingIndicator(false);
-      toast.success("Chat history cleared.");
     }
   };
 
   const hasActivePrompts = !!(lawPrompt || tonePrompt || policyPrompt);
-  const isStreaming = messages.some(msg => msg.isStreaming) || showLocalPendingIndicator;
-
+  // This is the global "isStreaming" used to disable UI elements
+  const isStreaming = messages.some((msg: MessageDoc) => msg.isStreaming) || showLocalPendingIndicator;
 
   return (
     <>
       <Sidebar
         isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)} // Sidebar's internal close button
+        onClose={() => setIsSidebarOpen(false)}
         lawPrompt={lawPrompt}
         onLawPromptChange={setLawPrompt}
         tonePrompt={tonePrompt}
@@ -325,35 +350,33 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
         onPolicyPromptChange={setPolicyPrompt}
         onClearChat={handleClearChat}
         hasActivePrompts={hasActivePrompts}
-        id="app-sidebar"
       />
-      {isSidebarOpen && ( // Backdrop for overlay effect on smaller screens
+      {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 md:hidden"
           onClick={() => setIsSidebarOpen(false)}
           aria-hidden="true"
         ></div>
       )}
-      {/* Main chat content area */}
-      <main 
+      <main
         className={`
-          flex-1 flex flex-col bg-white overflow-hidden 
-          md:my-4 md:mr-4 md:rounded-lg md:shadow-lg 
+          flex-1 flex flex-col bg-white overflow-hidden
+          md:my-4 md:mr-4 md:rounded-lg md:shadow-lg
           transition-[margin-left] duration-300 ease-in-out
-          ${isSidebarOpen ? 'md:ml-72 lg:ml-80' : 'ml-0'} 
+          ${isSidebarOpen ? 'md:ml-72 lg:ml-80' : 'ml-0'}
           `}
-        /* The 'md:ml-72 lg:ml-80' values should match Sidebar's md and lg widths */
       >
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar"> {/* Added custom-scrollbar */}
-          {messages.map((message) => (
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
+          {messages.map((message: MessageDoc) => (
             <MemoizedChatMessage
               key={message._id}
               message={message}
-              displayContent={message.isStreaming ? liveStreamingContent : message.content}
+              displayContent={message.role === 'assistant' && message.isStreaming ? liveStreamingContent : message.content}
             />
           ))}
+          {/* Show local "..." indicator if we've initiated a send, but no DB message is yet marked as streaming */}
           {showLocalPendingIndicator &&
-            !messages.some(msg => msg.role === 'assistant' && msg.isStreaming) && (
+            !messages.some((msg: MessageDoc) => msg.role === 'assistant' && msg.isStreaming) && (
             <div className="flex justify-start" key="local-pending-jsx-indicator">
               <div className="max-w-[80%] p-3 rounded-lg bg-slate-100 text-slate-800">
                 <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
