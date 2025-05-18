@@ -6,6 +6,7 @@ import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
 import { Toaster, toast } from "sonner";
 import { Sidebar } from "./Sidebar";
+import ReactMarkdown from 'react-markdown';
 
 // Type for Convex message document
 type MessageDoc = {
@@ -26,16 +27,6 @@ const CloseIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
 );
 
-function renderMessageContent(content: string) {
-  const parts = content.split(/(\*[^*]+\*)/g);
-  return parts.map((part, index) => {
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <strong key={index} className="font-semibold">{part.slice(1, -1)}</strong>;
-    }
-    return <span key={index}>{part}</span>;
-  });
-}
-
 const MemoizedChatMessage = React.memo(({ message, displayContent }: { message: MessageDoc, displayContent: string }) => {
   return (
     <div
@@ -47,7 +38,7 @@ const MemoizedChatMessage = React.memo(({ message, displayContent }: { message: 
         className={`max-w-[85%] sm:max-w-[80%] p-3 rounded-xl shadow-sm ${
           message.role === "user"
             ? "bg-blue-500 text-white"
-            : "bg-slate-100 text-slate-800"
+            : "bg-slate-100 text-slate-800 prose" // Add prose class here
         }`}
       >
         {/* Show typing indicator if it's an assistant message, actively streaming from DB, but liveStreamingContent is still empty */}
@@ -55,7 +46,7 @@ const MemoizedChatMessage = React.memo(({ message, displayContent }: { message: 
         {message.role === "assistant" && message.isStreaming && displayContent === "" ? (
           <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
         ) : (
-          <p className="whitespace-pre-wrap leading-relaxed">{renderMessageContent(displayContent)}</p>
+          <ReactMarkdown>{displayContent}</ReactMarkdown> // Use ReactMarkdown here
         )}
       </div>
     </div>
@@ -127,7 +118,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
 
   const messages = useQuery(
     api.chat.getMessages,
-    user?._id ? { userId: user._id } : { skip: true }
+    user?._id ? { userId: user._id } : "skip"
   ) || [] as MessageDoc[];
 
   const savedPrompts = useQuery(api.chat.getSystemPrompts) || { lawPrompt: "", tonePrompt: "", policyPrompt: "" };
@@ -378,7 +369,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
           {showLocalPendingIndicator &&
             !messages.some((msg: MessageDoc) => msg.role === 'assistant' && msg.isStreaming) && (
             <div className="flex justify-start" key="local-pending-jsx-indicator">
-              <div className="max-w-[80%] p-3 rounded-lg bg-slate-100 text-slate-800">
+              <div className="max-w-[80%] p-3 rounded-lg bg-slate-100 text-slate-800 prose"> {/* Add prose class here */}
                 <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
               </div>
             </div>
