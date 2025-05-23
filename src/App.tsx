@@ -125,7 +125,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
 
   const sendMessage = useMutation(api.chat.sendMessage)
     .withOptimisticUpdate(
-      (optimisticStore, args: { content: string; lawPrompt?: string; tonePrompt?: string; policyPrompt?: string; }) => {
+      (optimisticStore, args: { content: string; lawPrompt?: string; tonePrompt?: string; policyPrompt?: string; selectedModel?: string; }) => {
         if (user?._id) {
           const currentMessages = optimisticStore.getQuery(api.chat.getMessages, { userId: user._id }) || [] as MessageDoc[];
           const timestamp = Date.now();
@@ -149,6 +149,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
   const [lawPrompt, setLawPrompt] = useState(savedPrompts.lawPrompt);
   const [tonePrompt, setTonePrompt] = useState(savedPrompts.tonePrompt);
   const [policyPrompt, setPolicyPrompt] = useState(savedPrompts.policyPrompt);
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-04-17"); // Default model
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const savePromptTimeoutRef = useRef<number | null>(null);
@@ -296,6 +297,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
         lawPrompt,
         tonePrompt,
         policyPrompt,
+        selectedModel,
       });
       // setShowLocalPendingIndicator(false) will be handled by the effect when DB stream starts or if an error occurs later
     } catch (error) {
@@ -341,6 +343,8 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
         onPolicyPromptChange={setPolicyPrompt}
         onClearChat={handleClearChat}
         hasActivePrompts={hasActivePrompts}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
       />
       {isSidebarOpen && (
         <div

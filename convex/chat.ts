@@ -9,6 +9,7 @@ export const sendMessage = mutation({
     lawPrompt: v.optional(v.string()),
     tonePrompt: v.optional(v.string()),
     policyPrompt: v.optional(v.string()),
+    selectedModel: v.optional(v.string()), // Add selectedModel here
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -29,6 +30,7 @@ export const sendMessage = mutation({
       lawPrompt: args.lawPrompt || "",
       tonePrompt: args.tonePrompt || "",
       policyPrompt: args.policyPrompt || "",
+      selectedModel: args.selectedModel, // Pass selectedModel to the action
     });
   },
 });

@@ -158,10 +158,11 @@ export const getAIResponse = action({
     lawPrompt: v.optional(v.string()),
     tonePrompt: v.optional(v.string()),
     policyPrompt: v.optional(v.string()),
+    selectedModel: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Id<"messages">> => {
-    const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt } = args;
-    console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}"`);
+    const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel } = args;
+    console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}"`);
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
 
     let searchContextForLLM = "";
@@ -223,7 +224,7 @@ Your primary goal is to answer the user's question.
 - Always be concise and directly address the user's original question.
 `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-04-17" });
+    const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
     const previousMessages = await ctx.runQuery(api.chat.getMessages, { userId: userId });
     const formattedHistory = previousMessages.map(msg => ({
       role: msg.role === "user" ? "user" : "model",

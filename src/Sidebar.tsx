@@ -81,6 +81,8 @@ export interface SidebarProps {
   onPolicyPromptChange: (value: string) => void;
   onClearChat: () => void;
   hasActivePrompts: boolean;
+  selectedModel: string;
+  onModelChange: (model: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -94,6 +96,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onPolicyPromptChange,
   onClearChat,
   hasActivePrompts,
+  selectedModel,
+  onModelChange,
 }) => {
   const [arePromptsExpanded, setArePromptsExpanded] = useState(true);
 
@@ -139,7 +143,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className={`flex-1 flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar ${arePromptsExpanded ? 'flex' : 'hidden'}`}> {/* Added custom-scrollbar if you uncomment CSS */}
+      <div className={`flex-1 flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar ${arePromptsExpanded ? 'flex' : 'hidden'}`}>
+        <div>
+          <label htmlFor="aiModelSelect" className="block text-sm font-medium text-gray-700 mb-1">
+            AI Model:
+          </label>
+          <select
+            id="aiModelSelect"
+            className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+            value={selectedModel}
+            onChange={(e) => onModelChange(e.target.value)}
+          >
+            <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 Flash</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+          </select>
+        </div>
         <div>
           <label htmlFor="lawPromptAreaSidebar" className="block text-sm font-medium text-gray-700 mb-1">
             Laws & Regulations:
