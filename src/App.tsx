@@ -115,6 +115,7 @@ export default function App() {
 
 function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOpen: boolean, setIsSidebarOpen: (isOpen: boolean) => void }) {
   const user = useQuery(api.auth.loggedInUser);
+  const [currentSidebarWidth, setCurrentSidebarWidth] = useState(0); // State to hold sidebar width
 
   const messages = useQuery(
     api.chat.getMessages,
@@ -345,6 +346,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
         hasActivePrompts={hasActivePrompts}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
+        onWidthChange={setCurrentSidebarWidth} // Pass the setter for sidebar width
       />
       {isSidebarOpen && (
         <div
@@ -358,8 +360,8 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
           flex-1 flex flex-col bg-white overflow-hidden
           md:my-4 md:mr-4 md:rounded-lg md:shadow-lg
           transition-[margin-left] duration-300 ease-in-out
-          ${isSidebarOpen ? 'md:ml-72 lg:ml-80' : 'ml-0'}
           `}
+        style={{ marginLeft: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }} // Dynamic margin
       >
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
           {messages.map((message: MessageDoc) => (
