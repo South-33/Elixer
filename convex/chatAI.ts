@@ -52,10 +52,13 @@ const WEB_SEARCH_TIMEOUT_MS = 4000;
 
 // New function to decide if a search is needed
 // Inside shouldPerformSearch - REVISED PROMPT
-async function shouldPerformSearch(userMessage: string, genAI: GoogleGenerativeAI): Promise<boolean> {
+async function shouldPerformSearch(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], selectedModel: string | undefined, genAI: GoogleGenerativeAI): Promise<boolean> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-04-17" });
-    const prompt = `Analyze the following user message. Your task is to decide if a web search would significantly improve the quality, accuracy, or recency of the answer. Output only "YES" or "NO".
+    const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
+    const prompt = `Analyze the following user message in the context of the provided conversation history. Your task is to decide if a web search would significantly improve the quality, accuracy, or recency of the answer. Output only "YES" or "NO".
+
+**Conversation History (most recent last):**
+${history.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
 
 **Strong reasons to search ("YES"):**
 - The query explicitly asks for current or real-time information (e.g., "What's the weather like in London right now?", "latest news on X", "current stock price of Y").
@@ -79,7 +82,7 @@ async function shouldPerformSearch(userMessage: string, genAI: GoogleGenerativeA
 
 User Message: "${userMessage}"
 
-Decision (YES or NO):`; // Changed the final line slightly for clarity
+Decision (YES or NO):`;
 
     console.log("[shouldPerformSearch] Prompting to decide on search for user message:", userMessage);
     const result = await model.generateContent(prompt);
@@ -92,10 +95,27 @@ Decision (YES or NO):`; // Changed the final line slightly for clarity
   }
 }
 
-async function generateSearchQuery(userMessage: string, genAI: GoogleGenerativeAI): Promise<string> {
+async function generateSearchQuery(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], lawPrompt: string | undefined, tonePrompt: string | undefined, policyPrompt: string | undefined, selectedModel: string | undefined, genAI: GoogleGenerativeAI): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-04-17" });
-    const prompt = `Based on the following user message, generate a concise and effective Google search query to find the core information requested. The user's message has been deemed to require a web search. Output only the search query itself, without any preamble or explanation.
+    const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
+    const dynamicPrompts = [
+      lawPrompt,
+      policyPrompt,
+      tonePrompt,
+    ].filter(Boolean).join("\n\n");
+
+    const prompt = `Based on the following user message and the conversation history, and considering the following system prompts, generate a effective Google search query to find the core information requested. The user's message has been deemed to require a web search. Output only the search query itself, without any preamble or explanation.
+
+**System Prompts (if any):**
+${dynamicPrompts}
+
+**Conversation History (most recent last):**
+${history.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
+
+**Guidance for Search Query Generation:**
+- If the user's message or conversation history implies a search for quality, ranking, or recommendations (e.g., "best", "top", "leading", "highly-rated"), incorporate these terms into the search query.
+- Be specific and concise.
+
 User Message: "${userMessage}"
 Search Query:`;
     console.log("[generateSearchQuery] Generating search query for:", userMessage);
@@ -168,13 +188,25 @@ export const getAIResponse = action({
     let searchContextForLLM = "";
     let searchInfoForSystemPrompt = "Web search was not performed for this query, as it was deemed unnecessary or the query was conversational. Answer from general knowledge.";
 
-    const performSearch = await shouldPerformSearch(userMessage, genAI);
+    const previousMessages = await ctx.runQuery(api.chat.getMessages, { userId: userId });
+    const formattedHistory = previousMessages.map(msg => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    }));
+    console.log("[getAIResponse] Formatted conversation history:", JSON.stringify(formattedHistory, null, 2));
+
+    console.log("[getAIResponse] Calling shouldPerformSearch with user message, history, and selected model...");
+    const performSearch = await shouldPerformSearch(userMessage, formattedHistory, selectedModel, genAI);
+    console.log(`[getAIResponse] shouldPerformSearch returned: ${performSearch}`);
 
     let optimizedSearchQuery = ""; // Initialize
     if (performSearch) {
       console.log("[getAIResponse] Decision: Performing web search.");
-      optimizedSearchQuery = await generateSearchQuery(userMessage, genAI);
+      console.log("[getAIResponse] Calling generateSearchQuery with user message, history, system prompts, and selected model...");
+      optimizedSearchQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI);
+      console.log(`[getAIResponse] generateSearchQuery returned: "${optimizedSearchQuery}"`);
       const searchResultsOrErrorKey = await searchWeb(optimizedSearchQuery);
+      console.log(`[getAIResponse] searchWeb returned: ${searchResultsOrErrorKey.substring(0, 100)}...`);
 
       if (searchResultsOrErrorKey === "WEB_SEARCH_TIMED_OUT") {
         searchInfoForSystemPrompt = `A web search attempt (query: "${optimizedSearchQuery}") timed out. Inform the user that the information could not be retrieved at this time. Do not attempt to answer the part of the query that required the search.`;
@@ -223,14 +255,9 @@ Your primary goal is to answer the user's question.
 - If no search was performed, or if search yielded no results for the specific information sought, answer from your general training knowledge to the best of your ability. Do not invent search results.
 - Always be concise and directly address the user's original question.
 `;
+    console.log("[getAIResponse] Final System Instruction (first 500 chars):", finalSystemInstruction.substring(0, 500) + "...");
 
     const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-    const previousMessages = await ctx.runQuery(api.chat.getMessages, { userId: userId });
-    const formattedHistory = previousMessages.map(msg => ({
-      role: msg.role === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
-    }));
-
     const chat = model.startChat({
       history: [
         { role: "user", parts: [{ text: finalSystemInstruction }] },
@@ -251,7 +278,7 @@ Your primary goal is to answer the user's question.
     // It includes the search context (if any) and then the user's original question.
     const messageToSendToGemini = (searchContextForLLM ? searchContextForLLM + "\n\nUser's original question: " : "User's original question: ") + userMessage;
     
-    console.log(`[getAIResponse] Sending to Gemini for response generation (first 200 chars): "${messageToSendToGemini.substring(0,200)}..."`);
+    console.log(`[getAIResponse] Sending to Gemini for response generation (first 500 chars): "${messageToSendToGemini.substring(0,500)}..."`);
 
     const streamResult = await chat.sendMessageStream(messageToSendToGemini);
 
