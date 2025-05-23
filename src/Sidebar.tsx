@@ -1,19 +1,6 @@
 // src/Sidebar.tsx
 import React, { useState } from 'react';
-
-// Placeholder SVG icons
-const ChevronDownIcon = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-);
-const ChevronUpIcon = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd"></path></svg>
-);
-const TrashIcon = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
-);
-const CloseIcon = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-);
+import { ChevronDownIcon, ChevronUpIcon, TrashIcon, XMarkIcon, ArrowsPointingOutIcon } from '@heroicons/react/20/solid';
 
 const DEFAULT_TONE_PROMPT = `Your Identity: You are the ELIXIR AI Assistant, specifically designed to serve users in Cambodia. Your persona is that of a friendly, highly knowledgeable, consistently trustworthy, and approachable guide for users navigating insurance through the ELIXIR platform within the Cambodian context.
 Your Voice & Personality:
@@ -100,6 +87,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onModelChange,
 }) => {
   const [arePromptsExpanded, setArePromptsExpanded] = useState(true);
+  const [showToneFullscreen, setShowToneFullscreen] = useState(false);
+  const [showPolicyFullscreen, setShowPolicyFullscreen] = useState(false);
+  const [showLawFullscreen, setShowLawFullscreen] = useState(false);
 
   const handleLoadDefaultPrompts = () => {
     onTonePromptChange(DEFAULT_TONE_PROMPT);
@@ -137,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={onClose}
             className="p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 md:hidden" // Kept md:hidden as header toggle is primary on desktop
           >
-            <CloseIcon />
+                <XMarkIcon className="h-6 w-6" />
             <span className="sr-only">Close Sidebar</span>
           </button>
         </div>
@@ -159,22 +149,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </select>
         </div>
         <div>
-          <label htmlFor="lawPromptAreaSidebar" className="block text-sm font-medium text-gray-700 mb-1">
-            Laws & Regulations:
-          </label>
+          <div className="flex justify-between items-center mb-1">
+            <label htmlFor="tonePromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
+              Tone & Role-Play:
+            </label>
+            <button
+              title="Expand Tone & Role-Play Prompt"
+              onClick={() => setShowToneFullscreen(true)}
+              className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+            >
+              <ArrowsPointingOutIcon className="h-5 w-5" />
+            </button>
+          </div>
           <textarea
-            id="lawPromptAreaSidebar"
+            id="tonePromptAreaSidebar"
             className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="e.g., GDPR, HIPAA compliance..."
-            value={lawPrompt}
-            onChange={(e) => onLawPromptChange(e.target.value)}
+            placeholder="e.g., Formal, empathetic, expert role..."
+            value={tonePrompt}
+            onChange={(e) => onTonePromptChange(e.target.value)}
             rows={4}
           />
         </div>
         <div>
-          <label htmlFor="policyPromptAreaSidebar" className="block text-sm font-medium text-gray-700 mb-1">
-            Company Policy:
-          </label>
+          <div className="flex justify-between items-center mb-1">
+            <label htmlFor="policyPromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
+              Company Policy:
+            </label>
+            <button
+              title="Expand Company Policy Prompt"
+              onClick={() => setShowPolicyFullscreen(true)}
+              className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+            >
+              <ArrowsPointingOutIcon className="h-5 w-5" />
+            </button>
+          </div>
           <textarea
             id="policyPromptAreaSidebar"
             className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
@@ -185,15 +193,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         </div>
         <div>
-          <label htmlFor="tonePromptAreaSidebar" className="block text-sm font-medium text-gray-700 mb-1">
-            Tone & Role-Play:
-          </label>
+          <div className="flex justify-between items-center mb-1">
+            <label htmlFor="lawPromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
+              Laws & Regulations:
+            </label>
+            <button
+              title="Expand Laws & Regulations Prompt"
+              onClick={() => setShowLawFullscreen(true)}
+              className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+            >
+              <ArrowsPointingOutIcon className="h-5 w-5" />
+            </button>
+          </div>
           <textarea
-            id="tonePromptAreaSidebar"
+            id="lawPromptAreaSidebar"
             className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="e.g., Formal, empathetic, expert role..."
-            value={tonePrompt}
-            onChange={(e) => onTonePromptChange(e.target.value)}
+            placeholder="e.g., GDPR, HIPAA compliance..."
+            value={lawPrompt}
+            onChange={(e) => onLawPromptChange(e.target.value)}
             rows={4}
           />
         </div>
@@ -214,9 +231,102 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="w-full px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
           title="Clear Chat History"
       >
-          <TrashIcon /> Clear Chat
+          <TrashIcon className="h-5 w-5" /> Clear Chat
           <span className="sr-only">Clear Chat History</span>
       </button>
+
+      {showToneFullscreen && (
+        <div
+          className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowToneFullscreen(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center p-4 border-b border-gray-200">
+              <h4 className="text-lg font-semibold text-gray-800">Edit Tone & Role-Play Prompt</h4>
+              <button
+                onClick={() => setShowToneFullscreen(false)}
+                className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+                title="Close Fullscreen Editor"
+                aria-label="Close Fullscreen Editor"
+                tabIndex={0}
+                role="button"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+            <textarea
+              className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+              value={tonePrompt}
+              onChange={(e) => onTonePromptChange(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {showPolicyFullscreen && (
+        <div
+          className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowPolicyFullscreen(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center p-4 border-b border-gray-200">
+              <h4 className="text-lg font-semibold text-gray-800">Edit Company Policy Prompt</h4>
+              <button
+                onClick={() => setShowPolicyFullscreen(false)}
+                className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+                title="Close Fullscreen Editor"
+                aria-label="Close Fullscreen Editor"
+                tabIndex={0}
+                role="button"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+            <textarea
+              className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+              value={policyPrompt}
+              onChange={(e) => onPolicyPromptChange(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {showLawFullscreen && (
+        <div
+          className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowLawFullscreen(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center p-4 border-b border-gray-200">
+              <h4 className="text-lg font-semibold text-gray-800">Edit Laws & Regulations Prompt</h4>
+              <button
+                onClick={() => setShowLawFullscreen(false)}
+                className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+                title="Close Fullscreen Editor"
+                aria-label="Close Fullscreen Editor"
+                tabIndex={0}
+                role="button"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+            <textarea
+              className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+              value={lawPrompt}
+              onChange={(e) => onLawPromptChange(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
     </aside>
   );
 };
