@@ -1,0 +1,804 @@
+{
+  "metadata": {
+    "title": "Law on Insurance",
+    "official_title": "PREAH RACH KRAM",
+    "document_id": "NS/RKM/0814/021",
+    "promulgation_date": "2014-08-04",
+    "effective_date": "2015-02-04",
+    "legislature_info": "Adopted by National Assembly on 27 June 2014 (2nd session, 5th legislature), reviewed by Senate on 21 July 2014 (5th session, 3rd legislature)",
+    "translation_status": "DFDL UNOFFICIAL TRANSLATION"
+  },
+  "preamble": [
+    "Having seen the Constitution of the Kingdom of Cambodia",
+    "Having seen Royal Kret No. NS/RKT/0913/903 of 24 September 2103 regarding the Appointment of the Royal Government of the Kingdom of Cambodia",
+    "Having seen Royal Kram No. 02/NS/94 of 20 July 1994 promulgating the Law on the Organization and Functioning of the Council of Ministers",
+    "Having seen Royal Kram No. NS/RKM/0196/18 of 24 January 1996 promulgating the Law on the Establishment of the Ministry of Economy and Finance",
+    "Having seen the proposal of Samdech Hun Sen, Prime Minister of the Kingdom of Cambodia"
+  ],
+  "chapters": [
+    {
+      "chapter_number": "I",
+      "chapter_title": "GENERAL PROVISIONS",
+      "articles": [
+        {
+          "article_number": "1",
+          "content": "The objectives of this Law are to ensure:",
+          "points": [
+            "sustainable development of insurance sector;",
+            "public interest and confidence in the insurance services;",
+            "consistency with the International Insurance Fundamental Principles ; and",
+            "benefits for the natural and legal person who are the insured person."
+          ]
+        },
+        {
+          "article_number": "2",
+          "content": "This Law aims to:",
+          "points": [
+            "strengthen the management and supervision of insurance business;",
+            "determine the management of insurance operations and the carrying on of insurance business; and",
+            "encourage competition, fairness and transparency in the insurance sector."
+          ]
+        },
+        {
+          "article_number": "3",
+          "content": "This Law applies to all insurance activities in the Kingdom of Cambodia save for provisions separately provided in Chapter 12 of this Law."
+        },
+        {
+          "article_number": "4",
+          "content": "Terms used in this Law have the following meanings:",
+          "definitions": {
+            "Insurance": "refers to a creation of an insurance contract in which an insured person shall pay the insurance premium to insurance company, and insurance company shall compensate for property damage or loss caused by accident, or make compensation when the insured person is dead, injured, disabled or ill, or when the insured person reaches the maturity which both parties agreed upon as specified in the insurance contract.",
+            "Compulsory insurance": "refers to a creation of an insurance contract in which the insured person is required to perform his/her obligations as determined by law and regulations on insurance for the purpose of serving and protecting the public interest.",
+            "Insurance contract": "refers to a written agreement made between insurance company and the insured person whereby the insurance company agrees to take any specific risks in return for a payment of premium by the insured person.",
+            "Cover note": "refers to a temporary document issued by insurance company or by insurance agent instead of definitive insurance policy.",
+            "Insurance company": "refers to Life Insurance Company, General Insurance Company, Micro-Insurance Company and Reinsurance Company.",
+            "Insurance institution": "refers to Insurance Company, Insurance Agent, Insurance Broker and Insurance Risk Evaluation Company.",
+            "Insurance policy": "refers to legally binding documents issued by insurance company which state the important contents and detailed conditions as agreed between the insurance company and the insured person in the insurance contract. The insurance policy shall be attached with insurance certificate or any other relevant documents.",
+            "Personal accident Insurance policy": "refers to an insurance contract whereby its interest which is in cash or its indemnity interest which is in kind or its interest of collective indemnity which is both in cash and in kind will be provided to the insured person upon the occurrence of an accident, the risk of such being insured.",
+            "Insurance premium": "refers to an amount of money to be paid by the insured person to insurance company as scheduled by the insurance company in the insurance policy.",
+            "Transitional penalty": "refers to penalty in cash against acts of the insurance company which does not follow the instruction of the insurance regulator.",
+            "Owner of insurance policy": "refers to a natural or legal person having legal rights over the insurance policy.",
+            "Insurance certificate": "refers to documents issued by an insurance company to certify that the insured person has purchased the insurance from the insurance company.",
+            "Insurance indemnity": "refers to indemnity made in cash or in kind, or collective indemnity, both in cash and in kind, to be paid by the insurance company.",
+            "Administrator": "refers to a temporary manager/director appointed by the Ministry of Economy and Finance to perform duties in the insurance company prior to liquidation so as to evaluate an insolvency status of the insurance company.",
+            "Liquidator": "refers to a natural person appointed by the Ministry of Economy and Finance or the court to resolve and pay the debts when the insurance company is under liquidation.",
+            "Insured person": "refers to a natural or legal person who purchases insurance policy, and in some cases may be both the owner of insurance policy and the insured person.",
+            "Beneficiary": "refers to a third party to a contract that has been determined as having legal rights to receive any interest payable under any contracts which are related to only life insurance.",
+            "Insurance applicant": "refers to a natural or legal person who may become an insured person in the future and has fulfilled and signed a written form/application of the insurance company describing personal circumstances.",
+            "Motor Vehicle": "refers to vehicles which are powered by engine to move either in water or on land."
+          }
+        }
+      ]
+    },
+    {
+      "chapter_number": "2",
+      "chapter_title": "COMPETENT INSTITUTION",
+      "articles": [
+        {
+          "article_number": "5",
+          "content": "The Ministry of Economy and Finance has a competence to issue regulations to oversee and inspect the conduct of insurance businesses pursuant to the provisions provided for in this Law."
+        },
+        {
+          "article_number": "6",
+          "content": "The Ministry of Economy and Finance has a competence to establish and manage funds for the insurance development to enhance the development, support and promotion of dissemination of insurance interest to the public."
+        }
+      ]
+    },
+    {
+      "chapter_number": "3",
+      "chapter_title": "INSURANCE CONTRACT",
+      "sections": [
+        {
+          "section_number": "I",
+          "section_title": "GENERAL FORMS",
+          "articles": [
+            {
+              "article_number": "7",
+              "content": "An Insurance, whether life or general insurance, which is beneficial to natural or legal person who is insured against any risks, shall be made only with insurance company having license to operate [the insurance business] in the Kingdom of Cambodia."
+            },
+            {
+              "article_number": "8",
+              "content": "Insurance contract shall clearly stipulate the relationship between the rights and duties of the insured person and the insurance company. The insurance contract shall be prepared in Khmer language and shall be signed and/or affixed with a thumbprint by both parties."
+            },
+            {
+              "article_number": "9",
+              "content": "In making insurance contract, the insured person and the insurance company shall respect the principles of good faith, mutual benefits, and unanimity through negotiation and shall not harm the public interest."
+            },
+            {
+              "article_number": "10",
+              "content": "The insurance company is obliged to clearly explain to the insured person the terms and conditions of insurance contract and the contents of the insurance policy which is attached with the insurance certificate and/or other relevant documents."
+            },
+            {
+              "article_number": "11",
+              "content": "When a natural or legal person applies for insurance and the insurance company accepts that request, and then the terms and conditions of the contract are agreed by both parties, the insurance contract may be deemed to have been agreed upon. Upon execution on the contract, the insurance company shall issue the insurance policy attached with an insurance certificate or issue a cover note and/or other relevant documents to the insurance applicant. The insurance policy attached with the insurance certificate and/or other relevant documents shall generally stipulate and determine the important contents which have been previously agreed by both parties."
+            },
+            {
+              "article_number": "12",
+              "content": "Insurance certificate shall specify:",
+              "points": [
+                "last name, first name, and address of the parties to the contract;",
+                "person or thing to be insured;",
+                "type of risks to be insured/covered;",
+                "commencement date and location of risks to be covered;",
+                "insured value;",
+                "insurance premium to be paid and method of payment;",
+                "methods and conditions for declarations of risks;",
+                "duration of contract and period of insurance; and",
+                "conditions determining invalidity and losing of rights, and conditions allowing each party to terminate the contract before expiry date."
+              ],
+              "additional_info": "Other than the foregoing items, the parties may include other items upon prior agreement between the parties."
+            },
+            {
+              "article_number": "13",
+              "content": "Only insurance policy or cover note specifies the mutual insurance between the insurance company and the insured person. Application for extension or amendment, or reactivation of the suspended insurance contract shall be deemed to have been agreed in the event that the insurance company does not reject such application within 15 (fifteen) days."
+            },
+            {
+              "article_number": "14",
+              "content": "The duration of an insurance contract is defined in the insurance policy. Any additions or modifications to the original insurance policy shall be made by supplemental contract and signed by both parties."
+            },
+            {
+              "article_number": "15",
+              "content": "The insured person shall gain the benefit from insurance which is the subject to be insured. Benefit from insurance refers to the indemnity made based on the subject to be insured. The subject to be insured consists of property, body of a person, and life."
+            },
+            {
+              "article_number": "16",
+              "content": "After entering into insurance contract, the insured person shall pay the premium as agreed in the contract. Insurance shall be effective from the date that the insured person pays the premium as stated in the contract."
+            },
+            {
+              "article_number": "17",
+              "content": "If the insured person fails to pay any premium on the due date, the validity of the insurance contract may not be suspended more than 30 (thirty) days after the date of execution of the insurance contract. 20 (twenty) days after execution of the insurance contract, the insurance company shall notify by registered letter or letter duly acknowledged to the insured person or the owner of insurance policy to make a payment of the insurance premium at the agreed place. After being notified, if the insured person or the owner of insurance policy still fails to make a payment of the insurance premium within 10 (ten) days, the insurance company has the right to nullify the contract."
+            },
+            {
+              "article_number": "18",
+              "content": "Any loss or damage caused by any risks insured by the insurance policy shall be indemnified by the insurance company. However, the insurance company shall not indemnify for any loss or damage arising out of intentional wrongdoing or a fraud of the insured person. The insurance company also covers for loss and damage arising from any persons under the supervision of the insured person, irrespective of type and severity of such faults."
+            },
+            {
+              "article_number": "19",
+              "content": "An insurance contract may be nullified when the insurance company found out that the insured person was trying to conceal information or intentionally made any false declaration which might cause any change to the subject to be insured. Negligence or unintentionally making an unclear declaration by the insured person shall not be a ground for nullification of the insurance."
+            },
+            {
+              "article_number": "20",
+              "content": "In the event that the accident is intentionally falsified by the insured person and if the insurance company found out such act with the clear proof, the insurance company is entitled to file a complaint to the court to reject any liability in case an indemnity has not been made or to claim the indemnity back in case it has been made."
+            },
+            {
+              "article_number": "21",
+              "content": "In a type of liability insurance, if the insured person causes any damage or makes any loss to a third party, the insurance company shall directly indemnify the injured third party."
+            },
+            {
+              "article_number": "22",
+              "content": "In an implementation of insurance contract, party has the right to terminate the contract before the expiry date. Conditions and procedures of termination of the contract before the term shall be determined by Sub-Decree."
+            }
+          ]
+        },
+        {
+          "section_number": "II",
+          "section_title": "GENERAL INSURANCE",
+          "articles": [
+            {
+              "article_number": "23",
+              "content": "General insurance is an insurance contract made by the insured person and the insurance company whereby the payment of premium shall be made to cover risks to property, liability and health. Types of general insurance products include property insurance, liability insurance, and health insurance.",
+              "sub_types": [
+                {
+                  "type": "Property insurance",
+                  "description": "an insurance contract whereby an indemnity will be paid to the insured person when the property of that person is damaged, lost or destroyed by a risk insured against. The indemnity to be paid by the insurance company to the insured person shall not exceed the value of an object/thing declared at the time of the conclusion of the insurance contract unless agreed otherwise. Property which is the subject of property insurance includes buildings, vessels, etc."
+                },
+                {
+                  "type": "Liability insurance",
+                  "description": "an insurance contract covering an indemnity amount whereby the insured person is obliged to pay to a third party who is physically injured or deceased, or whose property is damaged by the acts of the insured person or any activities giving rise to liability of the insured person. Types of liability insurance products include motor vehicle liability insurance, construction site liability insurance, and passenger transportation liability insurance."
+                },
+                {
+                  "type": "Health insurance",
+                  "description": "an insurance contract covering an expense for treatment of injury, disease, or other expenses, such as an expense for long term care of an insured patient who is physically injured or affected by disease."
+                }
+              ]
+            },
+            {
+              "article_number": "24",
+              "content": "If there is a complete loss of the subject to be insured arises out of an event which is not projected in the insurance policy, the insurance shall be legally terminated and the insurance company shall pay the insured person 90% (ninety percent) of the insurance premium for the remaining period."
+            },
+            {
+              "article_number": "25",
+              "content": "After an insurance company indemnified for claim, the insured person’s claim to file a lawsuit against third party(s) who caused the damage so as to claim back the sum equivalent to the indemnity shall be transferred to the insurance company, but the insurance company may not claim indemnity from descending relatives, ancestral relatives, relatives by affinity, managers, and employees who normally live in the residence of the insured person except where there is evidence to prove that the gross/severe intentional fault/acts has been committed by any of the aforementioned persons."
+            }
+          ]
+        },
+        {
+          "section_number": "3",
+          "section_title": "LIFE INSURANCE",
+          "articles": [
+            {
+              "article_number": "26",
+              "content": "Life insurance is an insurance contract made between the insured person and the insurance company in which the payment of insurance premium shall be made to insure on death or livelihood, which may include personal accident insurance, severe disease, or general disease. The types of life insurance products are term-life insurance, whole-life insurance, endowment insurance, and annuity insurance.",
+              "sub_types": [
+                {
+                  "type": "Term Life insurance",
+                  "description": "a life insurance when the insured person deceases within a specific period, such as 5 (five) years or 10 (ten) years, or deceases before a specified age, and the benefits are paid to a beneficiary as determined in the contract. If the insured person is still alive after the specified period in the contract, the beneficiary will not be entitled to receive any interest from the insurance."
+                },
+                {
+                  "type": "Whole-life insurance",
+                  "description": "an insurance contract which insures the death of the insured person, and the insurance premium may be paid for a specified period of time or for life of the insured person. For whole-life insurance, annually fixed insurance premium installment can be equally paid annually during the period that the insured person is alive. An insurance company shall pay the benefits to the family of the deceased or any designated beneficiary(s) upon the death of the insured person."
+                },
+                {
+                  "type": "Endowment insurance",
+                  "description": "a life insurance in which the interest may be paid to the insured person if the insured person is still alive during the insured period as specified in a contract. If the insured person dies before the specified date in the contract, the interest shall be granted to the beneficiary."
+                },
+                {
+                  "type": "Annuity insurance",
+                  "description": "an insurance contract in which an income shall be granted to the insured person for retirement age."
+                }
+              ]
+            },
+            {
+              "article_number": "27",
+              "content": "For life insurance, after having paid indemnity, an insurance company may not demand the transfer of any claim from the contracting party or the beneficiary(s) to file a lawsuit against any third party."
+            },
+            {
+              "article_number": "28",
+              "content": "Any person may request for life insurance for himself/herself or for a third party if such third party has expressly consented in writing and confirmed the insured sum. Life insurance shall be prohibited with respect to:",
+              "prohibitions": [
+                "retarded persons.",
+                "persons who are receiving mental treatment."
+              ]
+            },
+            {
+              "article_number": "29",
+              "content": "Other than the necessary details of an insurance contract, a life insurance policy shall specify the following:",
+              "points": [
+                "Last name, first name, and date of birth of the person who will enter into a contract.",
+                "Last name and first name of the beneficiary(s), if any.",
+                "Event or condition for refund of amount of money which has been insured.",
+                "Conditions for exemption if provided for in a contract."
+              ]
+            },
+            {
+              "article_number": "30",
+              "content": "The beneficiary(s) may not obtain the benefits of a life insurance if the insured person commits suicide."
+            },
+            {
+              "article_number": "31",
+              "content": "The beneficiary(s) may not obtain the benefits of a life insurance if the beneficiary(s) is/are perpetrator(s), co-perpetrator(s), initiator(s), or accomplice(s) in the committing of homicide of the insured person."
+            }
+          ]
+        },
+        {
+          "section_number": "4",
+          "section_title": "REINSURANCE",
+          "articles": [
+            {
+              "article_number": "32",
+              "content": "Reinsurance is an insurance operation where a [primary] insurance company is insured by another insurance company which is a company that reinsures all or part of the insured risks under an insurance contract executed by the [primary] insurance company. In such case of reinsurance, the [primary] insurance company shall remain responsible for the insured person."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter_number": "4",
+      "chapter_title": "TYPES OF COMPULSORY INSURANCE",
+      "sections": [
+        {
+          "section_number": "1",
+          "section_title": "MOTOR VEHICLE LIABLITY INSURANCE",
+          "articles": [
+            {
+              "article_number": "33",
+              "content": "A natural or legal person who is the owner of a motor vehicle and who conducts business in the Kingdom of Cambodia shall obtain an insurance for his/her motor vehicle from an insurance company for the liability of all damages caused to any third party resulting from the operation of his/her motor vehicle, including all types of trailers. Such insurance is not only effective for motor vehicle owners but also for drivers and motor vehicle maintainers. All types of motor vehicles used for business operations that are required to have insurance shall be determined by Sub-Decree."
+            },
+            {
+              "article_number": "34",
+              "content": "The other types of motor vehicles required to have compulsory insurance, other than the motor vehicles determined in Article 33 hereof, shall be determined by Sub-Decree."
+            },
+            {
+              "article_number": "35",
+              "content": "With respect to any third party who is physically injured or killed by an insured motor vehicle, the insurance company shall pay indemnity for all damages in timely manner and appropriate to the extent of damages."
+            },
+            {
+              "article_number": "36",
+              "content": "Such insurance covers, at least, victim(s) of traffic accident who are injured, disabled, or killed, regardless of whether those persons are transported by the insured motor vehicles."
+            }
+          ]
+        },
+        {
+          "section_number": "2",
+          "section_title": "CONSTRUCTION SITE LIABILITY INSURANCE",
+          "articles": [
+            {
+              "article_number": "37",
+              "content": "Natural or legal person who is the owner of construction sites shall hold construction sites liability insurance. When operate the construction site, the construction site’s owner shall prove that he/she had entered into an insurance contract with an insurance company. The types of construction sites which are required to be insured shall be determined by Sub-Decree."
+            }
+          ]
+        },
+        {
+          "section_number": "3",
+          "section_title": "LIABILITY INSURANCE FOR PASSENGER TRANSPORTATION",
+          "articles": [
+            {
+              "article_number": "38",
+              "content": "All natural or legal persons who conduct passenger transportation business by way of various transportation means shall have liability insurance covering passengers who ride their transportation whether on land, water, air routes or railways. The types of passenger transportation means that require to have insurance shall be determined by Sub-Decree."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter_number": "5",
+      "chapter_title": "MICROINSURANCE",
+      "articles": [
+        {
+          "article_number": "39",
+          "content": "Microinsurance is a provision of insurance contract to low-income people such as property microinsurance, life microinsurance, and health microinsurance."
+        },
+        {
+          "article_number": "40",
+          "content": "Microinsurance shall be determined by Sub-Decree."
+        }
+      ]
+    },
+    {
+      "chapter_number": "6",
+      "chapter_title": "INSURANCE INSTITUTION AND LICENSE ISSUANCE",
+      "sections": [
+        {
+          "section_number": "1",
+          "section_title": "INSURANCE COMPANY",
+          "articles": [
+            {
+              "article_number": "41",
+              "content": "All insurance companies, whether State companies, private companies, or joint venture, maybe permitted to operate insurance [business] in the Kingdom of Cambodia only in the form of Public Limited Company."
+            },
+            {
+              "article_number": "42",
+              "content": "General insurance companies, life insurance companies, and microinsurance companies may transfer part or all of their insurance to reinsurance companies. Reinsurance companies may transfer part or all of their reinsurance to other reinsurance companies."
+            },
+            {
+              "article_number": "43",
+              "content": "A Public Limited Company may request for any insurance license from the Ministry of Economy and Finance in order to conduct the following insurance businesses:",
+              "business_types": [
+                "life insurance business",
+                "general insurance business",
+                "reinsurance business",
+                "microinsurance business"
+              ],
+              "additional_info": "General insurance companies and life insurance companies may conduct health insurance business and microinsurance business."
+            },
+            {
+              "article_number": "44",
+              "content": "The minimum capital required for general insurance companies, life insurance companies, and reinsurance companies shall be determined by Sub-Decree. However, the minimum capital shall be in Riel and shall not be less than the sum equivalent to 5,000,000 (five million) S.D.R as per prevailing rate at the issuance of license. The minimum capital for microinsurance business shall be determined by Sub-Decree."
+            },
+            {
+              "article_number": "45",
+              "content": "An insurance company cannot grant the authorities to lead, manage, or pay to any persons who used to be sentenced to imprisonment for misdemeanor or felony offences."
+            }
+          ]
+        },
+        {
+          "section_number": "2",
+          "section_title": "INSURANCE AGENT, INSURANCE BROKER, AND INSURANCE RISK EVALUATION COMPANY",
+          "articles": [
+            {
+              "article_number": "46",
+              "content": "",
+              "definitions": {
+                "Insurance Agent": "natural or legal person that, on behalf of insurance companies, provide guidance on insurance policies, prepare insurance contracts, collect insurance premiums, and arrange for indemnity, within an expressly specified framework of an agreement between the insurance agent and the insurance company through which commissions from the insurance company are received.",
+                "Insurance Broker": "legal person who work in the interests of insured persons, provide counsel, information related to the types of insurance, terms and conditions, insurance premiums, negotiate and prepare insurance contracts between insurance applicants and insurance companies, and sell insurance policies by receiving lawful commissions from insurance companies.",
+                "Insurance Risk Evaluation Company": "an independent legal entity which has the duty to inspect, verify, and evaluate damages when insured risks are realized, and decide to issue a document on damage evaluation as the basis for insurance companies to indemnify. Insurance Risk Evaluation Company conducts its activities by receiving inspection fee from insurance companies in accordance with agreements."
+              }
+            }
+          ]
+        },
+        {
+          "section_number": "3",
+          "section_title": "INSURANCE LICENSING",
+          "articles": [
+            {
+              "article_number": "47",
+              "content": "Insurance institution carrying on insurance business in the Kingdom of Cambodia shall have insurance license issued by the Ministry of Economy and Finance. The Ministry of Economy and Finance has the right to approve or reject the application for insurance license within a period of 90 (ninety) days from the date of receiving the application attached with sufficient supporting documents."
+            },
+            {
+              "article_number": "48",
+              "content": "The procedures and conditions for insurance licensing shall be determined by Sub-Decree."
+            }
+          ]
+        },
+        {
+          "section_number": "4",
+          "section_title": "FINANCIAL STATEMENT",
+          "articles": [
+            {
+              "article_number": "49",
+              "content": "During the period of 3 (three) months following the end of the financial year or during any additional period approved by the Ministry of Economy and Finance, insurance companies shall submit to the Ministry of Economy and Finance their annual financial statement which have been audited by permitted auditors. The financial statement shall comply with International Financial Reporting Standards, applicable laws and legal norms. Insurance companies shall publicly disseminate their annual financial statement in a summarized form as required by the Ministry of Economy and Finance."
+            },
+            {
+              "article_number": "50",
+              "content": "Insurance institution shall submit financial statement and other documents as required by the Ministry of Economy and Finance."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter_number": "7",
+      "chapter_title": "INSURANCE INSPECTION",
+      "articles": [
+        {
+          "article_number": "51",
+          "content": "The Minister of the Ministry of Economy and Finance has the right to appoint insurance inspection official to monitor, research, inspect, and enforce the implementation of this Law. Insurance inspection official has the right to inspect insurance companies and perform other duties as assigned by the Ministry of Economy and Finance. Insurance inspection official has the right to monitor, examine, research, and investigate offences in the insurance sector."
+        },
+        {
+          "article_number": "52",
+          "content": "Insurance inspection official accredits as judicial police to examine offences which are stipulated in this Law in compliance with the provisions of the Code of Criminal Procedure. The formality and procedure for the accreditation to insurance inspection official shall be determined by a joint Prakas of the Minister of the Ministry of Justice and Minister of the Ministry of Economy and Finance."
+        },
+        {
+          "article_number": "53",
+          "content": "Within the cooperation framework in relation to the examination and investigation of offences as stipulated in this Law, the insurance inspection official shall have the power to search, seize items, summon relevant person, and to perform other acts in accordance with the provisions of the Code of Criminal Procedure. In case it is necessary to detain a suspect, the insurance inspection official shall primarily obtain permission from prosecutor although the permission is given verbally. Any activities of the insurance inspection official in examining and investigating offences and detaining the suspect shall be in compliance with the Code of Criminal Procedure. The insurance inspection official shall have the right to request assistance from the sub-national administration and armed units or other relevant competent authorities to crack down on the offences under this Law."
+        },
+        {
+          "article_number": "54",
+          "content": "During the law enforcement operation, the insurance inspection official shall wear uniform, insignia and ranking badge, and shall have an authorized mission letter in his or her possession. The uniform, insignia, and ranking badge of the insurance inspection officials shall be determined by Sub-Decree."
+        },
+        {
+          "article_number": "55",
+          "content": "During the insurance inspection process, if the evidence shows, or the result of the verification shows, that there is a sale of insurance products inconsistent with the assertion/declaration made when applying for the license, the insurance inspection official shall have the right to take provisional measures to prohibit the sale of those products so that procedures, in accordance with law, may be enforced."
+        },
+        {
+          "article_number": "56",
+          "content": "Any person who is not satisfied with any action made by the insurance inspection official may make a complaint to the Ministry of Economy and Finance within 45 (forty five) days, commencing from the date of receipt of the decision. The Ministry of Economy and Finance shall decide on the complaint within 2 (two) months from the date of receipt of the complaint. In the event that the person is not satisfied with the decision of the Ministry of Economy and Finance, she/he can lodge a complaint to the court in accordance with the procedures."
+        },
+        {
+          "article_number": "57",
+          "content": "The formalities and procedures for insurance inspection shall be determined by Prakas of the Ministry of Economy and Finance."
+        },
+        {
+          "article_number": "58",
+          "content": "The insurance inspection official who faithfully performs his/her functions and duties shall be protected by laws."
+        }
+      ]
+    },
+    {
+      "chapter_number": "8",
+      "chapter_title": "LIQUIDATION AND DISSOLUTION OF COMPANY",
+      "sections": [
+        {
+          "section_number": "1",
+          "section_title": "VOLUNTARY LIQUIDATION AND DISSOLUTION OF COMPANY",
+          "articles": [
+            {
+              "article_number": "59",
+              "content": "An insurance company can proceed with the voluntary liquidation and dissolution only when the company is sufficiently solvent."
+            },
+            {
+              "article_number": "60",
+              "content": "An insurance company in a sufficient solvent condition may request a voluntary liquidation for one of the following reasons:",
+              "reasons": [
+                "The company reaches its maturity.",
+                "The shareholders so resolve at an ordinary general meeting or extra-ordinary general meeting of the shareholders in accordance with the articles of incorporation."
+              ]
+            },
+            {
+              "article_number": "61",
+              "content": "A director or shareholder who has a voting right at a general meeting of shareholders may propose a voluntary liquidation and dissolution of a company."
+            },
+            {
+              "article_number": "62",
+              "content": "Notice of shareholders’ meeting convened for the purpose of [voting] on a proposal to voluntarily liquidate and dissolve the company shall contain the terms and conditions for liquidation and dissolution of the company."
+            },
+            {
+              "article_number": "63",
+              "content": "Upon obtaining the shareholders’ resolution with regard to the voluntary liquidation and dissolution, the company shall apply for the voluntary liquidation and dissolution to the Ministry of Economy and Finance."
+            },
+            {
+              "article_number": "64",
+              "content": "Upon receipt of the application for the voluntary liquidation and dissolution, the Ministry of Economy and Finance shall issue an authorization certificate for the voluntary liquidation and dissolution of the relevant company, after it considers liquidation and dissolution to be reasonably justified."
+            },
+            {
+              "article_number": "65",
+              "content": "After receiving the authorization certificate, the insurance company shall cease to enter into any new insurance contract, and shall transfer the existing insurance policies to other companies before the voluntary liquidation and dissolution takes place."
+            },
+            {
+              "article_number": "66",
+              "content": "The Ministry of Economy and Finance shall appoint a professionally qualified liquidator [whose name appears] in the permitted register of the Ministry of Economy and Finance."
+            },
+            {
+              "article_number": "67",
+              "content": "Powers and duties of the liquidator are as follows:",
+              "duties": [
+                "To act as a legal representative for the company and assume the roles of exclusively directing and managing the company until the liquidation process is finished;",
+                "To reorganize the company’s financial statement to ensure true and complete status of each account involved, which will serve as a foundation for liquidation;",
+                "To re-verify the existence of movable and immovable property as per the inventory list, and to take into a safe custody those properties to ensure equal treatment for shareholders and creditors;",
+                "To issue public notice regarding the liquidation of the company and set ultimatum for each creditor to provide document for repayment of debt, and if any creditor fails to provide document as per notice, that creditor will lose the rights to claim for the debt repayment from the liquidator;",
+                "To convene a meeting between shareholders and relevant persons, in case of where there is a resolution to take over and continue operating business of the company which is subject to liquidation, in order for [shareholders and relevant persons] making a decision in principle in that regard;",
+                "To issue a notice rejecting any agreements or letters that the company made in an irregular or illegal manner prior to the commencement of the liquidation process;",
+                "To prepare the list of all debtors, together with the outstanding amount owed to the company, and shareholders (if any), and pursue the debt recovery/collection even if the debt has yet to reach its term;",
+                "To prepare the list of all creditors who have been known, together with the amount to be repaid, including the tax amount owed to the State and the employees wages in accordance with the law in force;",
+                "To liquidate the company’s assets through a sale or through any other methods;",
+                "To liquidate the company’s liabilities through debt repayment based on the actual ability by its priority as provided for in Article 86 of this Law; and",
+                "To prepare a balance sheet of the liquidation, distribute to shareholders the proceeds of the liquidation and to clear all relevant accounts for the conclusion of the liquidation as final."
+              ],
+              "oversight": "Powers and duties of the liquidator shall be monitored and supervised by the Ministry of Economy and Finance. The Minister of the Ministry of Economy and Finance shall have the right to issue Prakas on inclusion of additional powers and duties of the liquidator."
+            },
+            {
+              "article_number": "68",
+              "content": "For voluntary liquidation and dissolution of a company, the liquidator shall carry out the following procedures:",
+              "procedures": [
+                "To immediately publish the announcement on dissolution of the company for 2 (two) consecutive weeks in a newspaper which is published or distributed in the place where the company has its registered office, or in other publications as provided by the internal regulations of the Ministry of Economy and Finance;",
+                "To convene a meeting between shareholders, debtors and creditors either jointly or separately, if deemed necessary;",
+                "Within 15 (fifteen) days at the latest, starting from the date of the latest meeting as above mentioned, the liquidator shall prepare a report to be submitted to the Ministry of Economy and Finance, attached with minutes of the meeting, list of known debtors and creditors, and list of company’s properties which are subject to the liquidation. Once the approval of Ministry of Economy and Finance has been received, only then will the liquidators implement their duties until the process duly completed.",
+                "Within 7 (seven) days at the latest, commencing from the date of completion of the liquidation, the liquidator shall furnish the Ministry of Economy and Finance with a report on the result of the liquidation and the notification of the final completion of the liquidation."
+              ]
+            },
+            {
+              "article_number": "69",
+              "content": "Upon receipt of the announcement of the completion of the voluntary liquidation and dissolution, the Ministry of Economy and Finance shall revoke the insurance license within 3 (three) months at the latest."
+            },
+            {
+              "article_number": "70",
+              "content": "Once the voluntary liquidation and dissolution is completed, the company’s director shall issue an announcement on the dissolution of the company to be submitted to the Director of Companies of the Ministry of Commerce. Upon receipt of the announcement on the company dissolution, the Director of Companies of the Ministry of Commerce shall issue a certificate of company dissolution. The company shall terminate from the date listed in the certificate of company dissolution."
+            },
+            {
+              "article_number": "71",
+              "content": "During the liquidation of a company, the Ministry of Economy and Finance or the relevant person may apply to a court to place the voluntary liquidation of the company under the supervision of the court."
+            },
+            {
+              "article_number": "72",
+              "content": "If the activities of the liquidator are hindered or interrupted by insurance company, the liquidator for the voluntary liquidation and dissolution of the company may use his/her rights to lodge an appeal to the court after having reported to the Ministry of Economy and Finance [related to such hindrance or interruption]."
+            }
+          ]
+        },
+        {
+          "section_number": "2",
+          "section_title": "PROVISIONAL GOVERNANCE",
+          "articles": [
+            {
+              "article_number": "73",
+              "content": "If an insurance company is seriously facing financial crisis, the Ministry of Economy and Finance shall have the rights to appoint an administrator for a period not exceeding the first 3 (three) months for the purpose of restoring the company. If necessary, the term of the administrator can be extended for another 3 (three) months."
+            },
+            {
+              "article_number": "74",
+              "content": "The Ministry of Economy and Finance shall appoint a professionally qualified administrator [whose name is listed] in the permitted register of the Ministry of Economy and Finance."
+            },
+            {
+              "article_number": "75",
+              "content": "The administrator has the right to manage and to lead the works [business] of the insurance company. The key roles of the administrator are to evaluate the solvency of the company, to take prudent measures to restore the company, and to protect interests of the general public."
+            },
+            {
+              "article_number": "76",
+              "content": "During the provisional governance, the provisions provided for in Chapter 4 “Effects of the Opening of Insolvency Proceedings” of the Law on Insolvency shall be invoked."
+            },
+            {
+              "article_number": "77",
+              "content": "If the evaluation indicates that the insurance company may be sufficiently solvent and can comply with laws and all prudent measures, the administrator shall prepare a report to be submitted to the Ministry of Economy and Finance to lift all prudent measures which have been taken against the company and the provisional governance shall be terminated."
+            },
+            {
+              "article_number": "78",
+              "content": "If the evaluation indicates that the insurance company may be sufficiently solvent but cannot comply with the laws and all prudent measures within 3 (three) months, the Ministry of Economy and Finance shall provisionally revoke the license of the company, and the provisional governance shall be changed to the voluntary liquidation and dissolution of the company. Procedures for voluntary liquidation shall be consistent with the procedures as provided in Section 1 of this Chapter."
+            },
+            {
+              "article_number": "79",
+              "content": "If the evaluation indicates that the insurance company is insolvent, the Ministry of Economy and Finance shall revoke the insurance license of the company, and the provisional governance shall be changed to liquidation of the company through court proceeding."
+            },
+            {
+              "article_number": "80",
+              "content": "If the activities of the administrator are hindered or interrupted by insurance company, the administrator may use his/her rights to lodge an appeal to the court after having reported to the Ministry of Economy and Finance [related to such hindrance or interruption]."
+            }
+          ]
+        },
+        {
+          "section_number": "3",
+          "section_title": "LIQUIDATION THROUGH COURT PROCEEDING",
+          "articles": [
+            {
+              "article_number": "81",
+              "content": "According to Article 79 above, the Ministry of Economy and Finance shall lodge a complaint to the court to commence the procedures of liquidation through court proceeding."
+            },
+            {
+              "article_number": "82",
+              "content": "The court shall choose a liquidator who is professionally qualified [and whose name is listed] in the permitted register of the Ministry of Economy and Finance. An administrator can also be chosen by the court to be a liquidator."
+            },
+            {
+              "article_number": "83",
+              "content": "The liquidator shall liquidate property and repay all debts of the company under the court’s supervision and comply with provisions of this Law and the Law on Insolvency. The liquidator shall perform duties and exercise authorities of the administrator at the liquidation stage which is defined by the Law on Insolvency, except otherwise provided in this Law."
+            },
+            {
+              "article_number": "84",
+              "content": "If the activities of the liquidator through court proceeding are obstructed or hindered by insurance company, the liquidator through court proceeding may exercise his/her rights to lodge a complaint to the court."
+            }
+          ]
+        },
+        {
+          "section_number": "4",
+          "section_title": "COMMON PROVISIONS FOR LIQUIDATION",
+          "articles": [
+            {
+              "article_number": "85",
+              "content": "If criminal offence is found to have been committed, the competent official of the Ministry of Economy and Finance or administrator or liquidator shall immediately notify the prosecutor or the judicial police by attaching information, minutes, letters and all proofs, which are related to such criminal offence."
+            },
+            {
+              "article_number": "86",
+              "content": "Priority of the debt repayment shall be determined as follows:",
+              "priority_order": [
+                "Remuneration and other expenses related to the provisional governance and liquidation.",
+                "Claim for insurance indemnity.",
+                "Claim of the owner of insurance policy.",
+                "Salary of staffs and employees, administrative fee, court fees and other taxes [imposed by the court].",
+                "Secured claim.",
+                "State taxes whose notice is not filed.",
+                "All admissible unsecured claims."
+              ]
+            },
+            {
+              "article_number": "87",
+              "content": "For liquidation of insurance company, whether the company is solvent or insolvent, the evaluation of all properties and damages including the indemnity of insurance policy shall comply with the instruction of the Ministry of Economy and Finance."
+            },
+            {
+              "article_number": "88",
+              "content": "Remuneration and other expenses for the provisional governance and liquidation shall be calculated based on professional price rate and shall be automatically borne by insurance company. The Minister of the Ministry of Economy and Finance shall issue a Prakas for management of remuneration rate for administrator."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter_number": "9",
+      "chapter_title": "DISPUTE RECONCILIATION [RESOLUTION]",
+      "articles": [
+        {
+          "article_number": "89",
+          "content": "For all disputes related to insurance business, any party of the disputes may submit the dispute to the Ministry of Economy and Finance for the dispute reconciliation before filing a lawsuit to the arbitration tribunal or the competent court, except for [the dispute related to] the criminal charge."
+        },
+        {
+          "article_number": "90",
+          "content": "After a party has submitted disputes to the Ministry of Economy and Finance, the Ministry of Economy and Finance shall examine both parties to attempt to conciliate/resolve the disputes based on the laws and regulations in force. The Ministry of Economy and Finance shall make a record about the results of the dispute reconciliation/resolution by specifying agreement or disagreement of the parties on the dispute reconciliation/resolution. Minutes of the dispute reconciliation/resolution shall be signed by a representative of the Ministry of Economy and Finance and parties from both sides, and shall be copied to all relevant parties. All agreement on dispute reconciliation/resolution made before the Ministry of Economy and Finance shall come into effect immediately."
+        },
+        {
+          "article_number": "91",
+          "content": "During the dispute reconciliation/resolution, when the Ministry of Economy and Finance confirms that the insured person committed a fault and the insured person admitted the fault, all claims made by the insured person as stated in the general terms and conditions of the insurance policy shall be deemed as null and void."
+        },
+        {
+          "article_number": "92",
+          "content": "In case that the dispute cannot be resolved, the Ministry of Economy and Finance shall submit the minutes of difference/non-compromise settlement to arbitration tribunal or file a lawsuit to the competent court. The period of extinguishment by prescription of a right to file a complaint to the arbitration tribunal or to the competent court shall be 90 (ninety) days commencing from the date that parties do not reach a compromise settlement otherwise the right to file a complaint will be lost. The period of extinguishment by prescription of a right to file a complaint to the arbitration tribunal or competent court shall be automatically rescinded in case the parties reach a compromise settlement and the Ministry of Economy and Finance confirms accordingly."
+        },
+        {
+          "article_number": "93",
+          "content": "Procedures of dispute reconciliation/resolution shall be determined by Sub-Decree."
+        }
+      ]
+    },
+    {
+      "chapter_number": "10",
+      "chapter_title": "DISCIPLINARY PUNISHMENT",
+      "articles": [
+        {
+          "article_number": "94",
+          "content": "The Ministry of Economy and Finance may impose disciplinary punishment against any insurance company if:",
+          "conditions": [
+            "Insurance company operates business which damages the interest of the insured person, a creditor or the public.",
+            "Insurance company’s expenses are too high comparing its premium income received.",
+            "Insurance company does not commence operating its business within the period of 6 (six) months upon having obtained a license.",
+            "Insurance company acts against provisions of this Law and other regulations related to the insurance sector."
+          ]
+        },
+        {
+          "article_number": "95",
+          "content": "The disciplinary punishments are as follows:",
+          "punishments": [
+            "Termination of sale of new insurance policy.",
+            "Termination of permission for new insurance business activities or other sale-purchases.",
+            "Termination of other activities of insurance company if it is seen that the financial condition is fragile.",
+            "Restriction on sale of company’s property.",
+            "Transfer of a part or a whole of the insurance policy of the company which is not expired.",
+            "Termination of position of director and manager.",
+            "Revocation of the company’s insurance license."
+          ]
+        },
+        {
+          "article_number": "96",
+          "content": "Procedure for, and severity of disciplinary punishment shall be determined by Prakas of the Minister of Economy and Finance."
+        }
+      ]
+    },
+    {
+      "chapter_number": "11",
+      "chapter_title": "PENALTIES",
+      "articles": [
+        {
+          "article_number": "97",
+          "content": "Any person, who is the motor vehicle’s owner and does not have compulsory insurance consistent with Articles 33 and 34 of this Law, and using the motor vehicle to move traffic on the public roads within the Kingdom of Cambodia, shall be fined between 15,000 (fifteen thousand) Riels and 1,500,000 (one million five hundred thousand) Riels and shall be required to have insurance. Any person, who is the owner of construction site and opened his/her construction site without liability insurance construction site consistent with Article 37 of this Law, shall be fined between 1,500,000 (one million five hundred thousand) Riels and 150,000,000 (one hundred fifty million) Riels and shall be required to have insurance. Any person, who carries out passenger transportation business by transportation means and does not have liability insurance for passengers who ride their transportation means consistent with Article 38 of this Law, shall be fined between 1,500,000 (one million five hundred thousand) Riels and 150,000,000 (one hundred fifty million) Riels, and shall be required to have insurance."
+        },
+        {
+          "article_number": "98",
+          "content": "Any person, who grants authorities to lead, manage and pay to any person who used to be punished as perpetrator, co-perpetrator, accomplice for offences as stated in Article 45 of this Law, shall be fined between 10,000,000 (ten million) Riels and 50,000,000 (fifty million) Riels and the insurance license shall be revoked."
+        },
+        {
+          "article_number": "99",
+          "content": "Any person who carried out insurance business without license shall be fined between 50,000,000 (fifty million) Riels and 100,000,000 (one hundred million) Riels and its activities shall be immediately ceased. In case of continuing to do so, the person shall be punished as follows:",
+          "punishment_natural_person": "sentenced to imprisonment between 1 (one) year and 5 (five) years and shall be fined between 100,000,000 (one hundred million) Riels and 200,000,000 (two hundred million) Riels.",
+          "punishment_legal_person": "fined between 200,000,000 (two hundred million) Riels and 400,000,000 (four hundred million) Riels, and shall not be allowed to conduct insurance business in the Kingdom of Cambodia within a determined period."
+        },
+        {
+          "article_number": "100",
+          "content": "Any director, president/chief, manager of insurance institution, administrator and liquidator, who commit any act which is a breach of trust or commits any breach of power in performing his/her work for the purpose of serving a personal interest or [interest of] third party, or for the purpose of damaging insurance institution, and causing damages to property of insurance institution, shall be sentenced in prison between 2 (two) years and 5 (five) years, and shall be fined between 10,000,000 (ten million) Riels and 50,000,000 (fifty million) Riels."
+        },
+        {
+          "article_number": "101",
+          "content": "Public civil servants or citizens who obtain public mandate by election, who hinders or interfere insurance inspection official in performing his/her functions, shall be sentenced to imprisonment between 2 (two) years and 5 (five) years, and shall be fined between 4,000,000 (four million) Riels and 10,000,000 (ten million) Riels."
+        },
+        {
+          "article_number": "102",
+          "content": "Any person who commits a fraud in the insurance sector shall be punished by referring to the criminal provisions in force."
+        },
+        {
+          "article_number": "103",
+          "content": "Any person conducting insurance business falsifies documents or disseminates or provides untrue information which damages the interest of the public or deceives the relevant authority shall be punished as follows:",
+          "punishment_natural_person": "sentenced to imprisonment between 1 (one) year and 3 (three) years and shall be fined between 5,000,000 (five million) Riels and 150,000,000 (one hundred fifty million) Riels.",
+          "punishment_legal_person": "fined between 10,000,000 (ten million) Riels and 300,000,000 (three hundred million) Riels."
+        },
+        {
+          "article_number": "104",
+          "content": "Any person who conduct insurance business and who destroys evidence of an offence related to the insurance sector for the purpose of being an obstacle to the research of inspection official or other relevant competent official shall be punished as follows:",
+          "punishment_natural_person": "sentenced to imprisonment between 1 (one) year and 3 (three) years and shall be fined between 5,000,000 (five million) Riels and 150,000,000 (one hundred fifty million) Riels.",
+          "punishment_legal_person": "fined between 200,000,000 (two hundred million) Riels and 400,000,000 (four hundred million) Riels."
+        },
+        {
+          "article_number": "105",
+          "content": "Any person who conduct insurance business and who commits offences related to money laundering shall be sentenced by criminal provisions in force."
+        },
+        {
+          "article_number": "106",
+          "content": "Any person who conduct insurance business and who breaks insurance professional secrecy determined by insurance institution and damages the interest of the insurance institution shall be punished as follows:",
+          "punishment_natural_person": "sentenced to imprisonment between 1 (one) month and 1 (one) year and shall be fined between 5,000,000 (five million) Riels and 150,000,000 (one hundred fifty million) Riels.",
+          "punishment_legal_person": "fined between 200,000,000 (two hundred million) Riels and 400,000,000 (four hundred million) Riels."
+        },
+        {
+          "article_number": "107",
+          "content": "For a natural person who commits offences stated in Articles 100, 101, 103, 104 and 106 of this Law, the court may impose one or more additional penalties as stipulated in Article 53 (type of additional penalties) of the Criminal Code. For a legal person committing offences provided in Articles 103, 104 and 106 of this Law, the court may impose one or more additional penalties as stated in Article 168 (additional penalties applying to legal person) of the Criminal Code. The substance, formalities and procedures requires to enforce such additional penalties shall comply with the provisions of the Criminal Code."
+        },
+        {
+          "article_number": "108",
+          "content": "The Ministry of Economy and Finance may determine and impose a transitional fine for any insurance institutions which do not comply with the instruction of the Ministry. Formalities and procedures of enforcing a transitional fine shall be determined by Prakas of the Minister of the Ministry of Economy and Finance."
+        },
+        {
+          "article_number": "109",
+          "content": "Any offences which are not determined by this Law shall be enforced in accordance with regulations in force."
+        }
+      ]
+    },
+    {
+      "chapter_number": "12",
+      "chapter_title": "PARTICULAR/SEPARATE PROVISIONS",
+      "articles": [
+        {
+          "article_number": "110",
+          "content": "Insurance, whether life insurance or general insurance, which is beneficial to natural or legal person that are insured against any risks, may be an execution of an insurance contract with the insurance company abroad. Type of insurance contract shall be determined by Sub-Decree."
+        },
+        {
+          "article_number": "111",
+          "content": "Motor vehicle liability insurance shall not cover any damages caused by accident occurring outside the geography of the Kingdom of Cambodia unless there is bilateral or multilateral agreement otherwise."
+        }
+      ]
+    },
+    {
+      "chapter_number": "13",
+      "chapter_title": "TRANSITIONAL PROVISIONS",
+      "articles": [
+        {
+          "article_number": "112",
+          "content": "Insurance licenses granted to all insurance institutions in compliance with the Law on Insurance, promulgated by Royal Kram No. NS/RKM/0700/02, dated 25 July 2000, shall remain valid until the expiry date of license even though this Law is implemented. Within the period of 6 (six) months commencing from the date of enforcement of this Law, insurance companies that have been carrying out insurance business in the Kingdom of Cambodia shall fulfill the minimum capital requirement in full as stated in Article 44 of this Law."
+        }
+      ]
+    },
+    {
+      "chapter_number": "14",
+      "chapter_title": "FINAL PROVISIONS",
+      "articles": [
+        {
+          "article_number": "113",
+          "content": "Law on Insurance promulgated by Royal Kram No. NS/RKM/0700/02, dated 25 July 2000, shall lose it effect commencing from the effective date of this Law unless otherwise stipulated in Article 112 of Chapter 13 on Transitional Provisions of this Law. Legal norms/regulations made under Law on Insurance promulgated by Royal Kram No NS/RKM/0700/02, dated 25 July 2000, shall continue in effect until new norms/regulations replace, except any regulations which are contrary to the spirit of this Law. This law shall be enforceable after a period of 6 (six) months following this Law coming into effect."
+        },
+        {
+          "article_number": "114",
+          "content": "Any provisions which contradict this Law shall be deemed null and void."
+        }
+      ]
+    }
+  ]
+}

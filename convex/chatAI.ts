@@ -50,52 +50,283 @@ const WEB_SEARCH_USAGE_INSTRUCTIONS = `
 
 const WEB_SEARCH_TIMEOUT_MS = 4000;
 
-// New function to decide if a search is needed
-// Inside shouldPerformSearch - REVISED PROMPT
-async function shouldPerformSearch(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], selectedModel: string | undefined, genAI: GoogleGenerativeAI): Promise<boolean> {
+// Define the structure of the law database for type safety
+interface LawArticle {
+  article_number: string;
+  content: string;
+  points?: string[];
+  definitions?: { [key: string]: string };
+  sub_types?: { type: string; description: string }[];
+  prohibitions?: string[];
+  business_types?: string[];
+  priority_order?: string[];
+  conditions?: string[];
+  punishments?: string[];
+  punishment_natural_person?: string;
+  punishment_legal_person?: string;
+}
+
+interface LawSection {
+  section_number: string;
+  section_title: string;
+  articles: LawArticle[];
+}
+
+interface LawChapter {
+  chapter_number: string;
+  chapter_title: string;
+  articles?: LawArticle[];
+  sections?: LawSection[];
+}
+
+interface LawDatabase {
+  metadata: any;
+  preamble: string[];
+  chapters: LawChapter[];
+}
+
+// Function to query the law database
+async function queryLawDatabase(query: string, lawDatabase: LawDatabase): Promise<string> {
+  console.log(`[queryLawDatabase] Searching law database for query: "${query}"`);
+  const queryKeywords = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[] = [];
+
+  const calculateScore = (text: string, keywords: string[]) => {
+    const lowerText = text.toLowerCase();
+    let score = 0;
+    for (const keyword of keywords) {
+      if (lowerText.includes(keyword)) {
+        score++;
+      }
+    }
+    return score;
+  };
+
+  // First pass: Score chapters and sections for direct title matches
+  lawDatabase.chapters.forEach(chapter => {
+    const chapterTitle = `Chapter ${chapter.chapter_number}: ${chapter.chapter_title}`;
+    const chapterScore = calculateScore(chapter.chapter_title, queryKeywords);
+
+    if (chapterScore > 0) {
+      scoredResults.push({
+        content: `\n--- ${chapterTitle} ---`,
+        score: chapterScore * 10, // Boost score for chapter title matches
+        chapterTitle: chapterTitle
+      });
+    }
+
+    if (chapter.sections) {
+      chapter.sections.forEach(section => {
+        const sectionTitle = `Section ${section.section_number}: ${section.section_title}`;
+        const sectionScore = calculateScore(section.section_title, queryKeywords);
+        if (sectionScore > 0) {
+          scoredResults.push({
+            content: `\n--- ${chapterTitle} - ${sectionTitle} ---`,
+            score: sectionScore * 5, // Boost score for section title matches
+            chapterTitle: chapterTitle,
+            sectionTitle: sectionTitle
+          });
+        }
+      });
+    }
+  });
+
+  // Second pass: Score articles and add content, linking to their respective chapters/sections
+  lawDatabase.chapters.forEach(chapter => {
+    const chapterTitle = `Chapter ${chapter.chapter_number}: ${chapter.chapter_title}`;
+
+    const processArticle = (article: LawArticle, currentSectionTitle?: string) => {
+      let articleText = `Article ${article.article_number}: ${article.content}`;
+      let articleScore = calculateScore(article.content, queryKeywords);
+
+      if (article.points) {
+        article.points.forEach(point => {
+          if (calculateScore(point, queryKeywords) > 0) {
+            articleText += `\n  - ${point}`;
+            articleScore += calculateScore(point, queryKeywords);
+          }
+        });
+      }
+      if (article.definitions) {
+        for (const term in article.definitions) {
+          if (calculateScore(term, queryKeywords) > 0 || calculateScore(article.definitions[term], queryKeywords) > 0) {
+            articleText += `\n  Definition of ${term}: ${article.definitions[term]}`;
+            articleScore += calculateScore(term, queryKeywords) + calculateScore(article.definitions[term], queryKeywords);
+          }
+        }
+      }
+      if (article.sub_types) {
+        article.sub_types.forEach(sub => {
+          if (calculateScore(sub.type, queryKeywords) > 0 || calculateScore(sub.description, queryKeywords) > 0) {
+            articleText += `\n  Sub-type ${sub.type}: ${sub.description}`;
+            articleScore += calculateScore(sub.type, queryKeywords) + calculateScore(sub.description, queryKeywords);
+          }
+        });
+      }
+      if (article.prohibitions) {
+        article.prohibitions.forEach(prohibition => {
+          if (calculateScore(prohibition, queryKeywords) > 0) {
+            articleText += `\n  Prohibition: ${prohibition}`;
+            articleScore += calculateScore(prohibition, queryKeywords);
+          }
+        });
+      }
+      if (article.business_types) {
+        article.business_types.forEach(type => {
+          if (calculateScore(type, queryKeywords) > 0) {
+            articleText += `\n  Business Type: ${type}`;
+            articleScore += calculateScore(type, queryKeywords);
+          }
+        });
+      }
+      if (article.priority_order) {
+        article.priority_order.forEach(item => {
+          if (calculateScore(item, queryKeywords) > 0) {
+            articleText += `\n  Priority: ${item}`;
+            articleScore += calculateScore(item, queryKeywords);
+          }
+        });
+      }
+      if (article.conditions) {
+        article.conditions.forEach(condition => {
+          if (calculateScore(condition, queryKeywords) > 0) {
+            articleText += `\n  Condition: ${condition}`;
+            articleScore += calculateScore(condition, queryKeywords);
+          }
+        });
+      }
+      if (article.punishments) {
+        article.punishments.forEach(punishment => {
+          if (calculateScore(punishment, queryKeywords) > 0) {
+            articleText += `\n  Punishment: ${punishment}`;
+            articleScore += calculateScore(punishment, queryKeywords);
+          }
+        });
+      }
+      if (article.punishment_natural_person && calculateScore(article.punishment_natural_person, queryKeywords) > 0) {
+        articleText += `\n  Punishment (Natural Person): ${article.punishment_natural_person}`;
+        articleScore += calculateScore(article.punishment_natural_person, queryKeywords);
+      }
+      if (article.punishment_legal_person && calculateScore(article.punishment_legal_person, queryKeywords) > 0) {
+        articleText += `\n  Punishment (Legal Person): ${article.punishment_legal_person}`;
+        articleScore += calculateScore(article.punishment_legal_person, queryKeywords);
+      }
+
+      if (articleScore > 0) {
+        scoredResults.push({
+          content: articleText,
+          score: articleScore,
+          chapterTitle: chapterTitle,
+          sectionTitle: currentSectionTitle
+        });
+      }
+    };
+
+    if (chapter.articles) {
+      chapter.articles.forEach(article => processArticle(article));
+    }
+    if (chapter.sections) {
+      chapter.sections.forEach(section => {
+        const sectionTitle = `Section ${section.section_number}: ${section.section_title}`;
+        section.articles.forEach(article => processArticle(article, sectionTitle));
+      });
+    }
+  });
+
+  // Sort results by score in descending order
+  scoredResults.sort((a, b) => b.score - a.score);
+
+  // Aggregate unique relevant content, ensuring chapter/section headers appear before their articles
+  const finalRelevantContent: string[] = [];
+  const addedHeaders = new Set<string>();
+  const addedArticles = new Set<string>();
+
+  for (const result of scoredResults) {
+    let header = "";
+    if (result.chapterTitle) {
+      header += result.chapterTitle;
+    }
+    if (result.sectionTitle) {
+      header += ` - ${result.sectionTitle}`;
+    }
+
+    if (header && !addedHeaders.has(header)) {
+      finalRelevantContent.push(`\n--- ${header} ---`);
+      addedHeaders.add(header);
+    }
+
+    if (!addedArticles.has(result.content)) {
+      finalRelevantContent.push(result.content);
+      addedArticles.add(result.content);
+    }
+  }
+
+  if (finalRelevantContent.length > 0) {
+    console.log(`[queryLawDatabase] Found ${finalRelevantContent.length} relevant sections.`);
+    return finalRelevantContent.join('\n\n');
+  } else {
+    console.log("[queryLawDatabase] No relevant content found.");
+    return "LAW_DATABASE_NO_RESULTS";
+  }
+}
+
+// New function to decide if law database access or web search is needed
+async function decideInformationSource(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], selectedModel: string | undefined, genAI: GoogleGenerativeAI): Promise<"LAW_DATABASE_ONLY" | "WEB_SEARCH_ONLY" | "BOTH" | "NONE"> {
   try {
     const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-    const prompt = `Analyze the following user message in the context of the provided conversation history. Your task is to decide if a web search would significantly improve the quality, accuracy, or recency of the answer. Output only "YES" or "NO".
+    const prompt = `Analyze the following user message in the context of the provided conversation history. Your task is to decide the optimal information source(s) to answer the query. Output only one of the following: "LAW_DATABASE_ONLY", "WEB_SEARCH_ONLY", "BOTH", or "NONE".
 
 **Conversation History (most recent last):**
 ${history.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
 
-**Strong reasons to search ("YES"):**
-- The query explicitly asks for current or real-time information (e.g., "What's the weather like in London right now?", "latest news on X", "current stock price of Y").
-- The query is about very recent events or developments (e.g., things that happened in the last few days/weeks, post-dating your knowledge cutoff).
-- The query asks for specific, niche, or technical facts, statistics, or details about entities (people, places, organizations, products) that are not common knowledge or where precision is important.
-- The query pertains to local information (businesses, services, events) and implies a need for current, location-specific data.
-- The user is asking for a comparison or list of specific items where web data would provide comprehensive options (e.g., "top 5 laptops for students").
+**Decision Criteria:**
 
-**Strong reasons NOT to search ("NO"):**
-- The query is a simple greeting, conversational filler, or a personal statement not seeking external information (e.g., "hello", "my name is Alice", "I feel happy today").
-- The query is for creative content generation (e.g., "write a poem", "tell me a story") unless it specifically asks for factual elements to be included from the web.
-- The query asks for your own opinions, or internal AI instructions (unless the question is specifically about how you *use* web search as a tool).
-- The query is about extremely broad, common knowledge that is highly unlikely to have changed (e.g., "What is the capital of France?", "How many days in a week?").
-- The query is excessively vague, and a web search would not yield a focused or useful answer.
+*   **LAW_DATABASE_ONLY:**
+    *   The query explicitly asks about "law", "legal provisions", "articles of the law", "chapter", "section", "definition", "liquidation", "dissolution", "company", "enterprise", or similar terms directly related to the provided law database.
+    *   The query is about definitions, procedures, rights, obligations, or specific content *within* the provided law document.
+    *   The query can be fully and accurately answered *solely* by the content of the law database without needing external, real-time, or broader information.
+    *   Examples: "What does Article 10 say about contracts?", "Define 'Company' according to the law.", "Which chapter discusses penalties?", "What are the general provisions of the law?", "What are the procedures for company liquidation?"
 
-**Decision guidance:**
-- If the query falls into a "Strong reasons to search" category, answer "YES".
-- If it falls into a "Strong reasons NOT to search" category, answer "NO".
-- **If it's borderline, but the user seems to be looking for factual, up-to-date, or specific information that *could* be on the web, lean towards "YES" to prioritize providing the most helpful and accurate response.**
-- Do not search if the user is just making a statement or asking a question you can confidently answer from your existing knowledge without needing external verification for recency or specificity.
+*   **WEB_SEARCH_ONLY:**
+    *   The query explicitly asks for current or real-time information (e.g., "latest news on X", "current stock price of Y").
+    *   The query is about very recent events or developments (e.g., things that happened in the last few days/weeks, post-dating your knowledge cutoff).
+    *   The query asks for specific, niche, or technical facts, statistics, or details about entities (people, places, organizations, products) that are not common knowledge or where precision is important, and are *not* directly covered by the law database.
+    *   The query pertains to local information (businesses, services, events) and implies a need for current, location-specific data.
+    *   The user is asking for a comparison or list of specific items where web data would provide comprehensive options (e.g., "top 5 laptops for students").
+    *   The query is clearly outside the scope of the "Law on Insurance" database (e.g., "What is the capital of France?").
+
+*   **BOTH:**
+    *   The query has components that could benefit from both the law database and a web search. For example, asking about a specific legal concept *and* its current real-world application or recent news (e.g., "What is compulsory insurance and are there any recent cases related to it?").
+    *   The query asks for a legal definition or provision *and* examples of companies or situations related to it that might require current information (e.g., "What is a 'Motor Vehicle' according to the law, and what are current examples of compulsory motor vehicle insurance in practice?").
+    *   The query is about a legal topic that might have recent interpretations, cases, or related news that are not in the static law document, but the core concept is in the law database.
+
+*   **NONE:**
+    *   The query is a simple greeting, conversational filler, or a personal statement not seeking external information (e.g., "hello", "my name is Alice", "I feel happy today").
+    *   The query is for creative content generation (e.g., "write a poem", "tell me a story") unless it specifically asks for factual elements to be included from external sources.
+    *   The query asks for your own opinions, or internal AI instructions (unless the question is specifically about how you *use* external tools).
+    *   The query is about extremely broad, common knowledge that is highly unlikely to have changed (e.g., "What is the capital of France?", "How many days in a week?").
+    *   The query is excessively vague, and neither a law database search nor a web search would yield a focused or useful answer.
 
 User Message: "${userMessage}"
 
-Decision (YES or NO):`;
+Decision (LAW_DATABASE_ONLY, WEB_SEARCH_ONLY, BOTH, or NONE):`;
 
-    console.log("[shouldPerformSearch] Prompting to decide on search for user message:", userMessage);
+    console.log("[decideInformationSource] Prompting to decide on information source for user message:", userMessage);
     const result = await model.generateContent(prompt);
     const responseText = result.response.text().trim().toUpperCase();
-    console.log(`[shouldPerformSearch] Decision for "${userMessage}": ${responseText}`);
-    return responseText === "YES";
+    console.log(`[decideInformationSource] Decision for "${userMessage}": ${responseText}`);
+
+    if (["LAW_DATABASE_ONLY", "WEB_SEARCH_ONLY", "BOTH", "NONE"].includes(responseText)) {
+      return responseText as "LAW_DATABASE_ONLY" | "WEB_SEARCH_ONLY" | "BOTH" | "NONE";
+    }
+    return "NONE"; // Default to none on error or unexpected response
   } catch (error) {
-    console.error("[shouldPerformSearch] Error deciding whether to search:", error);
-    return false; // Default to no search on error
+    console.error("[decideInformationSource] Error deciding information source:", error);
+    return "NONE"; // Default to no search on error
   }
 }
 
-async function generateSearchQuery(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], lawPrompt: string | undefined, tonePrompt: string | undefined, policyPrompt: string | undefined, selectedModel: string | undefined, genAI: GoogleGenerativeAI): Promise<string> {
+async function generateSearchQuery(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], lawPrompt: string | undefined, tonePrompt: string | undefined, policyPrompt: string | undefined, selectedModel: string | undefined, genAI: GoogleGenerativeAI, searchType: "LAW_DATABASE" | "WEB_SEARCH", isRetry: boolean = false): Promise<string> {
   try {
     const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
     const dynamicPrompts = [
@@ -104,7 +335,7 @@ async function generateSearchQuery(userMessage: string, history: { role: string;
       tonePrompt,
     ].filter(Boolean).join("\n\n");
 
-    const prompt = `Based on the following user message and the conversation history, and considering the following system prompts, generate a effective Google search query to find the core information requested. The user's message has been deemed to require a web search. Output only the search query itself, without any preamble or explanation.
+    let prompt = `Based on the following user message and the conversation history, and considering the following system prompts, generate an effective search query. Output only the search query itself, without any preamble or explanation.
 
 **System Prompts (if any):**
 ${dynamicPrompts}
@@ -112,12 +343,33 @@ ${dynamicPrompts}
 **Conversation History (most recent last):**
 ${history.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
 
-**Guidance for Search Query Generation:**
+User Message: "${userMessage}"
+`;
+
+    if (searchType === "WEB_SEARCH") {
+      prompt += `
+**Guidance for Web Search Query Generation:**
+- The user's message has been deemed to require a web search.
 - If the user's message or conversation history implies a search for quality, ranking, or recommendations (e.g., "best", "top", "leading", "highly-rated"), incorporate these terms into the search query.
 - Be specific and concise.
 
-User Message: "${userMessage}"
 Search Query:`;
+    } else if (searchType === "LAW_DATABASE") {
+      prompt += `
+**Guidance for Law Database Query Generation:**
+- The user's message has been deemed to require a search within the local law database.
+- Extract specific keywords or phrases that are highly likely to be found directly within the law document's structure (e.g., chapter titles, section titles, or key terms from article content).
+- Prioritize terms that directly relate to legal concepts, procedures, or specific parts of a law.
+- For example, if the user asks "what chapter discusses company dissolution", a good query might be "LIQUIDATION AND DISSOLUTION OF COMPANY" or "company dissolution".
+`;
+      if (isRetry) {
+        prompt += `
+- **RETRY ATTEMPT**: The previous search attempt for the law database yielded no results. Generate a broader or alternative set of keywords. Consider synonyms or more general terms related to the user's query to improve the chances of a match.
+`;
+      }
+      prompt += `
+Search Query for Law Database:`;
+    }
     console.log("[generateSearchQuery] Generating search query for:", userMessage);
     const result = await model.generateContent(prompt);
     const response = result.response;
@@ -185,8 +437,10 @@ export const getAIResponse = action({
     console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}"`);
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
 
-    let searchContextForLLM = "";
-    let searchInfoForSystemPrompt = "Web search was not performed for this query, as it was deemed unnecessary or the query was conversational. Answer from general knowledge.";
+    let lawDatabaseContextForLLM = "";
+    let lawDatabaseInfoForSystemPrompt = "Law database was not accessed for this query.";
+    let webSearchContextForLLM = "";
+    let webSearchInfoForSystemPrompt = "Web search was not performed for this query.";
 
     const previousMessages = await ctx.runQuery(api.chat.getMessages, { userId: userId });
     const formattedHistory = previousMessages.map(msg => ({
@@ -195,40 +449,75 @@ export const getAIResponse = action({
     }));
     console.log("[getAIResponse] Formatted conversation history:", JSON.stringify(formattedHistory, null, 2));
 
-    console.log("[getAIResponse] Calling shouldPerformSearch with user message, history, and selected model...");
-    const performSearch = await shouldPerformSearch(userMessage, formattedHistory, selectedModel, genAI);
-    console.log(`[getAIResponse] shouldPerformSearch returned: ${performSearch}`);
+    console.log("[getAIResponse] Calling decideInformationSource with user message, history, and selected model...");
+    const decision = await decideInformationSource(userMessage, formattedHistory, selectedModel, genAI);
+    console.log(`[getAIResponse] decideInformationSource returned: ${decision}`);
+
+    // Load the law database content
+    const lawDatabaseContent = await ctx.runQuery(api.chat.getLawDatabaseContent); // Assuming this query exists and returns the JSON content
+    const lawDatabase: LawDatabase = JSON.parse(lawDatabaseContent);
 
     let optimizedSearchQuery = ""; // Initialize
-    if (performSearch) {
+
+    if (decision === "LAW_DATABASE_ONLY" || decision === "BOTH") {
+      console.log("[getAIResponse] Decision: Accessing law database.");
+      console.log("[getAIResponse] Decision: Accessing law database.");
+      let lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", false); // Initial search
+      let lawResultsOrErrorKey = await queryLawDatabase(lawQuery, lawDatabase);
+
+      if (lawResultsOrErrorKey === "LAW_DATABASE_NO_RESULTS") {
+        console.log("[getAIResponse] First law database search yielded no results. Attempting retry with broader query.");
+        // Retry: Generate a broader query and try again
+        lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", true); // Retry with isRetry = true
+        lawResultsOrErrorKey = await queryLawDatabase(lawQuery, lawDatabase);
+
+        if (lawResultsOrErrorKey === "LAW_DATABASE_NO_RESULTS") {
+          lawDatabaseInfoForSystemPrompt = `A search of the law database (query: "${lawQuery}") found no relevant results after two attempts.`;
+        } else if (lawResultsOrErrorKey) {
+          lawDatabaseInfoForSystemPrompt = `Relevant information from the law database for query "${lawQuery}" (after retry) is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
+          lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}" - after retry):
+---
+${lawResultsOrErrorKey}
+---
+Use this information to help answer the user's original question.`;
+        }
+      } else if (lawResultsOrErrorKey) {
+        lawDatabaseInfoForSystemPrompt = `Relevant information from the law database for query "${lawQuery}" is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
+        lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}"):
+---
+${lawResultsOrErrorKey}
+---
+Use this information to help answer the user's original question.`;
+      }
+    }
+
+    if (decision === "WEB_SEARCH_ONLY" || decision === "BOTH") {
       console.log("[getAIResponse] Decision: Performing web search.");
-      console.log("[getAIResponse] Calling generateSearchQuery with user message, history, system prompts, and selected model...");
-      optimizedSearchQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI);
+      optimizedSearchQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "WEB_SEARCH");
       console.log(`[getAIResponse] generateSearchQuery returned: "${optimizedSearchQuery}"`);
       const searchResultsOrErrorKey = await searchWeb(optimizedSearchQuery);
       console.log(`[getAIResponse] searchWeb returned: ${searchResultsOrErrorKey.substring(0, 100)}...`);
 
       if (searchResultsOrErrorKey === "WEB_SEARCH_TIMED_OUT") {
-        searchInfoForSystemPrompt = `A web search attempt (query: "${optimizedSearchQuery}") timed out. Inform the user that the information could not be retrieved at this time. Do not attempt to answer the part of the query that required the search.`;
+        webSearchInfoForSystemPrompt = `A web search attempt (query: "${optimizedSearchQuery}") timed out. Inform the user that the information could not be retrieved at this time. Do not attempt to answer the part of the query that required the search.`;
       } else if (searchResultsOrErrorKey === "WEB_SEARCH_NO_RESULTS") {
-        searchInfoForSystemPrompt = `A web search (query: "${optimizedSearchQuery}") found no relevant results. Inform the user that the search didn't find specific information for that part of the query. Do not attempt to answer the part of the query that required the search from general knowledge if the search was meant to find specifics.`;
+        webSearchInfoForSystemPrompt = `A web search (query: "${optimizedSearchQuery}") found no relevant results. Inform the user that the search didn't find specific information for that part of the query. Do not attempt to answer the part of the query that required the search from general knowledge if the search was meant to find specifics.`;
       } else if (searchResultsOrErrorKey === "WEB_SEARCH_ERROR") {
-        searchInfoForSystemPrompt = `An error occurred during a web search attempt (query: "${optimizedSearchQuery}"). Inform the user that the information could not be retrieved. Do not attempt to answer the part of the query that required the search.`;
+        webSearchInfoForSystemPrompt = `An error occurred during a web search attempt (query: "${optimizedSearchQuery}"). Inform the user that the information could not be retrieved. Do not attempt to answer the part of the query that required the search.`;
       } else if (searchResultsOrErrorKey) { // This means actual search results were returned
-        searchInfoForSystemPrompt = `Web search results for query "${optimizedSearchQuery}" are provided below. You MUST synthesize this information to answer the user's query if it's relevant, strictly adhering to any specific number of items requested by the user (e.g., "top 5"). Format any list of items as a Markdown bulleted list, each item starting with '- '. Follow WEB_SEARCH_USAGE_INSTRUCTIONS for how to present this information.`;
-        searchContextForLLM = `\n\nRelevant web search snippets (search term used: "${optimizedSearchQuery}"):
+        webSearchInfoForSystemPrompt = `Web search results for query "${optimizedSearchQuery}" are provided below. You MUST synthesize this information to answer the user's query if it's relevant, strictly adhering to any specific number of items requested by the user (e.g., "top 5"). Format any list of items as a Markdown bulleted list, each item starting with '- '. Follow WEB_SEARCH_USAGE_INSTRUCTIONS for how to present this information.`;
+        webSearchContextForLLM = `\n\nRelevant web search snippets (search term used: "${optimizedSearchQuery}"):
 ---
 ${searchResultsOrErrorKey}
 ---
 Use this information to help answer the user's original question, adhering to the WEB_SEARCH_USAGE_INSTRUCTIONS.`;
       } else {
          // Fallback, should ideally not be reached if searchWeb returns one of the defined strings or results
-         searchInfoForSystemPrompt = `Web search was attempted for query "${optimizedSearchQuery}" but yielded no usable results. Proceed by answering from general knowledge if appropriate.`;
+         webSearchInfoForSystemPrompt = `Web search was attempted for query "${optimizedSearchQuery}" but yielded no usable results. Proceed by answering from general knowledge if appropriate.`;
       }
-    } else {
-      console.log("[getAIResponse] Decision: NOT performing web search. Answering from general knowledge.");
-      // searchContextForLLM remains ""
-      // searchInfoForSystemPrompt remains its default "Web search was not performed..."
+    } else if (decision === "NONE") {
+      console.log("[getAIResponse] Decision: NOT performing any external search. Answering from general knowledge.");
+      webSearchInfoForSystemPrompt = "No external search (neither law database nor web) was performed for this query. Answer from general knowledge.";
     }
 
     const dynamicPrompts = [
@@ -247,11 +536,12 @@ ${dynamicPrompts}
 ${WEB_SEARCH_USAGE_INSTRUCTIONS} 
 // The instructions above specifically guide how you MUST use and refer to any web search information IF IT IS PROVIDED to you.
 
-${searchInfoForSystemPrompt}
-// The line above gives you crucial context: EITHER the outcome of a web search attempt OR an instruction that no search was performed and you should rely on general knowledge.
+${lawDatabaseInfoForSystemPrompt}
+${webSearchInfoForSystemPrompt}
+// The lines above give you crucial context: EITHER the outcome of a law database search, a web search, both, or an instruction that no search was performed and you should rely on general knowledge.
 
 Your primary goal is to answer the user's question.
-- If web search results were provided (see context above), integrate them according to WEB_SEARCH_USAGE_INSTRUCTIONS.
+- If external search results (law database and/or web) were provided (see context above), integrate them according to the specific instructions for each.
 - If no search was performed, or if search yielded no results for the specific information sought, answer from your general training knowledge to the best of your ability. Do not invent search results.
 - Always be concise and directly address the user's original question.
 `;
@@ -261,7 +551,7 @@ Your primary goal is to answer the user's question.
     const chat = model.startChat({
       history: [
         { role: "user", parts: [{ text: finalSystemInstruction }] },
-        { role: "model", parts: [{ text: "Understood. I will follow all instructions. If web search data is provided, I will use it as guided. Otherwise, I will rely on my general knowledge." }] },
+        { role: "model", parts: [{ text: "Understood. I will follow all instructions. If external data is provided, I will use it as guided. Otherwise, I will rely on my general knowledge." }] },
         ...formattedHistory,
       ],
     });
@@ -275,8 +565,20 @@ Your primary goal is to answer the user's question.
     console.log(`[getAIResponse] Created placeholder message ${messageId} for streaming response.`);
 
     // Construct the final message to send to the LLM for response generation
-    // It includes the search context (if any) and then the user's original question.
-    const messageToSendToGemini = (searchContextForLLM ? searchContextForLLM + "\n\nUser's original question: " : "User's original question: ") + userMessage;
+    // It includes the law database context, web search context (if any), and then the user's original question.
+    let messageToSendToGemini = "";
+    if (lawDatabaseContextForLLM) {
+      messageToSendToGemini += lawDatabaseContextForLLM;
+    }
+    if (webSearchContextForLLM) {
+      if (messageToSendToGemini) messageToSendToGemini += "\n\n"; // Add separator if both are present
+      messageToSendToGemini += webSearchContextForLLM;
+    }
+    if (messageToSendToGemini) {
+      messageToSendToGemini += "\n\nUser's original question: " + userMessage;
+    } else {
+      messageToSendToGemini = "User's original question: " + userMessage;
+    }
     
     console.log(`[getAIResponse] Sending to Gemini for response generation (first 500 chars): "${messageToSendToGemini.substring(0,500)}..."`);
 

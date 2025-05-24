@@ -189,6 +189,8 @@ export const appendMessageContent = mutation({
   },
 });
 
+import lawDatabase from "../Database/Law.json"; // Adjust path as necessary
+
 export const updateMessageStreamingStatus = mutation({
   args: {
     messageId: v.id("messages"),
@@ -202,5 +204,12 @@ export const updateMessageStreamingStatus = mutation({
     await ctx.db.patch(args.messageId, {
       isStreaming: args.isStreaming,
     });
+  },
+});
+
+export const getLawDatabaseContent = query({
+  args: {},
+  handler: async () => {
+    return JSON.stringify(lawDatabase);
   },
 });

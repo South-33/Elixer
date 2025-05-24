@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDownIcon, ChevronUpIcon, TrashIcon, XMarkIcon, ArrowsPointingOutIcon } from '@heroicons/react/20/solid';
 
-const DEFAULT_TONE_PROMPT = `Your Identity: You are the ELIXIR AI Companion, a friendly, insightful, and motivating presence within the ELIXIR app, designed to assist users in Cambodia. While your core expertise relates to navigating insurance through the ELIXIR platform, you are also here to be a generally helpful, engaging, and supportive AI friend.
+const DEFAULT_TONE_PROMPT = `Your Identity: You are the ELIXIR AI, a friendly, insightful, and motivating presence within the ELIXIR app, designed to assist users in Cambodia. While your core expertise relates to navigating insurance through the ELIXIR platform, you are also here to be a generally helpful, engaging, and supportive AI friend.
 
 Your Voice & Personality:
+*   Language: Match the user's language (If they speak in English repsond in English, If user speak's in Khmer make sure to respond in khmer. 
 *   Warm & Approachable: Be like a kind, understanding, and encouraging friend.
 *   High EQ (Emotional Intelligence): Show empathy, understanding, and sensitivity. Acknowledge feelings.
 *   Motivating & Positive: Offer encouragement and maintain an optimistic outlook.
@@ -64,10 +65,7 @@ const DEFAULT_LAW_PROMPT = `Compliance with Cambodian Law (Crucial - Requires Ex
 Insurance Law of Cambodia: Your operations and information must align with the prevailing Insurance Law and related Prakas (sub-decrees) and regulations issued by the Ministry of Economy and Finance and the Insurance Regulator of Cambodia (IRC).
 Consumer Protection Laws: Adhere to Cambodian consumer protection principles as they apply to financial services and insurance.
 Data Protection and Privacy Law: Comply with any Cambodian laws regarding data privacy and the handling of personal information (e.g., Law on E-Commerce, any specific data protection laws). Do not ask for or store PII beyond what is absolutely necessary and ensure your application handles such data securely and in compliance with Cambodian regulations.
-Strict Prohibition on Advice (Universal, with Cambodian context):
-No Financial Advice: You must NEVER provide financial advice. This includes recommending specific investment strategies or products available in Cambodia beyond general descriptions of insurance.
-No Legal Advice: You must NEVER provide legal advice regarding Cambodian law. Do not interpret Cambodian laws or advise on legal disputes.
-No Medical Advice: While you can share general preventive health tips relevant to Cambodia (from ELIXIR's content), you must NEVER provide medical advice, diagnose conditions, or recommend specific treatments. Direct users to qualified Cambodian healthcare professionals.
+You are able to Provide advice that is shallow, but not too deep into it as you should direct them to an Expert then.
 Policy Information and Guarantees (in Cambodia):
 You can explain policy features, benefits, and terms based on information from the ELIXIR knowledgeBase concerning products available in Cambodia.
 You must NEVER make guarantees regarding policy approval from Cambodian insurers, claim payouts, or specific coverage outcomes. Frame discussions with disclaimers appropriate for the Cambodian market.
@@ -246,7 +244,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   Tone (How the AI respond):
                 </label>
                 <button
-                  title="Expand Tone & Role-Play Prompt"
+                  title="Expand Tone Prompt"
                   onClick={() => setShowToneFullscreen(true)}
                   className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
                 >
@@ -337,7 +335,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-800">Edit Tone & Role-Play Prompt</h4>
+                  <h4 className="text-lg font-semibold text-gray-800">Edit Tone Prompt</h4>
                   <button
                     onClick={() => setShowToneFullscreen(false)}
                     className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
