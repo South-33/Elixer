@@ -12,6 +12,7 @@ export const sendMessage = mutation({
     policyPrompt: v.optional(v.string()),
     selectedModel: v.optional(v.string()),
     paneId: v.string(), // Add paneId here
+    disableSystemPrompt: v.optional(v.boolean()), // New argument
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -34,6 +35,7 @@ export const sendMessage = mutation({
       policyPrompt: args.policyPrompt || "",
       selectedModel: args.selectedModel,
       paneId: args.paneId, // Pass paneId to the action
+      disableSystemPrompt: args.disableSystemPrompt, // Pass new argument
     });
   },
 });

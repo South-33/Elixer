@@ -23,7 +23,7 @@ interface ChatPaneProps {
   lawPrompt: string;
   tonePrompt: string;
   policyPrompt: string;
-  onSendMessage: (content: string, model: string, paneId: string) => Promise<void>;
+  onSendMessage: (content: string, model: string, paneId: string, disableSystemPrompt: boolean) => Promise<void>;
   onClearChat: () => void; // Callback for clearing chat
   onStreamingStatusChange: (paneId: string, isStreaming: boolean) => void; // New callback
   registerSendHandler: (paneId: string, handler: (content: string) => Promise<void>) => void; // New prop
@@ -63,6 +63,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
   ) || [] as MessageDoc[];
 
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-04-17"); // Default model for this pane
+  const [disableSystemPrompt, setDisableSystemPrompt] = useState(false); // New state for disabling system prompt
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -190,7 +191,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
         setShowLocalPendingIndicator(false);
         return;
       }
-      await onSendMessage(userMessageContent, selectedModel, paneId);
+      await onSendMessage(userMessageContent, selectedModel, paneId, disableSystemPrompt);
     } catch (error: any) { // Explicitly type error as any to access properties
       console.error("Failed to send message:", error);
       setShowLocalPendingIndicator(false); // Hide pending indicator on send error
@@ -217,16 +218,29 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
     <div className="flex-1 flex flex-col bg-white border-r border-slate-200 last:border-r-0">
       <div className="p-2 sm:p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
         <h3 className="text-md font-semibold text-slate-700">Pane: {paneId}</h3>
-        <select
-          value={selectedModel}
-          onChange={(e) => setSelectedModel(e.target.value)}
-          className="p-1.5 border border-slate-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none"
-          disabled={isStreaming}
-        >
-          <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 Flash</option>
-          <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-          {/* Add other models here */}
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setDisableSystemPrompt(prev => !prev)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              disableSystemPrompt
+                ? "bg-red-100 text-red-700 hover:bg-red-200"
+                : "bg-green-100 text-green-700 hover:bg-green-200"
+            }`}
+            disabled={isStreaming}
+          >
+            {disableSystemPrompt ? "Enable System Prompt" : "Disable System Prompt"}
+          </button>
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="p-1.5 border border-slate-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none"
+            disabled={isStreaming}
+          >
+            <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 Flash</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+            {/* Add other models here */}
+          </select>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
         {messages.map((message: MessageDoc) => (

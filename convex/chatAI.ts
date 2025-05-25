@@ -393,10 +393,11 @@ export const getAIResponse = action({
     policyPrompt: v.optional(v.string()),
     selectedModel: v.optional(v.string()),
     paneId: v.string(), // Add paneId here
+    disableSystemPrompt: v.optional(v.boolean()), // New argument
   },
   handler: async (ctx, args): Promise<Id<"messages">> => {
-    const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel, paneId } = args;
-    console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}". Pane ID: "${paneId}"`);
+    const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel, paneId, disableSystemPrompt } = args;
+    console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}". Pane ID: "${paneId}". System Prompt Disabled: ${!!disableSystemPrompt}`);
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
 
     // Correct instantiation of Tool and GoogleSearch
@@ -468,18 +469,19 @@ Use this information to help answer the user's original question.`;
         webSearchInfoForSystemPrompt = "No external search (neither law database nor web) was performed for this query. Answer from general knowledge.";
       }
 
-      const dynamicPrompts = [
+      const dynamicPrompts = disableSystemPrompt ? "" : [
         lawPrompt,
         policyPrompt,
         tonePrompt,
       ].filter(Boolean).join("\n\n");
 
-      const finalSystemInstruction = `You are ELIXIR AI, a helpful assistant.
+      const finalSystemInstruction = `You are a helpful assistant.
 ${STYLING_PROMPT}
 // The prompt above defines how you MUST format your output using Markdown. Adhere to it strictly.
 
 ${dynamicPrompts}
 // The dynamic prompts above (if any) define your general persona, legal constraints, and company policies.
+${disableSystemPrompt ? "" : "You are a helpful assistant designed to assist users in Cambodia. You can provide information, answer questions, and offer support on a variety of topics. I am here to be your friendly AI companion."}
 
 ${WEB_SEARCH_USAGE_INSTRUCTIONS}
 // The instructions above specifically guide how you MUST use and refer to any web search information IF IT IS PROVIDED to you.

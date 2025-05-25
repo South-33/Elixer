@@ -221,7 +221,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, savedPrompts]);
 
-  const handleSendMessage = async (content: string, model: string, paneId: string) => {
+  const handleSendMessage = async (content: string, model: string, paneId: string, disableSystemPrompt: boolean) => {
     if (!user?._id) {
       console.error("User not loaded, cannot send message.");
       toast.error("User not loaded. Please wait a moment.");
@@ -229,9 +229,9 @@ export default function App() {
     }
     await sendMessageMutation({
       content,
-      lawPrompt,
-      tonePrompt,
-      policyPrompt,
+      lawPrompt: disableSystemPrompt ? undefined : lawPrompt,
+      tonePrompt: disableSystemPrompt ? undefined : tonePrompt,
+      policyPrompt: disableSystemPrompt ? undefined : policyPrompt,
       selectedModel: model,
       paneId,
     });
