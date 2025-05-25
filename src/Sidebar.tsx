@@ -90,8 +90,6 @@ export interface SidebarProps {
   onPolicyPromptChange: (value: string) => void;
   onClearChat: () => void;
   hasActivePrompts: boolean;
-  selectedModel: string;
-  onModelChange: (model: string) => void;
   onWidthChange: (width: number) => void; // New prop for width change
 }
 
@@ -106,8 +104,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onPolicyPromptChange,
   onClearChat,
   hasActivePrompts,
-  selectedModel,
-  onModelChange,
   onWidthChange, // Destructure new prop
 }) => {
   const [arePromptsExpanded, setArePromptsExpanded] = useState(true);
@@ -223,21 +219,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onMouseDown={handleMouseDown}
           />
 
-          <div className={`flex-1 flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar ${arePromptsExpanded ? 'flex' : 'hidden'}`}>
-            <div>
-              <label htmlFor="aiModelSelect" className="block text-sm font-medium text-gray-700 mb-1">
-                AI Model:
-              </label>
-              <select
-                id="aiModelSelect"
-                className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                value={selectedModel}
-                onChange={(e) => onModelChange(e.target.value)}
-              >
-                <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 Flash</option>
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-              </select>
-            </div>
+          <div className={`flex-1 flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar pb-[70px] ${arePromptsExpanded ? 'flex' : 'hidden'}`}>
+            {/* Removed AI Model Select from Sidebar */}
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label htmlFor="tonePromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">

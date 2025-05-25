@@ -6,18 +6,8 @@ import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
 import { Toaster, toast } from "sonner";
 import { Sidebar } from "./Sidebar";
+import { ChatPane } from "./ChatPane"; // Import ChatPane
 import ReactMarkdown from 'react-markdown';
-
-// Type for Convex message document
-type MessageDoc = {
-  _id: Id<"messages">;
-  _creationTime: number;
-  role: string;
-  content: string;
-  userId: Id<"users">;
-  systemPrompt?: string;
-  isStreaming?: boolean;
-};
 
 // Placeholder Icons for Header
 const MenuIcon = () => (
@@ -26,35 +16,51 @@ const MenuIcon = () => (
 const CloseIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
 );
+const AddPaneIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+);
+const RemovePaneIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+);
 
-const MemoizedChatMessage = React.memo(({ message, displayContent }: { message: MessageDoc, displayContent: string }) => {
-  return (
-    <div
-      className={`flex ${
-        message.role === "user" ? "justify-end" : "justify-start"
-      }`}
-    >
-      <div
-        className={`max-w-[85%] sm:max-w-[80%] p-3 rounded-xl shadow-sm ${
-          message.role === "user"
-            ? "bg-blue-500 text-white"
-            : "bg-slate-100 text-slate-800 prose" // Add prose class here
-        }`}
-      >
-        {/* Show typing indicator if it's an assistant message, actively streaming from DB, but liveStreamingContent is still empty */}
-        {/* OR if we are showing the local pending indicator (which implies liveStreamingContent is also empty for the new message) */}
-        {message.role === "assistant" && message.isStreaming && displayContent === "" ? (
-          <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
-        ) : (
-          <ReactMarkdown>{displayContent}</ReactMarkdown> // Use ReactMarkdown here
-        )}
-      </div>
-    </div>
-  );
-});
 
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [chatPanes, setChatPanes] = useState([{ id: 'default-pane' }]); // Start with one default pane
+
+  const clearPaneMessagesMutation = useMutation(api.chat.clearPaneMessages);
+
+  const addChatPane = () => {
+    if (chatPanes.length < 4) { // Limit to 4 panes
+      setChatPanes(prevPanes => [...prevPanes, { id: `pane-${Date.now()}` }]);
+      // setMessageToSend(""); // This will be handled by AuthenticatedContent
+    } else {
+      toast.info("Maximum of 4 comparison panes reached.");
+    }
+  };
+
+  const removeChatPane = async (idToRemove: string) => {
+    if (chatPanes.length > 1) { // Always keep at least one pane
+      // Optimistically remove the pane from the UI
+      setChatPanes(prevPanes => prevPanes.filter(pane => pane.id !== idToRemove));
+
+      const paneToRemove = chatPanes.find(pane => pane.id === idToRemove);
+      if (paneToRemove) {
+        try {
+          // Attempt to clear messages on the backend in the background
+          await clearPaneMessagesMutation({ paneId: paneToRemove.id });
+          console.log(`Successfully cleared chat history for pane ${paneToRemove.id} on backend.`);
+        } catch (error) {
+          console.error(`Failed to clear chat for pane ${paneToRemove.id} on backend:`, error);
+          toast.error(`Failed to clear chat history for pane ${paneToRemove.id} on backend. You may need to clear it manually.`);
+          // Optionally, you could re-add the pane here if the backend operation is critical
+          // setChatPanes(prevPanes => [...prevPanes, paneToRemove]);
+        }
+      }
+    } else {
+      toast.info("Cannot remove the last chat pane.");
+    }
+  };
 
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
@@ -86,7 +92,30 @@ export default function App() {
           </Authenticated>
           <h1 className="text-xl font-semibold text-slate-700">ELIXIR AI Assistant</h1>
         </div>
-        <SignOutButton />
+        <div className="flex items-center gap-2"> {/* New div to group buttons */}
+          <Authenticated>
+            <button
+              onClick={addChatPane}
+              className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              title="Add Comparison Pane"
+              disabled={chatPanes.length >= 4}
+            >
+              <AddPaneIcon />
+              <span className="sr-only">Add Comparison Pane</span>
+            </button>
+            {chatPanes.length > 1 && (
+              <button
+                onClick={() => removeChatPane(chatPanes[chatPanes.length - 1].id)} // Remove last pane
+                className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                title="Remove Last Pane"
+              >
+                <RemovePaneIcon />
+                <span className="sr-only">Remove Last Pane</span>
+              </button>
+            )}
+          </Authenticated>
+          <SignOutButton />
+        </div>
       </header>
 
       <div className="flex flex-1 mt-16">
@@ -105,60 +134,62 @@ export default function App() {
           <AuthenticatedContent
             isSidebarOpen={isSidebarOpen}
             setIsSidebarOpen={setIsSidebarOpen}
+            chatPanes={chatPanes}
+            addChatPane={addChatPane}
+            removeChatPane={removeChatPane}
           />
         </Authenticated>
       </div>
-      <Toaster position="top-right" richColors />
+      <Toaster position="bottom-left" richColors />
     </div>
   );
 }
 
-function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOpen: boolean, setIsSidebarOpen: (isOpen: boolean) => void }) {
-  const user = useQuery(api.auth.loggedInUser);
-  const [currentSidebarWidth, setCurrentSidebarWidth] = useState(0); // State to hold sidebar width
+  function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addChatPane, removeChatPane }: {
+    isSidebarOpen: boolean,
+    setIsSidebarOpen: (isOpen: boolean) => void,
+    chatPanes: { id: string }[],
+    addChatPane: () => void,
+    removeChatPane: (id: string) => Promise<void>
+  }) {
+    const user = useQuery(api.auth.loggedInUser);
+    const [currentSidebarWidth, setCurrentSidebarWidth] = useState(0); // State to hold sidebar width
 
-  const messages = useQuery(
-    api.chat.getMessages,
-    user?._id ? { userId: user._id } : "skip"
-  ) || [] as MessageDoc[];
+  const chatPaneResetStatesHandlers = useRef<Record<string, () => void>>({}); // New ref to store reset state handlers for each pane
 
   const savedPrompts = useQuery(api.chat.getSystemPrompts) || { lawPrompt: "", tonePrompt: "", policyPrompt: "" };
 
-  const sendMessage = useMutation(api.chat.sendMessage)
+  const sendMessageMutation = useMutation(api.chat.sendMessage)
     .withOptimisticUpdate(
-      (optimisticStore, args: { content: string; lawPrompt?: string; tonePrompt?: string; policyPrompt?: string; selectedModel?: string; }) => {
+      (optimisticStore, args: { content: string; lawPrompt?: string; tonePrompt?: string; policyPrompt?: string; selectedModel?: string; paneId: string; }) => {
         if (user?._id) {
-          const currentMessages = optimisticStore.getQuery(api.chat.getMessages, { userId: user._id }) || [] as MessageDoc[];
+          const currentMessages = optimisticStore.getQuery(api.chat.getMessages, { userId: user._id, paneId: args.paneId }) || [];
           const timestamp = Date.now();
-          const optimisticUserMessage: MessageDoc = {
-            _id: `optimistic-user-${timestamp}` as Id<"messages">,
+          const optimisticUserMessage = {
+            _id: `optimistic-user-${timestamp}-${args.paneId}` as Id<"messages">,
             _creationTime: timestamp,
             role: "user",
             content: args.content,
             userId: user._id,
+            paneId: args.paneId,
           };
-          optimisticStore.setQuery(api.chat.getMessages, { userId: user._id }, [...currentMessages, optimisticUserMessage]);
+          optimisticStore.setQuery(api.chat.getMessages, { userId: user._id, paneId: args.paneId }, [...currentMessages, optimisticUserMessage]);
         } else {
           console.warn("Optimistic update for sendMessage skipped: user._id not available.");
         }
       }
     );
   const saveSystemPrompt = useMutation(api.chat.saveSystemPrompt);
-  const clearChat = useMutation(api.chat.clearChat);
+  const clearChatMutation = useMutation(api.chat.clearChat);
 
-  const [newMessage, setNewMessage] = useState("");
+  const [currentInputMessage, setCurrentInputMessage] = useState(""); // New state for input field
+  // const [messageToSend, setMessageToSend] = useState(""); // Removed: No longer needed as a global trigger
+  const chatPaneSendHandlers = useRef<Record<string, (content: string) => Promise<void>>>({}); // New ref to store send handlers for each pane
   const [lawPrompt, setLawPrompt] = useState(savedPrompts.lawPrompt);
   const [tonePrompt, setTonePrompt] = useState(savedPrompts.tonePrompt);
   const [policyPrompt, setPolicyPrompt] = useState(savedPrompts.policyPrompt);
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-04-17"); // Default model
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const savePromptTimeoutRef = useRef<number | null>(null);
-
-  const [liveStreamingContent, setLiveStreamingContent] = useState("");
-  const [streamingIntervalId, setStreamingIntervalId] = useState<number | null>(null);
-  const contentBuffer = useRef("");
-  const [showLocalPendingIndicator, setShowLocalPendingIndicator] = useState(false);
 
   useEffect(() => {
     if (savedPrompts) {
@@ -168,85 +199,6 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedPrompts]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    const streamingDbMessage = messages.find((msg: MessageDoc) => msg.role === "assistant" && msg.isStreaming);
-
-    if (streamingDbMessage) {
-      setShowLocalPendingIndicator(false); // DB stream started, hide local indicator
-      const fullDbContent = streamingDbMessage.content || "";
-      const currentlyDisplayedOrBufferedLength = liveStreamingContent.length + contentBuffer.current.length;
-
-      if (fullDbContent.length > currentlyDisplayedOrBufferedLength) {
-        contentBuffer.current += fullDbContent.substring(currentlyDisplayedOrBufferedLength);
-      }
-
-      if (streamingIntervalId === null) {
-        const id = window.setInterval(() => {
-          if (contentBuffer.current.length > 0) {
-            const chunkSize = Math.max(1, Math.floor(contentBuffer.current.length / 10)); // Dynamic chunk size
-            const nextChunk = contentBuffer.current.substring(0, chunkSize);
-            contentBuffer.current = contentBuffer.current.substring(chunkSize);
-            setLiveStreamingContent(prev => prev + nextChunk);
-          } else {
-            const latestDbMessageInstance = messages.find((m: MessageDoc) => m._id === streamingDbMessage._id);
-            if (!latestDbMessageInstance || !latestDbMessageInstance.isStreaming) {
-              clearInterval(id);
-              setStreamingIntervalId(null);
-              if (latestDbMessageInstance) {
-                setLiveStreamingContent(latestDbMessageInstance.content || ""); // Ensure final content is set
-              }
-            }
-          }
-        }, 50); // Interval for smoother animation
-        setStreamingIntervalId(id);
-      }
-    } else {
-      // No message is currently marked as streaming in the database
-      if (streamingIntervalId !== null) {
-        clearInterval(streamingIntervalId);
-        setStreamingIntervalId(null);
-      }
-      contentBuffer.current = ""; // Clear buffer if no longer streaming
-
-      // If we are NOT showing a local pending indicator (meaning a new message was NOT just sent and awaiting response)
-      // then try to sync liveStreamingContent with the last settled assistant message.
-      if (!showLocalPendingIndicator) {
-        const lastAssistantMessage = messages
-          .filter((m: MessageDoc) => m.role === 'assistant' && !m.isStreaming) // Only settled messages
-          .pop();
-
-        if (lastAssistantMessage) {
-          // If liveStreamingContent is different from the last settled assistant message, update it.
-          // This primarily handles the case where a stream just finished, and we need to ensure the final DB content is displayed.
-          if (liveStreamingContent !== (lastAssistantMessage.content || "")) {
-            setLiveStreamingContent(lastAssistantMessage.content || "");
-          }
-        } else if (liveStreamingContent) {
-          // If there are no assistant messages at all (e.g., after clearing chat),
-          // and liveStreamingContent still has something, clear it.
-          setLiveStreamingContent("");
-        }
-      }
-      // If showLocalPendingIndicator IS true, it means handleSend just ran,
-      // liveStreamingContent was set to "", and the local "..." indicator will be shown.
-      // So, no need to modify liveStreamingContent here in that specific sub-case.
-    }
-
-    return () => {
-      if (streamingIntervalId !== null) {
-        clearInterval(streamingIntervalId);
-      }
-    };
-  }, [messages, streamingIntervalId, liveStreamingContent, showLocalPendingIndicator]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, liveStreamingContent]);
 
   useEffect(() => {
     const promptsChangedByUser = lawPrompt !== savedPrompts.lawPrompt ||
@@ -269,56 +221,49 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, savedPrompts]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const userMessageContent = newMessage.trim();
-    // Recalculate current streaming state accurately before deciding to send
-    const isCurrentlyStreaming = messages.some((msg: MessageDoc) => msg.isStreaming) || showLocalPendingIndicator;
-
-    if (!userMessageContent || isCurrentlyStreaming) return;
-
-    setNewMessage("");
-    setLiveStreamingContent(""); // CRITICAL: Clear for the new incoming response
-    contentBuffer.current = "";
-    if (streamingIntervalId !== null) {
-        clearInterval(streamingIntervalId);
-        setStreamingIntervalId(null);
+  const handleSendMessage = async (content: string, model: string, paneId: string) => {
+    if (!user?._id) {
+      console.error("User not loaded, cannot send message.");
+      toast.error("User not loaded. Please wait a moment.");
+      return;
     }
-    setShowLocalPendingIndicator(true); // Show local pending state immediately
+    await sendMessageMutation({
+      content,
+      lawPrompt,
+      tonePrompt,
+      policyPrompt,
+      selectedModel: model,
+      paneId,
+    });
+  };
 
-    try {
-      if (!user?._id) {
-        console.error("User not loaded, cannot send message.");
-        toast.error("User not loaded. Please wait a moment.");
-        setShowLocalPendingIndicator(false);
-        return;
+  const handleGlobalSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const userMessageContent = currentInputMessage.trim();
+    if (!userMessageContent) return;
+
+    setCurrentInputMessage(""); // Clear input field immediately
+
+    // Trigger send for each active pane by calling their registered handlers
+    for (const paneId of chatPanes.map(pane => pane.id)) {
+      const sendHandler = chatPaneSendHandlers.current[paneId];
+      if (sendHandler) {
+        await sendHandler(userMessageContent);
       }
-      await sendMessage({
-        content: userMessageContent,
-        lawPrompt,
-        tonePrompt,
-        policyPrompt,
-        selectedModel,
-      });
-      // setShowLocalPendingIndicator(false) will be handled by the effect when DB stream starts or if an error occurs later
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      toast.error("Failed to send message. Please try again.");
-      setShowLocalPendingIndicator(false); // Hide pending indicator on send error
     }
   };
 
   const handleClearChat = async () => {
     if (window.confirm("Are you sure you want to clear all messages? This action cannot be undone.")) {
       try {
-        await clearChat();
-        setLiveStreamingContent("");
-        contentBuffer.current = "";
-        if (streamingIntervalId !== null) {
-          clearInterval(streamingIntervalId);
-          setStreamingIntervalId(null);
+        await clearChatMutation();
+        // After clearing messages from DB, also reset local streaming states in all panes
+        for (const paneId of chatPanes.map(pane => pane.id)) {
+          const resetHandler = chatPaneResetStatesHandlers.current[paneId];
+          if (resetHandler) {
+            resetHandler();
+          }
         }
-        setShowLocalPendingIndicator(false);
         toast.success("Chat history cleared.");
       } catch (error) {
         console.error("Failed to clear chat:", error);
@@ -328,8 +273,18 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
   };
 
   const hasActivePrompts = !!(lawPrompt || tonePrompt || policyPrompt);
-  // This is the global "isStreaming" used to disable UI elements
-  const isStreaming = messages.some((msg: MessageDoc) => msg.isStreaming) || showLocalPendingIndicator;
+  // Determine if any pane is currently streaming to disable global input
+  const [paneStreamingStatus, setPaneStreamingStatus] = useState<Record<string, boolean>>({});
+
+  const handlePaneStreamingStatusChange = React.useCallback((paneId: string, isStreaming: boolean) => {
+    setPaneStreamingStatus(prevStatus => ({
+      ...prevStatus,
+      [paneId]: isStreaming,
+    }));
+  }, [setPaneStreamingStatus]); // Dependency array includes setPaneStreamingStatus
+
+  const isAnyPaneStreaming = Object.values(paneStreamingStatus).some(status => status);
+
 
   return (
     <>
@@ -344,9 +299,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
         onPolicyPromptChange={setPolicyPrompt}
         onClearChat={handleClearChat}
         hasActivePrompts={hasActivePrompts}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
-        onWidthChange={setCurrentSidebarWidth} // Pass the setter for sidebar width
+        onWidthChange={setCurrentSidebarWidth}
       />
       {isSidebarOpen && (
         <div
@@ -357,50 +310,63 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen }: { isSidebarOp
       )}
       <main
         className={`
-          flex-1 flex flex-col bg-white overflow-hidden
+          flex-1 flex flex-col bg-white
           md:my-4 md:mr-4 md:rounded-lg md:shadow-lg
           transition-[margin-left] duration-300 ease-in-out
           `}
-        style={{ marginLeft: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }} // Dynamic margin
+        style={{ marginLeft: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
       >
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
-          {messages.map((message: MessageDoc) => (
-            <MemoizedChatMessage
-              key={message._id}
-              message={message}
-              displayContent={message.role === 'assistant' && message.isStreaming ? liveStreamingContent : message.content}
+
+        <div className="flex-1 flex flex-row pb-[70px] sm:pb-[80px]"> {/* Added padding-bottom to account for fixed input */}
+          {chatPanes.map(pane => (
+            <ChatPane
+              key={pane.id}
+              userId={user?._id} // user is authenticated here, but can be undefined initially
+              paneId={pane.id}
+              lawPrompt={lawPrompt}
+              tonePrompt={tonePrompt}
+              policyPrompt={policyPrompt}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat} // Pass clear chat for now, though it's global
+              onStreamingStatusChange={handlePaneStreamingStatusChange} // Pass the new callback
+              registerSendHandler={(paneId, handler) => {
+                chatPaneSendHandlers.current[paneId] = handler;
+              }}
+              unregisterSendHandler={(paneId) => {
+                delete chatPaneSendHandlers.current[paneId];
+              }}
+              registerResetStatesHandler={(paneId, handler) => { // New prop
+                chatPaneResetStatesHandlers.current[paneId] = handler;
+              }}
+              unregisterResetStatesHandler={(paneId) => { // New prop
+                delete chatPaneResetStatesHandlers.current[paneId];
+              }}
             />
           ))}
-          {/* Show local "..." indicator if we've initiated a send, but no DB message is yet marked as streaming */}
-          {showLocalPendingIndicator &&
-            !messages.some((msg: MessageDoc) => msg.role === 'assistant' && msg.isStreaming) && (
-            <div className="flex justify-start" key="local-pending-jsx-indicator">
-              <div className="max-w-[80%] p-3 rounded-lg bg-slate-100 text-slate-800 prose"> {/* Add prose class here */}
-                <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={handleSend} className="p-3 sm:p-4 border-t border-slate-200 bg-slate-50">
+        <form
+          onSubmit={handleGlobalSend}
+          className="fixed bottom-0 right-0 z-40 p-3 sm:p-4 border-t border-slate-200 bg-slate-50 transition-[left] duration-300 ease-in-out"
+          style={{ left: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
+        >
           <div className="flex gap-2 sm:gap-3 items-center">
             <input
               type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              value={currentInputMessage}
+              onChange={(e) => setCurrentInputMessage(e.target.value)}
               placeholder="Type your message..."
               className="flex-1 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
-              disabled={isStreaming}
+              disabled={isAnyPaneStreaming} // Disable if any pane is streaming
               aria-label="Chat message input"
             />
             <button
               type="submit"
-              disabled={isStreaming || !newMessage.trim()}
+              disabled={isAnyPaneStreaming || !currentInputMessage.trim()}
               className="px-4 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-colors font-medium"
-              aria-label={isStreaming ? "Sending message" : "Send message"}
+              aria-label={isAnyPaneStreaming ? "Sending message" : "Send message"}
             >
-              {isStreaming ? "..." : "Send"}
+              {isAnyPaneStreaming ? "..." : "Send"}
             </button>
           </div>
         </form>

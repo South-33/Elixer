@@ -1,9 +1,9 @@
 "use node";
 
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from "@google/generative-ai";
 import { Id } from "./_generated/dataModel";
 
 // --- Hardcoded Prompts ---
@@ -383,6 +383,7 @@ Search Query for Law Database:`;
   }
 }
 
+
 export const getAIResponse = action({
   args: {
     userMessage: v.string(),
@@ -391,10 +392,11 @@ export const getAIResponse = action({
     tonePrompt: v.optional(v.string()),
     policyPrompt: v.optional(v.string()),
     selectedModel: v.optional(v.string()),
+    paneId: v.string(), // Add paneId here
   },
   handler: async (ctx, args): Promise<Id<"messages">> => {
-    const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel } = args;
-    console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}"`);
+    const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel, paneId } = args;
+    console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}". Pane ID: "${paneId}"`);
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
 
     // Correct instantiation of Tool and GoogleSearch
@@ -407,69 +409,72 @@ export const getAIResponse = action({
     let webSearchInfoForSystemPrompt = "Web search was not performed for this query.";
     let searchSuggestionsHtml = ""; // To store the renderedContent from groundingMetadata
 
-    const previousMessages = await ctx.runQuery(api.chat.getMessages, { userId: userId });
-    const formattedHistory = previousMessages.map(msg => ({
-      role: msg.role === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
-    }));
-    console.log("[getAIResponse] Formatted conversation history:", JSON.stringify(formattedHistory, null, 2));
+    let messageId: Id<"messages"> | null = null; // Initialize messageId as nullable
 
-    console.log("[getAIResponse] Calling decideInformationSource with user message, history, and selectedModel...");
-    const decision = await decideInformationSource(userMessage, formattedHistory, selectedModel, genAI);
-    console.log(`[decideInformationSource] decideInformationSource returned: ${decision}`);
+    try {
+      const previousMessages = await ctx.runQuery(api.chat.getMessages, { userId: userId, paneId: paneId }); // Pass paneId to getMessages
+      const formattedHistory = previousMessages.map(msg => ({
+        role: msg.role === "user" ? "user" : "model",
+        parts: [{ text: msg.content }],
+      }));
+      console.log("[getAIResponse] Formatted conversation history:", JSON.stringify(formattedHistory, null, 2));
 
-    // Load the law database content
-    const lawDatabaseContent = await ctx.runQuery(api.chat.getLawDatabaseContent); // Assuming this query exists and returns the JSON content
-    const lawDatabase: LawDatabase = JSON.parse(lawDatabaseContent);
+      console.log("[getAIResponse] Calling decideInformationSource with user message, history, and selectedModel...");
+      const decision = await decideInformationSource(userMessage, formattedHistory, selectedModel, genAI);
+      console.log(`[decideInformationSource] decideInformationSource returned: ${decision}`);
 
-    if (decision === "LAW_DATABASE_ONLY" || decision === "BOTH") {
-      console.log("[getAIResponse] Decision: Accessing law database.");
-      let lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", false); // Initial search
-      let lawResultsOrErrorKey = await queryLawDatabase(lawQuery, lawDatabase);
+      // Load the law database content
+      const lawDatabaseContent = await ctx.runQuery(api.chat.getLawDatabaseContent); // Assuming this query exists and returns the JSON content
+      const lawDatabase: LawDatabase = JSON.parse(lawDatabaseContent);
 
-      if (lawResultsOrErrorKey === "LAW_DATABASE_NO_RESULTS") {
-        console.log("[getAIResponse] First law database search yielded no results. Attempting retry with broader query.");
-        // Retry: Generate a broader query and try again
-        lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", true); // Retry with isRetry = true
-        lawResultsOrErrorKey = await queryLawDatabase(lawQuery, lawDatabase);
+      if (decision === "LAW_DATABASE_ONLY" || decision === "BOTH") {
+        console.log("[getAIResponse] Decision: Accessing law database.");
+        let lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", false); // Initial search
+        let lawResultsOrErrorKey = await queryLawDatabase(lawQuery, lawDatabase);
 
         if (lawResultsOrErrorKey === "LAW_DATABASE_NO_RESULTS") {
-          lawDatabaseInfoForSystemPrompt = `A search of the law database (query: "${lawQuery}") found no relevant results after two attempts.`;
+          console.log("[getAIResponse] First law database search yielded no results. Attempting retry with broader query.");
+          // Retry: Generate a broader query and try again
+          lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", true); // Retry with isRetry = true
+          lawResultsOrErrorKey = await queryLawDatabase(lawQuery, lawDatabase);
+
+          if (lawResultsOrErrorKey === "LAW_DATABASE_NO_RESULTS") {
+            lawDatabaseInfoForSystemPrompt = `A search of the law database (query: "${lawQuery}") found no relevant results after two attempts.`;
+          } else if (lawResultsOrErrorKey) {
+            lawDatabaseInfoForSystemPrompt = `Relevant information from the law database for query "${lawQuery}" (after retry) is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
+            lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}" - after retry):
+---
+${lawResultsOrErrorKey}
+---
+Use this information to help answer the user's original question.`;
+          }
         } else if (lawResultsOrErrorKey) {
-          lawDatabaseInfoForSystemPrompt = `Relevant information from the law database for query "${lawQuery}" (after retry) is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
-          lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}" - after retry):
+          lawDatabaseInfoForSystemPrompt = `Relevant information from the law database for query "${lawQuery}" is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
+          lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}"):
 ---
 ${lawResultsOrErrorKey}
 ---
 Use this information to help answer the user's original question.`;
         }
-      } else if (lawResultsOrErrorKey) {
-        lawDatabaseInfoForSystemPrompt = `Relevant information from the law database for query "${lawQuery}" is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
-        lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}"):
----
-${lawResultsOrErrorKey}
----
-Use this information to help answer the user's original question.`;
       }
-    }
 
-    const toolsToUse: any[] = []; // Use any[] for the array type
-    if (decision === "WEB_SEARCH_ONLY" || decision === "BOTH") {
-      console.log("[getAIResponse] Decision: Enabling Google Search tool.");
-      toolsToUse.push(googleSearchTool);
-      webSearchInfoForSystemPrompt = `Google Search tool was enabled. If the model uses the tool, relevant web search results will be provided in groundingMetadata. You MUST synthesize this information to answer the user's query if it's relevant, strictly adhering to any specific number of items requested by the user (e.g., "top 5"). Format any list of items as a Markdown bulleted list, each item starting with '- '. Follow WEB_SEARCH_USAGE_INSTRUCTIONS for how to present this information.`;
-    } else if (decision === "NONE") {
-      console.log("[getAIResponse] Decision: NOT performing any external search. Answering from general knowledge.");
-      webSearchInfoForSystemPrompt = "No external search (neither law database nor web) was performed for this query. Answer from general knowledge.";
-    }
+      const toolsToUse: any[] = []; // Use any[] for the array type
+      if (decision === "WEB_SEARCH_ONLY" || decision === "BOTH") {
+        console.log("[getAIResponse] Decision: Enabling Google Search tool.");
+        toolsToUse.push(googleSearchTool);
+        webSearchInfoForSystemPrompt = `Google Search tool was enabled. If the model uses the tool, relevant web search results will be provided in groundingMetadata. You MUST synthesize this information to answer the user's query if it's relevant, strictly adhering to any specific number of items requested by the user (e.g., "top 5"). Format any list of items as a Markdown bulleted list, each item starting with '- '. Follow WEB_SEARCH_USAGE_INSTRUCTIONS for how to present this information.`;
+      } else if (decision === "NONE") {
+        console.log("[getAIResponse] Decision: NOT performing any external search. Answering from general knowledge.");
+        webSearchInfoForSystemPrompt = "No external search (neither law database nor web) was performed for this query. Answer from general knowledge.";
+      }
 
-    const dynamicPrompts = [
-      lawPrompt,
-      policyPrompt,
-      tonePrompt,
-    ].filter(Boolean).join("\n\n");
+      const dynamicPrompts = [
+        lawPrompt,
+        policyPrompt,
+        tonePrompt,
+      ].filter(Boolean).join("\n\n");
 
-    const finalSystemInstruction = `You are ELIXIR AI, a helpful assistant.
+      const finalSystemInstruction = `You are ELIXIR AI, a helpful assistant.
 ${STYLING_PROMPT}
 // The prompt above defines how you MUST format your output using Markdown. Adhere to it strictly.
 
@@ -488,75 +493,139 @@ Your primary goal is to answer the user's question.
 - If no search was performed, or if search yielded no results for the specific information sought, answer from your general training knowledge to the best of your ability. Do not invent search results.
 - Always be concise and directly address the user's original question.
 `;
-    console.log("[getAIResponse] Final System Instruction (first 500 chars):", finalSystemInstruction.substring(0, 500) + "...");
+      console.log("[getAIResponse] Final System Instruction (first 500 chars):", finalSystemInstruction.substring(0, 500) + "...");
 
-    const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-    console.log("[getAIResponse] Tools to be used in chat session:", JSON.stringify(toolsToUse));
-    const chat = model.startChat({
-      history: [
-        { role: "user", parts: [{ text: finalSystemInstruction }] },
-        { role: "model", parts: [{ text: "Understood. I will follow all instructions. If external data is provided, I will use it as guided. Otherwise, I will rely on my general knowledge." }] },
-        ...formattedHistory,
-      ],
-      tools: toolsToUse as any, // Pass the tools here
-    });
+      const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
+      console.log("[getAIResponse] Tools to be used in chat session:", JSON.stringify(toolsToUse));
+      const chat = model.startChat({
+        history: [
+          { role: "user", parts: [{ text: finalSystemInstruction }] },
+          { role: "model", parts: [{ text: "Understood. I will follow all instructions. If external data is provided, I will use it as guided. Otherwise, I will rely on my general knowledge." }] },
+          ...formattedHistory,
+        ],
+        tools: toolsToUse as any, // Pass the tools here
+      });
 
-    const messageId: Id<"messages"> = await ctx.runMutation(api.chat.createMessage, {
-      userId,
-      role: "assistant",
-      content: "",
-      isStreaming: true,
-    });
-    console.log(`[getAIResponse] Created placeholder message ${messageId} for streaming response.`);
+      messageId = await ctx.runMutation(api.chat.createMessage, {
+        userId,
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+        paneId, // Pass paneId here
+      });
+      console.log(`[getAIResponse] Created placeholder message ${messageId} for streaming response.`);
 
-    // Construct the final message to send to the LLM for response generation
-    // It includes the law database context, web search context (if any), and then the user's original question.
-    let messageToSendToGemini = "";
-    if (lawDatabaseContextForLLM) {
-      messageToSendToGemini += lawDatabaseContextForLLM;
-    }
-    // No webSearchContextForLLM here, as Gemini will handle the search internally
-    if (messageToSendToGemini) {
-      messageToSendToGemini += "\n\nUser's original question: " + userMessage;
-    } else {
-      messageToSendToGemini = "User's original question: " + userMessage;
-    }
+      // Construct the final message to send to the LLM for response generation
+      // It includes the law database context, web search context (if any), and then the user's original question.
+      let messageToSendToGemini = "";
+      if (lawDatabaseContextForLLM) {
+        messageToSendToGemini += lawDatabaseContextForLLM;
+      }
+      // No webSearchContextForLLM here, as Gemini will handle the search internally
+      if (messageToSendToGemini) {
+        messageToSendToGemini += "\n\nUser's original question: " + userMessage;
+      } else {
+        messageToSendToGemini = "User's original question: " + userMessage;
+      }
 
-    console.log(`[getAIResponse] Sending to Gemini for response generation (first 500 chars): "${messageToSendToGemini.substring(0,500)}..."`);
-    console.log("[getAIResponse] Initiating Gemini API call (sendMessageStream)...");
-    const streamResult = await chat.sendMessageStream(messageToSendToGemini);
-    console.log("[getAIResponse] Gemini API call returned stream result. Starting to process chunks...");
+      console.log(`[getAIResponse] Sending to Gemini for response generation (first 500 chars): "${messageToSendToGemini.substring(0,500)}..."`);
+      console.log("[getAIResponse] Initiating Gemini API call (sendMessageStream)...");
+      const streamResult = await chat.sendMessageStream(messageToSendToGemini);
+      console.log("[getAIResponse] Gemini API call returned stream result. Starting to process chunks...");
 
-    let accumulatedResponse = "";
-    for await (const chunk of streamResult.stream) {
-      const textChunk = chunk.text();
-      if (textChunk) {
-        accumulatedResponse += textChunk;
-        await ctx.runMutation(api.chat.appendMessageContent, {
-          messageId,
-          content: textChunk,
+      let accumulatedResponse = "";
+      for await (const chunk of streamResult.stream) {
+        const textChunk = chunk.text();
+        if (textChunk) {
+          accumulatedResponse += textChunk;
+          try {
+            await ctx.runMutation(api.chat.appendMessageContent, {
+              messageId,
+              content: textChunk,
+            });
+            console.log(`[getAIResponse] Appended chunk to message ${messageId}. Current length: ${accumulatedResponse.length}`);
+          } catch (appendError) {
+            console.error(`[getAIResponse] Error appending content to message ${messageId}:`, appendError);
+            // If appending fails, assume message might be gone (e.g., chat cleared)
+            // Terminate streaming gracefully
+            if (messageId) {
+              await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+                messageId,
+                isStreaming: false,
+              });
+              const currentMessage = await ctx.runQuery(api.chat.getMessage, { messageId });
+              if (currentMessage && currentMessage.content.length < 50) {
+                await ctx.runMutation(api.chat.appendMessageContent, {
+                  messageId,
+                  content: `Error: Streaming interrupted. Please try again.`,
+                });
+              }
+            }
+            break; // Exit the streaming loop
+          }
+        }
+      }
+      console.log(`[getAIResponse] Finished streaming for ${messageId}. Total response length: ${accumulatedResponse.length}`);
+
+      // Check for grounding metadata and extract search suggestions from the final response
+      const finalResponse = await streamResult.response; // Await the full response
+      if (finalResponse.candidates && finalResponse.candidates[0] && finalResponse.candidates[0].groundingMetadata && finalResponse.candidates[0].groundingMetadata.searchEntryPoint && finalResponse.candidates[0].groundingMetadata.searchEntryPoint.renderedContent) {
+        searchSuggestionsHtml = finalResponse.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
+        console.log("[getAIResponse] Extracted search suggestions from groundingMetadata.");
+      } else {
+        console.log("[getAIResponse] No search suggestions (groundingMetadata) found in the final response.");
+      }
+
+
+      await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+        messageId,
+        isStreaming: false,
+      });
+      console.log(`[getAIResponse] Finalized message ${messageId}.`);
+
+      return messageId;
+    } catch (error) {
+      console.error("[getAIResponse] Error during AI response generation:", error);
+
+      // Handle "Too Many Requests" error specifically
+      if (error instanceof GoogleGenerativeAIFetchError && error.status === 429) {
+        console.error("[getAIResponse] Caught 429 Too Many Requests error.");
+        // If a message was already created, update its status and content
+        if (messageId) {
+          await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+            messageId,
+            isStreaming: false,
+          });
+          await ctx.runMutation(api.chat.appendMessageContent, {
+            messageId,
+            content: "Error: You've exceeded your API quota. Please try again later.",
+          });
+        }
+        throw new ConvexError({
+          code: "TOO_MANY_REQUESTS",
+          message: "You've exceeded your API quota. Please try again later.",
         });
-        console.log(`[getAIResponse] Appended chunk to message ${messageId}. Current length: ${accumulatedResponse.length}`);
+      } else if (messageId) {
+        // For any other error, ensure the message is marked as not streaming
+        // and append a generic error message if it's not already done.
+        await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+          messageId,
+          isStreaming: false,
+        });
+        // Only append if the message content is still empty or very short,
+        // to avoid overwriting partial valid responses.
+        const currentMessage = await ctx.runQuery(api.chat.getMessage, { messageId });
+        if (currentMessage && currentMessage.content.length < 50) { // Arbitrary threshold
+          await ctx.runMutation(api.chat.appendMessageContent, {
+            messageId,
+            content: `Error: An unexpected error occurred. Please try again.`,
+          });
+        }
+        throw error; // Re-throw the original error for other error types
+      } else {
+        // If messageId was never created, just re-throw the error
+        throw error;
       }
     }
-    console.log(`[getAIResponse] Finished streaming for ${messageId}. Total response length: ${accumulatedResponse.length}`);
-
-    // Check for grounding metadata and extract search suggestions from the final response
-    const finalResponse = await streamResult.response; // Await the full response
-    if (finalResponse.candidates && finalResponse.candidates[0] && finalResponse.candidates[0].groundingMetadata && finalResponse.candidates[0].groundingMetadata.searchEntryPoint && finalResponse.candidates[0].groundingMetadata.searchEntryPoint.renderedContent) {
-      searchSuggestionsHtml = finalResponse.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
-      console.log("[getAIResponse] Extracted search suggestions from groundingMetadata.");
-    } else {
-      console.log("[getAIResponse] No search suggestions (groundingMetadata) found in the final response.");
-    }
-
-
-    await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
-      messageId,
-      isStreaming: false,
-    });
-    console.log(`[getAIResponse] Finalized message ${messageId}.`);
-
-    return messageId;
-  }
+  },
 });

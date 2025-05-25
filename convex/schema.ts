@@ -9,7 +9,8 @@ const applicationTables = {
     userId: v.id("users"),
     systemPrompt: v.optional(v.string()),
     isStreaming: v.optional(v.boolean()), // Add isStreaming field
-  }).index("by_user", ["userId"]),
+    paneId: v.optional(v.string()), // Temporarily make paneId optional to resolve schema validation
+  }).index("by_user", ["userId", "paneId"]),
   userSettings: defineTable({
     userId: v.id("users"),
     lawPrompt: v.optional(v.string()),
