@@ -1,8 +1,16 @@
-import lawDatabase from "../Database/Law.json";
+import lawDatabase from "../Database/Law on Insurance.json";
+import insuranceQnADatabase from "../Database/Insurance and reinsurance in Cambodia(QnA format).json";
+import consumerProtectionDatabase from "../Database/Law on Consumer Protection.json";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
+
+const databaseMap: { [key: string]: any } = {
+  "Law on Insurance": lawDatabase,
+  "Insurance and Reinsurance QnA": insuranceQnADatabase,
+  "Law on Consumer Protection": consumerProtectionDatabase,
+};
 
 export const sendMessage = mutation({
   args: {
@@ -13,6 +21,7 @@ export const sendMessage = mutation({
     selectedModel: v.optional(v.string()),
     paneId: v.string(), // Add paneId here
     disableSystemPrompt: v.optional(v.boolean()), // New argument
+    disableTools: v.optional(v.boolean()), // Add disableTools parameter
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -36,6 +45,7 @@ export const sendMessage = mutation({
       selectedModel: args.selectedModel,
       paneId: args.paneId, // Pass paneId to the action
       disableSystemPrompt: args.disableSystemPrompt, // Pass new argument
+      disableTools: args.disableTools, // Pass disableTools parameter
     });
   },
 });
@@ -246,8 +256,22 @@ export const getMessage = query({
 });
 
 export const getLawDatabaseContent = query({
-  args: {},
-  handler: async () => {
-    return JSON.stringify(lawDatabase);
+  args: {
+    databaseNames: v.optional(v.array(v.string())), // New argument to specify which databases to retrieve
+  },
+  handler: async (ctx, args) => {
+    const result: { [key: string]: any } = {}; // Object to hold selected database content
+
+    if (args.databaseNames && args.databaseNames.length > 0) {
+      for (const dbName of args.databaseNames) {
+        if (databaseMap[dbName]) { // Check if the database name exists in the map
+          result[dbName] = databaseMap[dbName];
+        }
+      }
+    } else {
+      // If no specific database is requested, return a message
+      return JSON.stringify({ message: "No specific law database requested." });
+    }
+    return JSON.stringify(result);
   },
 });

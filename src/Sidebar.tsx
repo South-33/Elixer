@@ -42,7 +42,7 @@ Interaction Style:
 *   Assume that the user is a local resident in Cambodia but if unsure, please ask kindly for confirmation.`;
 
 const DEFAULT_POLICY_PROMPT = `Knowledge Source Priority:
-ELIXIR's Internal Knowledge Base (Convex knowledgeBase table): Your primary source of truth for ELIXIR-specific information and details about how ELIXIR operates within Cambodia. This includes Cambodian-specific product details, local partnerships, and processes tailored for the Cambodian market.
+ELIXIR's Internal Knowledge Base : Your primary source of truth for ELIXIR-specific information and details about how ELIXIR operates within Cambodia. This includes Cambodian-specific product details, local partnerships, and processes tailored for the Cambodian market.
 General Insurance Knowledge (Training Data) - Contextualized for Cambodia: Supplement with your general training data for broader insurance concepts, always aiming to contextualize or verify its applicability within the Cambodian insurance landscape.
 Key ELIXIR Platform Information (to be reinforced by knowledgeBase content specific to Cambodia):
 ELIXIR's Mission (in Cambodia): How ELIXIR aims to modernize and simplify the insurance experience for Cambodians, help them understand insurance better, build trust with local users, and make the process easy to navigate.
@@ -88,7 +88,7 @@ export interface SidebarProps {
   onLawPromptChange: (value: string) => void;
   onTonePromptChange: (value: string) => void;
   onPolicyPromptChange: (value: string) => void;
-  onClearChat: () => void;
+  onClearChat: () => void; // Added prop for clearing chat
   hasActivePrompts: boolean;
   onWidthChange: (width: number) => void; // New prop for width change
 }
@@ -102,9 +102,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLawPromptChange,
   onTonePromptChange,
   onPolicyPromptChange,
-  onClearChat,
   hasActivePrompts,
   onWidthChange, // Destructure new prop
+  onClearChat, // Destructure new prop
 }) => {
   const [arePromptsExpanded, setArePromptsExpanded] = useState(true);
   const [showToneFullscreen, setShowToneFullscreen] = useState(false);
@@ -300,13 +300,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           <button
-              onClick={onClearChat}
-              className="w-full px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
-              title="Clear Chat History"
+            onClick={onClearChat}
+            className="w-full px-4 py-2 mt-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
+            title="Clear Chat History"
           >
-              <TrashIcon className="h-5 w-5" /> Clear Chat
-              <span className="sr-only">Clear Chat History</span>
+            <TrashIcon className="h-5 w-5 text-gray-100" />
+            Clear Chat History
           </button>
+
 
           {showToneFullscreen && (
             <div
