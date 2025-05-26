@@ -295,8 +295,212 @@ async function queryLawDatabase(query: string, lawDatabase: LawDatabase): Promis
   const scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[] = [];
 
   console.log(`[queryLawDatabase] Searching law database for query: "${query}"`);
-  scoreChaptersAndSections(lawDatabase, queryKeywords, scoredResults, calculateScore);
-  scoreAndProcessArticles(lawDatabase, queryKeywords, scoredResults, processArticleContent, calculateScore);
+  
+  // Helper function to convert between Roman and Arabic numerals
+  const romanToArabic = (roman: string): number => {
+    const romanMap: {[key: string]: number} = {
+      'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000
+    };
+    let result = 0;
+    for (let i = 0; i < roman.length; i++) {
+      const current = romanMap[roman[i]];
+      const next = i + 1 < roman.length ? romanMap[roman[i + 1]] : 0;
+      if (current < next) {
+        result -= current;
+      } else {
+        result += current;
+      }
+    }
+    return result;
+  };
+
+  const arabicToRoman = (num: number): string => {
+    const romanNumerals = [
+      { value: 1000, numeral: 'M' },
+      { value: 900, numeral: 'CM' },
+      { value: 500, numeral: 'D' },
+      { value: 400, numeral: 'CD' },
+      { value: 100, numeral: 'C' },
+      { value: 90, numeral: 'XC' },
+      { value: 50, numeral: 'L' },
+      { value: 40, numeral: 'XL' },
+      { value: 10, numeral: 'X' },
+      { value: 9, numeral: 'IX' },
+      { value: 5, numeral: 'V' },
+      { value: 4, numeral: 'IV' },
+      { value: 1, numeral: 'I' }
+    ];
+    let result = '';
+    for (const { value, numeral } of romanNumerals) {
+      while (num >= value) {
+        result += numeral;
+        num -= value;
+      }
+    }
+    return result;
+  };
+
+  // Function to check if chapter numbers match, handling both Roman and Arabic numerals
+  const chapterNumbersMatch = (a: string, b: string): boolean => {
+    // Direct string match
+    if (a === b) return true;
+    
+    // Try to convert and compare if they're in different formats
+    if (/^[IVXLCDM]+$/i.test(a) && /^\d+$/.test(b)) {
+      return romanToArabic(a.toUpperCase()) === parseInt(b, 10);
+    }
+    if (/^\d+$/.test(a) && /^[IVXLCDM]+$/i.test(b)) {
+      return parseInt(a, 10) === romanToArabic(b.toUpperCase());
+    }
+    
+    return false;
+  };
+
+  // Check for direct chapter and article references
+  const chapterMatch = query.match(/chapter\s*([IVX\d]+)/i);
+  const articleMatch = query.match(/article\s*(\d+)/i);
+  
+  // If we have specific chapter and article references, prioritize them
+  if (chapterMatch && articleMatch && lawDatabase && lawDatabase.chapters) {
+    const targetChapter = chapterMatch[1].toUpperCase();
+    const targetArticle = articleMatch[1];
+    console.log(`[queryLawDatabase] Direct reference detected: Chapter ${targetChapter}, Article ${targetArticle}`);
+    
+    // Find the specific chapter, handling both Roman and Arabic numerals
+    for (const chapter of lawDatabase.chapters) {
+      if (!chapter || !chapter.chapter_number) continue;
+      
+      if (chapterNumbersMatch(chapter.chapter_number, targetChapter)) {
+        console.log(`[queryLawDatabase] Found matching chapter: ${chapter.chapter_number}`);
+        
+        // Check if the chapter has articles directly
+        if (chapter.articles && Array.isArray(chapter.articles)) {
+          for (const article of chapter.articles) {
+            if (!article || !article.article_number) continue;
+            
+            if (article.article_number === targetArticle || article.article_number === targetArticle.replace(/^0+/, '')) {
+              console.log(`[queryLawDatabase] Found direct article match: Article ${article.article_number}`);
+              
+              // Construct a comprehensive article text with all properties
+              let articleContent = `Article ${article.article_number}: ${article.content}`;
+              
+              if (article.points && Array.isArray(article.points)) {
+                articleContent += '\n\nPoints:';
+                article.points.forEach(point => {
+                  articleContent += `\n- ${point}`;
+                });
+              }
+              
+              if (article.definitions) {
+                articleContent += '\n\nDefinitions:';
+                for (const [term, definition] of Object.entries(article.definitions)) {
+                  articleContent += `\n- ${term}: ${definition}`;
+                }
+              }
+              
+              // Add other properties if they exist
+              ['sub_types', 'prohibitions', 'business_types', 'priority_order', 'conditions', 'punishments'].forEach(propName => {
+                if (article[propName as keyof LawArticle] && Array.isArray(article[propName as keyof LawArticle])) {
+                  articleContent += `\n\n${propName.replace('_', ' ').charAt(0).toUpperCase() + propName.replace('_', ' ').slice(1)}:`;
+                  (article[propName as keyof LawArticle] as string[]).forEach(item => {
+                    articleContent += `\n- ${item}`;
+                  });
+                }
+              });
+              
+              // Add punishment details if they exist
+              if (article.punishment_natural_person) {
+                articleContent += `\n\nPunishment (Natural Person): ${article.punishment_natural_person}`;
+              }
+              
+              if (article.punishment_legal_person) {
+                articleContent += `\n\nPunishment (Legal Person): ${article.punishment_legal_person}`;
+              }
+              
+              // Add with very high score to ensure it appears at the top
+              scoredResults.push({
+                content: `--- Chapter ${chapter.chapter_number}: ${chapter.chapter_title} ---\n\n${articleContent}`,
+                score: 10000, // Very high score for direct matches
+                chapterTitle: `Chapter ${chapter.chapter_number}: ${chapter.chapter_title}`
+              });
+              
+              // Return early since we found an exact match
+              return aggregateAndSortResults(scoredResults).join('\n\n');
+            }
+          }
+        }
+        
+        // Check if the chapter has sections with articles
+        if (chapter.sections && Array.isArray(chapter.sections)) {
+          for (const section of chapter.sections) {
+            if (!section || !section.articles || !Array.isArray(section.articles)) continue;
+            
+            for (const article of section.articles) {
+              if (!article || !article.article_number) continue;
+              
+              if (article.article_number === targetArticle || article.article_number === targetArticle.replace(/^0+/, '')) {
+                console.log(`[queryLawDatabase] Found article match in section: Article ${article.article_number}`);
+                
+                // Construct a comprehensive article text with all properties
+                let articleContent = `Article ${article.article_number}: ${article.content}`;
+                
+                if (article.points && Array.isArray(article.points)) {
+                  articleContent += '\n\nPoints:';
+                  article.points.forEach(point => {
+                    articleContent += `\n- ${point}`;
+                  });
+                }
+                
+                if (article.definitions) {
+                  articleContent += '\n\nDefinitions:';
+                  for (const [term, definition] of Object.entries(article.definitions)) {
+                    articleContent += `\n- ${term}: ${definition}`;
+                  }
+                }
+                
+                // Add other properties if they exist
+                ['sub_types', 'prohibitions', 'business_types', 'priority_order', 'conditions', 'punishments'].forEach(propName => {
+                  if (article[propName as keyof LawArticle] && Array.isArray(article[propName as keyof LawArticle])) {
+                    articleContent += `\n\n${propName.replace('_', ' ').charAt(0).toUpperCase() + propName.replace('_', ' ').slice(1)}:`;
+                    (article[propName as keyof LawArticle] as string[]).forEach(item => {
+                      articleContent += `\n- ${item}`;
+                    });
+                  }
+                });
+                
+                // Add punishment details if they exist
+                if (article.punishment_natural_person) {
+                  articleContent += `\n\nPunishment (Natural Person): ${article.punishment_natural_person}`;
+                }
+                
+                if (article.punishment_legal_person) {
+                  articleContent += `\n\nPunishment (Legal Person): ${article.punishment_legal_person}`;
+                }
+                
+                // Add with very high score to ensure it appears at the top
+                scoredResults.push({
+                  content: `--- Chapter ${chapter.chapter_number}: ${chapter.chapter_title} ---\n--- Section ${section.section_number}: ${section.section_title} ---\n\n${articleContent}`,
+                  score: 10000, // Very high score for direct matches
+                  chapterTitle: `Chapter ${chapter.chapter_number}: ${chapter.chapter_title}`,
+                  sectionTitle: `Section ${section.section_number}: ${section.section_title}`
+                });
+                
+                // Return early since we found an exact match
+                return aggregateAndSortResults(scoredResults).join('\n\n');
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Continue with regular scoring if we don't have direct matches or as a fallback
+  if (scoredResults.length === 0) {
+    scoreChaptersAndSections(lawDatabase, queryKeywords, scoredResults, calculateScore);
+    scoreAndProcessArticles(lawDatabase, queryKeywords, scoredResults, processArticleContent, calculateScore);
+  }
+  
   const finalRelevantContent = aggregateAndSortResults(scoredResults);
 
   if (finalRelevantContent.length > 0) {
@@ -356,56 +560,113 @@ Decision (LAW_DATABASE_ONLY, WEB_SEARCH_ONLY, BOTH, or NONE):`;
 
     if (["LAW_DATABASE_ONLY", "WEB_SEARCH_ONLY", "BOTH", "NONE"].includes(responseText)) {
       return responseText as "LAW_DATABASE_ONLY" | "WEB_SEARCH_ONLY" | "BOTH" | "NONE";
+    } else {
+      console.log(`[decideInformationSource] Unexpected response: ${responseText}, defaulting to NONE`);
+      return "NONE";
     }
-    return "NONE"; // Default to none on error or unexpected response
   } catch (error) {
     console.error("[decideInformationSource] Error deciding information source:", error);
-    return "NONE"; // Default to no search on error
+    return "NONE"; // Default to NONE on error
   }
 }
 
+// Function to generate a structured search query for the law database
 async function generateSearchQuery(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], lawPrompt: string | undefined, tonePrompt: string | undefined, policyPrompt: string | undefined, selectedModel: string | undefined, genAI: GoogleGenerativeAI, searchType: "LAW_DATABASE", isRetry: boolean = false): Promise<string> {
   try {
     const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-    const dynamicPrompts = [
-      lawPrompt,
-      policyPrompt,
-      tonePrompt,
-    ].filter(Boolean).join("\n\n");
+    const systemPrompt = `You are a legal search query generator. Your task is to analyze the user's question and generate an effective search query for our law database.
 
-    let prompt = `Based on the following user message and the conversation history, and considering the following system prompts, generate an effective search query. Output only the search query itself, without any preamble or explanation.
+QUERY GUIDELINES:
+1. Extract key legal concepts, terms, and entities from the user's question
+2. Include specific article numbers if mentioned or implied
+3. Include chapter or section titles if relevant
+4. For definitions, include the term being defined
+5. For penalties or punishments, include relevant terms like "fine", "imprisonment", etc.
+6. For procedural questions, include terms like "procedure", "process", "steps", etc.
+7. Format your response as a JSON object with the following structure:
+   {
+     "mainTerms": ["term1", "term2"],  // 2-5 primary search terms
+     "relatedTerms": ["term3", "term4"],  // 2-5 secondary terms
+     "articleNumbers": ["7", "8"],  // specific article numbers if mentioned
+     "chapterTitles": ["INSURANCE CONTRACT"],  // chapter titles if relevant
+     "sectionTitles": ["GENERAL FORMS"]  // section titles if relevant
+   }
 
-**System Prompts (if any):**
-${dynamicPrompts}
+${isRetry ? "IMPORTANT: The previous query did not yield good results. Please reformulate the query to be more specific and use different keywords." : ""}
 
-**Conversation History (most recent last):**
-${history.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
+Output ONLY the JSON search query object, nothing else. No explanations, no additional text.`;
 
-User Message: "${userMessage}"
-`;
+    // Start a chat to generate the search query
+    const chat = model.startChat({
+      history: history,
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 500,
+      },
+    });
 
-    if (searchType === "LAW_DATABASE") {
-      prompt += `
-**Guidance for Law Database Query Generation:**
-- The user's message has been deemed to require a search within the local law database.
-- Extract specific keywords or phrases that are highly likely to be found directly within the law document's structure (e.g., chapter titles, section titles, or key terms from article content).
-- Prioritize terms that directly relate to legal concepts, procedures, or specific parts of a law.
-- For example, if the user asks "what chapter discusses company dissolution", a good query might be "LIQUIDATION AND DISSOLUTION OF COMPANY" or "company dissolution".
-`;
-      if (isRetry) {
-        prompt += `
-- **RETRY ATTEMPT**: The previous search attempt for the law database yielded no results. Generate a broader or alternative set of keywords. Consider synonyms or more general terms related to the user's query to improve the chances of a match.
-`;
-      }
-      prompt += `
-Search Query for Law Database:`;
+    const result = await chat.sendMessage(systemPrompt + "\n\nUser's message: " + userMessage);
+    let searchQuery = result.response.text().trim();
+    
+    // Extract direct chapter and article references from the user message
+    const chapterMatch = userMessage.match(/chapter\s*(\d+|[ivx]+)/i);
+    const articleMatch = userMessage.match(/article\s*(\d+)/i);
+    let directReferences = [];
+    
+    if (chapterMatch && chapterMatch[1]) {
+      directReferences.push(`Chapter ${chapterMatch[1].toUpperCase()}`);
     }
-    console.log("[generateSearchQuery] Generating search query for:", userMessage);
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text().trim();
-    console.log(`[generateSearchQuery] Generated query for "${userMessage}": "${text || userMessage}"`);
-    return text || userMessage; // Fallback to userMessage if generation fails or is empty
+    
+    if (articleMatch && articleMatch[1]) {
+      directReferences.push(`Article ${articleMatch[1]}`);
+    }
+    
+    // Try to parse the JSON response
+    try {
+      // Remove any markdown code block formatting if present
+      let cleanedResponse = searchQuery.replace(/```json|```/g, "").trim();
+      
+      // Handle non-standard JSON format that might be returned
+      if (!cleanedResponse.startsWith("{")) {
+        // Try to convert a key-value format to proper JSON
+        cleanedResponse = cleanedResponse
+          .replace(/([\w]+)\s*:\s*/g, '"$1":') // Convert keys to quoted format
+          .replace(/,\s*([\w]+)\s*:/g, ',"$1":') // Fix keys after commas
+          .replace(/:\s*([\w\s]+)(?=,|$)/g, ':"$1"') // Quote string values
+          .replace(/"([\d]+)"/g, '$1'); // Remove quotes from numbers
+          
+        // Ensure it's wrapped in braces
+        if (!cleanedResponse.startsWith("{")) {
+          cleanedResponse = "{" + cleanedResponse + "}";
+        }
+      }
+      
+      const jsonQuery = JSON.parse(cleanedResponse);
+      // Convert the structured query into a format that works with the existing search system
+      const allTerms = [
+        ...(jsonQuery.mainTerms || []),
+        ...(jsonQuery.relatedTerms || []),
+        ...(jsonQuery.articleNumbers || []).map((num: string) => `Article ${num}`),
+        ...(jsonQuery.chapterTitles || []),
+        ...(jsonQuery.sectionTitles || []),
+        ...directReferences // Add direct references from user message
+      ].filter(Boolean);
+      
+      searchQuery = allTerms.join(" ");
+      console.log(`[generateSearchQuery] Structured query parsed successfully: ${searchQuery}`);
+    } catch (error) {
+      // If JSON parsing fails, use the raw text and direct references
+      console.error("[generateSearchQuery] Error parsing JSON query:", error);
+      // Clean up the text and add direct references
+      searchQuery = searchQuery.replace(/[\{\}\[\]\"\'`]/g, " ").replace(/\s+/g, " ").trim();
+      if (directReferences.length > 0) {
+        searchQuery = directReferences.join(" ") + " " + searchQuery;
+      }
+      console.log(`[generateSearchQuery] Using cleaned raw text: ${searchQuery}`);
+    }
+    
+    console.log(`[generateSearchQuery] Final query for "${userMessage}": "${searchQuery}"`);
+    return searchQuery || userMessage; // Fallback to userMessage if generation fails or is empty
   } catch (error) {
     console.error("[generateSearchQuery] Error generating search query:", error);
     return userMessage; // Fallback to userMessage on error
@@ -489,7 +750,7 @@ export const getAIResponse = action({
       console.log(`[decideInformationSource] decideInformationSource returned: ${decision}`);
 
       let relevantDatabaseNames: string[] = [];
-      if (decision === "LAW_DATABASE_ONLY" || decision === "BOTH") {
+      if (!disableTools && (decision === "LAW_DATABASE_ONLY" || decision === "BOTH")) {
         console.log("[getAIResponse] Decision: Law database access indicated. Using all law databases.");
         relevantDatabaseNames = [
           "Law on Insurance",
@@ -508,8 +769,36 @@ export const getAIResponse = action({
           for (const dbName of relevantDatabaseNames) {
             if (lawDatabaseResults[dbName]) {
               const dbContent = lawDatabaseResults[dbName];
-              // Assuming queryLawDatabase can take a specific database content and query
-              const resultsForDb = await queryLawDatabase(lawQuery, dbContent); // Pass specific database content
+              
+              // Check if enhanced database is available
+              const enhancedDbName = dbName.replace(/\.json$/, "").replace(/ /g, "_");
+              const isEnhancedAvailable = await ctx.runQuery(api.integrateDatabases.isEnhancedDatabaseAvailable, { databaseName: enhancedDbName });
+              
+              console.log(`[getAIResponse] Database: ${dbName}, Enhanced available: ${isEnhancedAvailable}`);
+              
+              let resultsForDb;
+              if (isEnhancedAvailable) {
+                // Use enhanced search if available
+                console.log(`[getAIResponse] Using enhanced search for ${dbName}`);
+                try {
+                    // Use the Convex query to load the enhanced database
+                  const enhancedDb = await ctx.runQuery(api.integrateDatabases.queryWithEnhancedDatabase, { 
+                    query: lawQuery,
+                    databaseName: enhancedDbName
+                  });
+                  
+                  // The enhanced search is already performed in queryWithEnhancedDatabase
+                  resultsForDb = enhancedDb || "LAW_DATABASE_NO_RESULTS";
+                } catch (error) {
+                  console.error(`[getAIResponse] Error using enhanced database: ${error}. Falling back to original.`);
+                  resultsForDb = await queryLawDatabase(lawQuery, dbContent);
+                }
+              } else {
+                // Fall back to original search
+                console.log(`[getAIResponse] Using original search for ${dbName}`);
+                resultsForDb = await queryLawDatabase(lawQuery, dbContent);
+              }
+              
               if (resultsForDb !== "LAW_DATABASE_NO_RESULTS") {
                 combinedLawResults += `\n\n--- Results from ${dbName} ---\n${resultsForDb}`;
               }
@@ -553,8 +842,9 @@ export const getAIResponse = action({
         toolsToUse.push(googleSearchTool);
         webSearchInfoForSystemPrompt = `Google Search tool was enabled. If the model uses the tool, relevant web search results will be provided in groundingMetadata. You MUST synthesize this information to answer the user's query if it's relevant, strictly adhering to any specific number of items requested by the user (e.g., "top 5"). Format any list of items as a Markdown bulleted list, each item starting with '- '. Follow WEB_SEARCH_USAGE_INSTRUCTIONS for how to present this information.`;
       } else if (disableTools) {
-        console.log(`[getAIResponse] Decision: Tools explicitly disabled for pane ${paneId}, therefore NOT performing any external search. Answering from general knowledge. disableTools=${disableTools}, decision=${decision}`);
-        webSearchInfoForSystemPrompt = "External search (neither law database nor web) was explicitly disabled for this query. Answer from general knowledge.";
+        console.log(`[getAIResponse] Decision: Tools explicitly disabled for pane ${paneId}, therefore NOT performing any external search or database access. Answering from general knowledge only. disableTools=${disableTools}, decision=${decision}`);
+        webSearchInfoForSystemPrompt = "All external information sources (both law database and web search) were explicitly disabled for this query. Answer from general knowledge only.";
+        lawDatabaseInfoForSystemPrompt = "Law database access was explicitly disabled for this query. Answer from general knowledge only.";
       } else if (decision === "NONE") {
         console.log(`[getAIResponse] Decision: NOT performing any external search for pane ${paneId}. Answering from general knowledge. disableTools=${disableTools}, decision=${decision}`);
         webSearchInfoForSystemPrompt = "No external search (neither law database nor web) was performed for this query. Answer from general knowledge.";

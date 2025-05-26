@@ -432,7 +432,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             }`}
             disabled={isStreaming}
           >
-            {disableToolUse ? "Enable Tool Use" : "Disable Tool Use"}
+            {disableToolUse ? "Enable External Sources" : "Raw AI Only"}
           </button>
           <select
             value={selectedModel}

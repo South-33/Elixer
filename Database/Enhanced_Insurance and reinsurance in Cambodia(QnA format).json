@@ -1,0 +1,904 @@
+{
+  "title": "Insurance and reinsurance in Cambodia: overview",
+  "authors": [
+    {
+      "name": "Jay Cohen",
+      "firm": "Tilleke & Gibbins"
+    },
+    {
+      "name": "Nitikar Nith",
+      "firm": "Tilleke & Gibbins"
+    }
+  ],
+  "publication_details": {
+    "type": "Country Q&A",
+    "law_stated_as_at": "01-Nov-2019",
+    "jurisdiction": "Cambodia"
+  },
+  "introduction": [
+    "A Q&A guide to insurance and reinsurance in Cambodia.",
+    "The Q&A gives a high level overview of the market trends and regulatory framework in the insurance and reinsurance market; the definitions for a contract of insurance and a contract of reinsurance; the regulation of insurance and reinsurance contracts; the forms of corporate organisation an insurer can take; and the regulation of insurers and reinsurers, including regulation of the transfer of risk. It also covers: operating restrictions for insurance and reinsurance entities; reinsurance monitoring and disclosure requirements; content requirements for policies and implied terms; insurance and reinsurance claims; remedies; insolvency of insurance and reinsurance providers; taxation; dispute resolution; and proposals for reform. Finally, it provides websites and brief details for the main insurance/reinsurance trade organisations in Cambodia.",
+    "To compare answers across multiple jurisdictions visit the Insurance and reinsurance Country Q&A tool.",
+    "This Q&A is part of the global guide to insurance and reinsurance. For a full list of jurisdictional Q&As visit global.practicallaw.com/insurance-guide."
+  ],
+  "sections": [
+    {
+      "section_title": "Market trends and regulatory framework",
+      "questions": [
+        {
+          "question_number": "1",
+          "question_text": "What were the main trends in the insurance and reinsurance markets over the last 12 months?",
+          "answer_parts": [
+            {
+              "sub_heading": "Insurance",
+              "content": [
+                "No new regulations affecting insurance companies have been introduced over the past 12 months.",
+                "As of 2019, there are 80 insurers and other insurance operators registered with the Ministry of Economy and Finance (MEF), including:",
+                {
+                  "list": [
+                    "16 general insurers.",
+                    "One reinsurer.",
+                    "11 life insurers.",
+                    "Seven microinsurers.",
+                    "Three community insurance operators.",
+                    "16 insurance brokers.",
+                    "23 insurance agents.",
+                    "Three insurance loss adjusters."
+                  ]
+                },
+                "General insurance, which includes insurance for health, automobiles, fire and personal injury, is the most common form of insurance. Purchasers of fire insurance are mostly garment factories, warehouses and hotels.",
+                "As Cambodia is a less developed country and the concept of insurance was only introduced in the last decade, microinsurance (that is, insurance for the protection of low-income people against specific perils) also plays a role in Cambodia's insurance market.",
+                "According to the MEF, the insurance sector's annual growth rate was approximately 35% over the last five years, and the MEF expects that gross premiums will increase approximately 32% this year, from USD196.4 million in 2018 to USD260 million at the end of 2019."
+              ]
+            },
+            {
+              "sub_heading": "Reinsurance",
+              "content": [
+                "No new regulations affecting reinsurers have been introduced over the past 12 months.",
+                "Cambodian law does not prohibit insurers from reinsuring their risks with reinsurers abroad. The Cambodian Reinsurance Company is the only domestic reinsurance company registered with the MEF. The Cambodian Reinsurance Company is a state-owned reinsurer that was established in 2002.",
+                "All insurers in Cambodia (except life insurers) must reinsure at least 20% of their insurance business with the state-owned reinsurer."
+              ]
+            }
+          ]
+        },
+        {
+          "question_number": "2",
+          "question_text": "What is the regulatory framework for insurance/reinsurance activities?",
+          "answer_parts": [
+            {
+              "sub_heading": "Regulatory framework",
+              "content": [
+                "Cambodia opened its insurance industry to both domestic and foreign investors when the Law on Insurance was enacted on 25 July 2000 (Insurance Law 2000). Under the Insurance Law 2000, the Government of Cambodia issued Sub-Decree No. 106 on Insurance dated 22 October 2001. The MEF subsequently issued various lower-ranking regulations including prakas, circulars, and notifications concerning banking or financial matters.",
+                "Apart from the regulations that specifically govern insurance, insurance businesses are also governed by other Cambodian laws and regulations, including the Civil Code 2007 and the Law on Commercial Enterprises 2005, the Law on Taxation 2003 and the Law on Insolvency 2007.",
+                "A new insurance law was enacted on 4 August 2014 (Insurance Law 2014). Article 113 of the Insurance Law 2014 repealed the 2000 Insurance Law, but certain regulations issued under the Insurance Law 2000 remain in effect, for example Sub-Decree No. 106 on Insurance 2000, Prakas No. 185 on Corporate Governance for Insurance Companies 2007, and Prakas No.608 of 2008 on Life Insurance Business. Since no new regulations have been issued under the Insurance Law 2014, Cambodia's insurance regime is still full of uncertainties.",
+                "The 2014 Insurance Law provides the following basic regulatory principles:",
+                {
+                  "list": [
+                    "Formation and licensing requirements for insurers, including the requirement that insurers must be structured as public limited companies and hold licences issued by the MEF.",
+                    "Licensing requirements for insurance agents, brokers and loss adjusters.",
+                    "Types of insurance contracts that are permissible.",
+                    "Compulsory insurance for motor vehicles, construction sites and passenger transport.",
+                    "Requirement for reporting financial statements.",
+                    "Liquidation processes and requirements, including establishment of funds to protect policyholders in the event of insurer insolvency.",
+                    "Mediation of disputes by the MEF.",
+                    "Disciplinary punishments and penalties for compliance violations."
+                  ]
+                },
+                "Under the Insurance Law 2014, all insurance businesses including insurers, insurance agents, insurance brokers and insurance loss adjusters, must obtain a licence from the MEF. Insurers include life insurers, general insurers, microinsurers and reinsurers."
+              ]
+            },
+            {
+              "sub_heading": "Regulatory bodies",
+              "content": [
+                "The MEF is the competent authority that can issue insurance regulations and supervise and administer any insurance businesses in accordance with the law (Article 5, Insurance Law 2014). The MEF can also establish an insurance development fund for the purposes of development, support and promotion of the insurance industry and public awareness of the benefits of insurance. The Minister of the MEF has the authority to nominate insurance inspection officers to:",
+                {
+                  "list": [
+                    "Inspect insurers.",
+                    "Monitor, research or examine insurance offences.",
+                    "Promote the enforcement of the Insurance Law 2014."
+                  ]
+                },
+                "The insurance inspection officers can take measures to temporarily suspend the sale of insurance products that are different from those declared in the insurer's licence application. The decisions of the insurance inspection officers can be appealed to the MEF within 45 days from the date of the notice. The MEF must reply with its decision within two months. The MEF's decision can also be appealed to a competent court."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Regulation of insurance and reinsurance contracts",
+      "questions": [
+        {
+          "question_number": "3",
+          "question_text": "What is a contract of insurance for the purposes of the law and regulation? How does it differ from a contract of reinsurance?",
+          "answer_parts": [
+            {
+              "content": [
+                "An insurance contract is defined as a written agreement between an insurer and an insured, in which the insurer agrees to accept a specific risk, and in return receives a premium paid by the insured (Article 4, Insurance Law 2014).",
+                "The insured must have an insurable interest in the subject matter of the insurance. An insurance contract is not voidable by the insured's forgetful or unclear declarations of fact. It is, however, voidable if the insurer finds that the insured intentionally concealed the truth or wilfully misrepresented material facts. Further, if the risks are intentionally created by the insured, the insurer can refuse to pay a claim and if a claim has already been paid, the insurer has the right to demand reimbursement.",
+                "The Insurance Law 2014 provides definitions for the specific types of insurance contract."
+              ]
+            },
+            {
+              "sub_heading": "General insurance",
+              "content": [
+                "There are three types of general insurance according to Article 23 of the Insurance Law 2014:",
+                {
+                  "list": [
+                    "Property insurance. This is a policy that provides financial reimbursement to the owner or renter when a loss or damage occurs to the insured property. The aggregate amount to be indemnified by the insurer cannot exceed the value of the loss of the property, unless otherwise agreed.",
+                    "Liability insurance. This policy indemnifies the insured against all sums that the insured will be legally liable to pay as compensation for bodily injury caused to a third party or damages to property owned by a third party. As set out in prakas issued by the MEF, third party liability insurance for certain commercial motor vehicles, construction sites and passenger transport businesses is compulsory.",
+                    "Health insurance. This policy requires the health insurer to pay for the insured's treatment of injury, sickness, or other medical expenses."
+                  ]
+                }
+              ]
+            },
+            {
+              "sub_heading": "Life insurance",
+              "content": [
+                "Life insurance is a contract between an insured and an insurer, where the insurer promises to pay a designated beneficiary a sum in exchange for a premium on the death of an insured person as a result of an accident, disease or sickness (Article 26, Insurance Law 2014).",
+                "A person can purchase life insurance for himself or for a third party, provided that the third party has given written consent specifying the amount of insurance. Persons suffering from functional neurological diseases or patients in psychiatric wards/units are not eligible to purchase life insurance. A beneficiary cannot benefit from a life insurance policy if the insured commits suicide or the beneficiary is a perpetrator, co-perpetrator, instigator, or accomplice to the murder of the insured. After claiming payment of life insurance benefits, the insurer is not subrogated to claims belonging to the contracting party or the beneficiary against a third party.",
+                "There are four types of life insurance:",
+                {
+                  "list": [
+                    "Term life insurance. This insurance pays a benefit to a beneficiary in the event of the death of the insured, provided the death occurs within a specified term (such as five or ten years), or before a specified age. If the insured survives the period specified in the policy, no benefits will be paid to the beneficiary of the insurance.",
+                    "Whole life insurance. This insurance pays a benefit to the beneficiary or the insured's family on the death of the insured, with the premiums payable for a specified time or for life.",
+                    "Endowment insurance. This is a life insurance contract that pays the insured if they are still alive on the policy maturity date stated in the contract, or pays the beneficiary in the event of the death of the insured prior to that date.",
+                    "Annuity. This is a contract with an insurance company where the insurer provides a stated level of income to the insured for life after retirement."
+                  ]
+                }
+              ]
+            },
+            {
+              "sub_heading": "Microinsurance",
+              "content": "Microinsurance is an insurance contract designed to protect low-income people. Its coverage includes property, life and bodily injury (Article 39, Insurance Law 2014)."
+            },
+            {
+              "sub_heading": "Reinsurance",
+              "content": "Reinsurance is an insurance contract in which the ceding insurer is insured by another insurance company in whole or in part in respect of the risks accepted. The ceding insurer retains liability to the insured (Article 32, Insurance Law 2014)."
+            }
+          ]
+        },
+        {
+          "question_number": "4",
+          "question_text": "Are all contracts of insurance/reinsurance regulated?",
+          "answer_parts": [
+            {
+              "content": "All insurance contracts are regulated by the Ministry Economy and Finance, including life insurance, general insurance, microinsurance and reinsurance."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Corporate structure",
+      "questions": [
+        {
+          "question_number": "5",
+          "question_text": "What form of corporate organisation can insurers take?",
+          "answer_parts": [
+            {
+              "content": "To carry out insurance activities, all types of insurers must operate as public limited companies, regardless of whether they are state-owned, private or mixed companies (Article 41, Insurance Law 2014)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Regulation of insurers and reinsurers",
+      "questions": [
+        {
+          "question_number": "6",
+          "question_text": "Are all insurers and reinsurers regulated? Are they all regulated in the same way?",
+          "answer_parts": [
+            {
+              "content": [
+                "All insurers and reinsurers are regulated in the same way under the Insurance Law 2014.",
+                "However, they are subject to different licensing requirements (see Question 9)."
+              ]
+            }
+          ]
+        },
+        {
+          "question_number": "7",
+          "question_text": "Can insurers and reinsurers carry on non-insurance business? Are there any restrictions on their business activities?",
+          "answer_parts": [
+            {
+              "content": "Insurance and reinsurance companies can only operate within the scope specified in their insurance licences. General insurance companies cannot sell life insurance, and life insurance companies cannot sell general insurance products, except for health insurance. There are no specific prohibitions on insurance and reinsurance companies carrying on other unrelated commercial activities. Article 21 of Law on Taxation 2003 provides different tax rates on insurance activities and non-insurance activities conducted by insurance companies. However, the Ministry of Economic and Finance, which regulates insurance companies, has informally expressed its view that non-insurance activities will be scrutinised closely and may or may not be permitted for insurance companies."
+            }
+          ]
+        },
+        {
+          "question_number": "8",
+          "question_text": "Are there any statutory limits or other restrictions on, or requirements relating to, the transfer of risk by insurance or reinsurance companies?",
+          "answer_parts": [
+            {
+              "sub_heading": "Transfer of business",
+              "content": [
+                "A general insurer, life insurer, microinsurer or reinsurer can transfer its risks either partly or wholly to a reinsurer. All insurers (except for life insurers), must reinsure at least 20% of their risks with the state-owned reinsurance company at the minimum insurance premium rate set by the MEF (Article 67, Sub-Decree No. 106, 22 October 2001) (see Question 1, Reinsurance).",
+                "An insurer's exposure to any single insurable event cannot exceed 10% of the insurer's current capital and reserve fund, and any excess exposure must be reinsured. All insurance contracts (except life insurance contracts) with a total sum insured of less than or equal to USD500,000 must be reinsured with Cambodian insurers any insurance companies in Cambodia (Article 67, Sub-Decree No. 106, 22 October 2001)."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Operating restrictions",
+      "questions": [
+        {
+          "question_number": "9",
+          "question_text": "Does the entity or person have to be authorised or licensed?",
+          "answer_parts": [
+            {
+              "content": "All institutions operating an insurance business in Cambodia must obtain an insurance licence from the MEF (see below)."
+            },
+            {
+              "sub_heading": "Insurance and reinsurance providers",
+              "content": [
+                "Applicants for insurance licences must have a minimum of three shareholders (Article 2, Prakas No. 098, 17 January 2007). A state-owned insurer (that is, an insurer with at least 51% state ownership) must also obtain a licence. Before obtaining a licence, an applicant must show evidence of initial compliance, including a deposit of 10% of the registered capital and a minimum solvency margin of 50% of the registered capital. Life insurers must maintain capital of at least SDR5 million (special drawing rights), based on the exchange rate on the date of the licence issuance.",
+                "The application for a licence must be submitted on a form obtained from the MEF, by a duly authorised individual, and will contain the following information:",
+                {
+                  "list": [
+                    "Corporate information.",
+                    "Business plan.",
+                    "Internal audit.",
+                    "External audit.",
+                    "Sample of policies.",
+                    "Additional information for branches and subsidiaries of foreign insurance companies."
+                  ]
+                },
+                "(Article 4, Prakas No. 098, 17 January 2007.)",
+                "The MEF can must approve or reject the licence application within 45 working days of receiving the completed application documents (Article 4, Prakas No. 098, 17 January 2007). The licence fee is KHR50 million and the administrative fee is KHR20 million. The licence is valid for three years (Article 8, Prakas No. 098, 17 January 2007). Prior approval must be granted by the MEF for licensees to open domestic branch offices in Cambodia.",
+                "The Minister of the MEF can revoke a licence on certain grounds (Article 10, Prakas No. 098, 17 January 2007), by issuing a written notice of revocation and specifying the grounds. An insurer must request the renewal of his/her licence at least one month prior to the expiration date. The insurer can continue to operate its business until the MEF issues a decision on the renewal.",
+                "Currently, the licences for microinsurance operators are only valid for one year from the date of issuance, pending the approval of the sub-decree on micro insurance.",
+                "A microinsurance contract can have a maximum term of one year and a maximum amount of benefits equal to KHR20 million. The minimum capital for a microinsurance company is KHR600 million. Microinsurance companies cannot pay dividends to the shareholders until they obtain a permanent licence, but are allowed to transfer risks to reinsurers. Microinsurers must maintain all documents related to their business and submit statistics and insurance business reports (including monthly, quarterly and semester reports) and audited financial reports to the MEF. Further, they must disclose their audited financial reports (including balance sheets and income statements) to the public. A microinsurer can only dissolve with the MEF's approval. The MEF will order a microinsurer dissolved upon insolvency (Circular 009 on Issuance of Temporary Licence for Micro Insurance, 29 June 2011)."
+              ]
+            },
+            {
+              "sub_heading": "Insurance and reinsurance intermediaries",
+              "content": [
+                "An insurance agent is defined as a natural person or a legal entity representing an insurer to introduce insurance sales, prepare insurance contracts, collect premiums and prepare for indemnification, based on a clearly specified framework of the agreement between the insurer and the insured (Article 46, Insurance Law 2014). The insurance agent receives a commission from the insurer it represents.",
+                "An insurance broker is a legal entity working for the benefit of the insured. The services of an insurance broker include:",
+                {
+                  "list": [
+                    "Providing consultation services and information relating to different types of insurance.",
+                    "Explaining the terms, conditions and premiums of the insurance contracts.",
+                    "Negotiating and preparing the insurance contract between the applicant and the insurer.",
+                    "Selling insurance contracts by receiving a brokerage commission from the insurer."
+                  ]
+                },
+                "(Prakas 865 on Licensing for Insurance Agent, Broker & Loss Adjuster, 23 October 2001.)",
+                "Both insurance agents and insurance brokers must obtain licences from the MEF. The following licensing fees are applicable:",
+                {
+                  "list": [
+                    "An insurance agent must pay KHR3 million for the licence fee and an additional KHR2 million for the administrative fee.",
+                    "An insurance broker must pay KHR4 million for the licence fee and an additional KHR2 million for the administrative fee."
+                  ]
+                },
+                "The MEF will approve or reject the licence application within 45 working days of receiving the completed application documents (Article 9, Insurance Law 2014). The licence is valid for one year. At least one month before the licence expires, the insurance agent or the insurance broker must submit an application for the renewal of the licence (Article 6, Insurance Law 2014). The licensee can continue to operate its usual business until the MEF issues a decision on the renewal."
+              ]
+            },
+            {
+              "sub_heading": "Other providers of insurance and reinsurance-related activities",
+              "content": "Insurance loss adjusters must obtain a licence from the MEF. The licence fee is KHR3 million and the administrative fee is KHR1 million. It generally takes 90 working days to obtain a licence, and the licence is valid for one year. At least one month before the licence expires, the loss adjuster must submit an application for the renewal of the licence. The licensee can continue to operate its usual business until the MEF issues a decision on the renewal (Article 8, Prakas No. 865, 2001)."
+            }
+          ]
+        },
+        {
+          "question_number": "10",
+          "question_text": "What are the main exemptions or exclusions from authorisation or licensing?",
+          "answer_parts": [
+            {
+              "sub_heading": "Insurance and reinsurance providers",
+              "content": "There are no particular exemptions or exclusions from the licensing regime."
+            },
+            {
+              "sub_heading": "Insurance and reinsurance intermediaries",
+              "content": "See above, Insurance and reinsurance providers."
+            },
+            {
+              "sub_heading": "Other providers of insurance/reinsurance-related activities",
+              "content": "See above, Insurance and reinsurance providers."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Restrictions on ownership or control",
+      "questions": [
+        {
+          "question_number": "11",
+          "question_text": "Are there any restrictions on the ownership or control of insurance-related entities?",
+          "answer_parts": [
+            {
+              "sub_heading": "Insurance and reinsurance providers",
+              "content": [
+                "Cambodian law does not restrict the ownership of insurance-related entities. Foreign entities can own up to 100% of the shares of a Cambodian insurance-related entity.",
+                "Insurers cannot delegate management, administration or settlement roles to any person who has been convicted of a misdemeanour or felony offence that is subject to imprisonment.",
+                "Insurers operating in Cambodia must obtain the prior written approval of the MEF to appoint a director or chief executive officer (CEO) (Prakas No. 185 on the Requirements of Corporate Governance, 20 March 2007). The MEF has full discretion to determine whether a candidate fulfils the requirements for the position of director or CEO under Prakas No. 185. To be directors of licensed insurance-related entities, candidates must meet the following criteria:",
+                {
+                  "list": [
+                    "Have sufficient educational qualifications and experience to perform their duties effectively.",
+                    "Have never acted in a manner which would deem them unfit to perform their roles as directors.",
+                    "Have agreed to attend or has attended at least 75% of the company's annual board meetings, unless the absence has been approved by the MEF.",
+                    "Have not been part of any action or decision of the board or management of the company which are detrimental to the interests of the company and its policyholders."
+                  ]
+                },
+                "(Article 5, Prakas No. 185, 2007.)",
+                "A CEO is required to have additional credentials that are specified in the prakas.",
+                "The board composition requirements are also set out in the prakas. The chairman of the board of directors must hold a non-executive position. The board must be comprised of at least two independent non-executive directors representing the interests of both the general public and the non-controlling shareholders.",
+                "Insurers must have an audit committee to assist the board of directors in discharging its responsibilities relating to the integrity and transparency of the following:",
+                {
+                  "list": [
+                    "Financial and accounting records.",
+                    "Controls.",
+                    "Reporting practices."
+                  ]
+                }
+              ]
+            },
+            {
+              "sub_heading": "Insurance/reinsurance intermediaries",
+              "content": "The law does not restrict the ownership or control of insurance agents or insurance brokers. Prakas No. 185 does not apply to intermediaries."
+            },
+            {
+              "sub_heading": "Other providers of insurance/reinsurance-related activities",
+              "content": "The law appears to be silent on whether changes in control or ownership of other providers of insurance/reinsurance-related activities must be notified to the MEF, but the MEF has informally expressed its view that such changes must be reported."
+            }
+          ]
+        },
+        {
+          "question_number": "12",
+          "question_text": "Must owners or controllers notify the relevant authorities, or obtain approval, before taking, increasing or reducing their control or ownership of the entity?",
+          "answer_parts": [
+            {
+              "sub_heading": "Insurance/reinsurance providers",
+              "content": [
+                "Approval of the MEF is required when there is any change in the shareholders who own more than 10% of the shares of a state-owned insurance company. (Article 57, Sub-Decree No. 106, 22 October 2001).",
+                "The law appears to be silent on whether changes in control or ownership of a non-state-owned insurance company must be notified to the MEF, but the MEF has informally expressed its view that such changes must be reported."
+              ]
+            },
+            {
+              "sub_heading": "Insurance/reinsurance intermediaries",
+              "content": "The law appears to be silent on whether changes in control or ownership of insurance/reinsurance intermediaries must be notified to the MEF, but the MEF has informally expressed its view that such changes must be reported."
+            },
+            {
+              "sub_heading": "Other providers of insurance/reinsurance-related activities",
+              "content": "The law appears to be silent on whether changes in control or ownership of other providers of insurance/reinsurance-related activities must be notified to the MEF, but the MEF has informally expressed its view that such changes must be reported."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Ongoing requirements for the authorised or licensed entity",
+      "questions": [
+        {
+          "question_number": "13",
+          "question_text": "What are the key ongoing requirements with which the authorised or licensed entity must comply?",
+          "answer_parts": [
+            {
+              "sub_heading": "Insurance/ reinsurance providers",
+              "content": [
+                "Insurers must submit to the MEF their annual Khmer-language financial reports, including balance sheets and income statements, which must comply with the International Financial Reporting Standards and existing legal regulations (Article 49, Insurance Law 2014).",
+                "The financial reports must be audited by a certified auditor and submitted within three months after the fiscal year end (Article 49, Insurance Law 2014). Prior to 30 June of each calendar year, insurers must publish, for three consecutive days, their annual financial reports in a popular newspaper. Further, they must exhibit the reports on a bulletin board at their head office and branch office for at least 30 days.",
+                "Life insurers are subject to special regulatory requirements (Prakas 608 on Life Insurance Business, 12 August 2008). Life insurers must comply with the MEF's restrictions on investing in financial assets and real estate. The MEF can direct a life insurer to execute certain types of investments within a specific time frame, or order them not to invest in certain financial assets. Life insurers need prior written approval from the MEF to pledge or charge any of their assets or securities.",
+                "Further, life insurers cannot provide loans or guarantees, or any other facilities against the security of their own shares without the MEF's prior approval. However, a life insurer can invest in commercial loans or government bonds. A life insurer can also offer short-term loans to its insured persons, but only up to the amount the insured person has the right to claim from the insurer at the time of the loan. Life insurers can only pay dividends to their shareholders after they pay out the claims for insurance benefits and the reserves required by law."
+              ]
+            },
+            {
+              "sub_heading": "Insurance/ reinsurance intermediaries",
+              "content": [
+                "Insurance brokers have the same financial reporting obligations as insurers (see above, Insurance/ reinsurance providers).",
+                "No life insurance broker can pledge or charge any of its assets or securities without the prior written approval of the MEF."
+              ]
+            },
+            {
+              "sub_heading": "Other providers of insurance/reinsurance-related activities",
+              "content": "There are no legal requirements with which other providers of insurance/reinsurance-related activities must comply with."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Penalties for non-compliance with legal and regulatory requirements",
+      "questions": [
+        {
+          "question_number": "14",
+          "question_text": "What are the possible consequences of an entity failing to comply with applicable legal and regulatory requirements? What recourse do policyholders have if they have done business with an unauthorised or unlicensed entity?",
+          "answer_parts": [
+            {
+              "content": "The Insurance Law 2014 (Articles 94-107) sets out a number of penalties for the violation of the legal and regulatory requirements."
+            },
+            {
+              "sub_heading": "Insurance/reinsurance providers",
+              "content": [
+                "The MEF can impose disciplinary measures on any licensed insurer if the insurer:",
+                {
+                  "list": [
+                    "Conducts its insurance operation in a manner detrimental to the interests of the insured, the interests of the creditors or the interests of the general public.",
+                    "Excessively increases its expenses compared to its premiums.",
+                    "Does not commence insurance operations within six months of obtaining its licence.",
+                    "Contravenes any provisions of the Insurance Law 2014 and other regulatory requirements pertaining to the insurance industry."
+                  ]
+                },
+                "The MEF's disciplinary measures can include the following:",
+                {
+                  "list": [
+                    "Oblige the insurer to stop selling new insurance policies.",
+                    "Stop approving the insurer's new insurance activities or acquisitions.",
+                    "Stop the insurer from conducting activities if the MEF concludes that the insurer's financial condition is unsound.",
+                    "Restrict the disposal of the insurer's assets.",
+                    "Partly or fully transfer the unexpired insurance policies.",
+                    "Remove directors and managers from their positions.",
+                    "Revoke the insurer's licence."
+                  ]
+                },
+                "(Articles 94 and 95, Insurance Law 2014.)",
+                "Violations of certain provisions of the Insurance Law 2014 are subject to fines between KHR10 million and KHR400 million, and/or imprisonment of up to five years for individuals.",
+                "For some offences (such as forgery, publishing or disseminating false information leading to public damage, destroying evidence of insurance offences, or breaching professional confidentiality obligations) the court can impose multiple penalties (Articles 53 and 168, Cambodian Penal Code 2009)."
+              ]
+            },
+            {
+              "sub_heading": "Insurance/reinsurance intermediaries",
+              "content": "For the sanctions generally applicable to insurance/reinsurance intermediaries, see above, Insurance/reinsurance providers."
+            },
+            {
+              "sub_heading": "Other providers of insurance/reinsurance-related activities",
+              "content": "For the sanctions generally applicable to other providers of insurance/reinsurance-related activities, see above, Insurance/reinsurance providers."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Restrictions on persons to whom services can be marketed or sold",
+      "questions": [
+        {
+          "question_number": "15",
+          "question_text": "Are there any restrictions on the persons to whom insurance/reinsurance services and contracts can be marketed or sold?",
+          "answer_parts": [
+            {
+              "content": [
+                "Generally, there are no restrictions on the persons to whom insurance/reinsurance services and contracts can be marketed or sold, except that a policyholder must have an insurable interest in the insured risk.",
+                "However, with regards to life insurance, a person can only purchase a life insurance for himself or for a third party, provided that the third party has given written consent specifying the amount of the insurance.",
+                "Further, persons suffering from functional neurological diseases or persons hospitalised in psychiatric wards/units are not eligible to purchase life insurance (Article 28, Insurance Law 2014)."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Reinsurance monitoring and disclosure requirements",
+      "questions": [
+        {
+          "question_number": "16",
+          "question_text": "To what extent can/must a reinsurance company monitor the claims, settlements and underwriting of the cedant company?",
+          "answer_parts": [
+            {
+              "content": "As there are no implied statutory or regulatory rights or obligations, a reinsurer is entitled to monitor claims, settlements and underwriting of the cedant company to the extent provided in the reinsurance contract."
+            }
+          ]
+        },
+        {
+          "question_number": "17",
+          "question_text": "What disclosure/notification obligations does the cedant company have to the reinsurance company?",
+          "answer_parts": [
+            {
+              "content": [
+                "There are no specific laws or regulations in Cambodia imposing disclosure or notification obligations on a cedant company.",
+                "However, a contract become voidable on the ground of error, fraud, misrepresent material facts and/or mistake, if the other party is aware of the mistake (Articles 345 and 346, Civil Code).",
+                "Therefore, a reinsurance contract becomes voidable if the cedant conceals the truth or wilfully misrepresents material facts."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Insurance and reinsurance policies",
+      "questions": [
+        {
+          "question_number": "18",
+          "question_text": "What are the main general form and content requirements for insurance policies? What are the most commonly found clauses?",
+          "answer_parts": [
+            {
+              "sub_heading": "Form and content requirements",
+              "content": [
+                "An insurance contract must clearly define the rights and obligations of the insured and the insurer. The contract and its amendments must be written in the Khmer language and signed (or thumb printed) by both parties. The insurance policy or the cover note stand as proof of the contract between the insurer and insured (Article 8 and 13, Insurance Law 2014).",
+                "Upon entering an insurance contract, the insurer must provide the insurance applicant with an insurance policy and an insurance certificate or a cover note (a temporary certificate of insurance) and/or other relevant documents. The insurance policy must be signed by the insurer or its agent and its content must be approved by the MEF before use by the insurer (Article 11, Insurance Law 2014).",
+                "If the case is urgent, the insurer or its agent can issue a cover note to provide an individual with proof of insurance before all the insurance paperwork has been processed. Both parties must sign the cover note, and the insured must pay the required insurance premium (Article 9, Sub-Decree No.106, 22 October 2001)."
+              ]
+            },
+            {
+              "sub_heading": "Commonly found clauses",
+              "content": [
+                "An insurance policy must include general conditions regarding the types of risks that are insured and the types of risks that are not insured. It must include an insurance certificate that has been signed by the insurance company and it must contain the following information:",
+                {
+                  "list": [
+                    "Full name and address of the insured.",
+                    "Person or subject matter to be insured.",
+                    "Types of risks to be covered.",
+                    "Commencement date and location of the risk to be covered.",
+                    "Sum insured.",
+                    "Insurance premium and method of payment.",
+                    "Methods and conditions for declaration of risks.",
+                    "Period of coverage.",
+                    "Terms and conditions of nullification and forfeiture of rights under the insurance policy.",
+                    "The conditions allowing each party to terminate the contract before the expiration date.",
+                    "Other details and particulars that have been mutually agreed by the parties."
+                  ]
+                },
+                "(Article 12, Insurance Law 2014.)"
+              ]
+            }
+          ]
+        },
+        {
+          "question_number": "19",
+          "question_text": "Is facultative or treaty reinsurance more common? What are the most commonly found clauses in reinsurance policies?",
+          "answer_parts": [
+            {
+              "sub_heading": "Facultative/treaty reinsurance",
+              "content": "Both facultative and treaty reinsurances are used. In light of the early stage of the market's development, however, facultative reinsurance is more common in respect of high value and/or complex risks."
+            },
+            {
+              "sub_heading": "Commonly found clauses",
+              "content": "Reinsurance policy terms tend to follow international conventions and precedents as there is no domestic reinsurance market beyond the state-owned Cambodian reinsurance company."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Implied terms",
+      "questions": [
+        {
+          "question_number": "20",
+          "question_text": "Are there any terms that are implied by law or regulation (even if not included in the insurance or reinsurance contract)?",
+          "answer_parts": [
+            {
+              "content": [
+                "All insurance contracts must include a clause permitting termination by either party before the expiration date, but the law does not elaborate on the permissible grounds for termination (Article 12, Insurance Law 2014).",
+                "The terms and conditions must be specified in a sub-decree, but none have been issued to date (Article 22, Insurance Law 2014). However, Article 408 of the Civil Code provides general rules for contract termination, such as the use of material breach as a ground to terminate a contract.",
+                "The insured must provide a ten-day notice to the insurer of their intent to terminate the policy before the expiration date (Article 12, Sub-Decree No. 106, 22 October 2001). Subsequently, when a policy is cancelled before its expiration date, a return premium of 90% is owed to the insured, if the no claim has been paid during the coverage.",
+                "With regards to general insurance contracts, a total loss of the subject matter insured due to a risk that is not covered by the policy, automatically terminates the contract. In this case, the insurer must refund 90% of the insurance premium, pro-rated for the remaining period (Article 24, Insurance Law 2014). The law also mandates that the insured subrogate its rights against third parties to the insurer after being paid by the insurer. With the exception of collusion fraud, the insurer cannot claim damages from the:",
+                {
+                  "list": [
+                    "Descendants of the insured.",
+                    "Ascendants of the insured.",
+                    "Relatives by marriage of the insured.",
+                    "Managers, workers or employees that are living at the residence of the insured."
+                  ]
+                },
+                "(Article 25, Insurance Law 2014.)",
+                "The insurer must pay the insured any loss or damage arising out of the risks covered by the policy, except for losses or damages caused by the wilful conduct or fraudulent acts of the insured. This coverage also includes loss or damage caused by persons under the responsibility of the insured (Article 18, Insurance Law 2014). However, the law does not provide guidance on who the insured would be responsible for, and the authors are not aware of any Cambodian cases that have addressed this issue.",
+                "An insurance contract must be entered into based on the principles of honesty, mutual benefit, unanimity through negotiation and without harming the public interest. The insurer must clearly explain the terms and conditions of the insurance contract and the substance of insurance policy to the insured (Articles 9 and 10, Insurance Law 2014)."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Customer protections",
+      "questions": [
+        {
+          "question_number": "21",
+          "question_text": "How do customer protections in the general law affect insurance contracts? What customer protections are generally included in insurance policies to supplement this?",
+          "answer_parts": [
+            {
+              "sub_heading": "General law",
+              "content": "Currently, Cambodia does not have a consumer protection law in place, and consumers' rights are only very generally protected under the Civil Code."
+            },
+            {
+              "sub_heading": "Insurance policies",
+              "content": [
+                "Article 9 of the Insurance Law provides that insurance contracts must be based on principles of honesty, mutual benefit, unanimity by way of negotiation, and without detrimental effect to the public interest.",
+                "This article implies that ambiguities or \"unfair\" terms in insurance contracts may be construed against the insurer.",
+                "Since Cambodian case law is not binding in later cases with similar facts, and is not published, there are no cases to substantiate or clarify this point.",
+                "Further, the insurer must clearly explain the terms and conditions of the insurance contract and the substance of the insurance policy to the insured."
+              ]
+            }
+          ]
+        },
+        {
+          "question_number": "22",
+          "question_text": "What are the main standard policies or terms produced by trade associations or relevant authorities?",
+          "answer_parts": [
+            {
+              "sub_heading": "Standard policies or terms",
+              "content": [
+                "There are no standard policies or terms produced by trade associations or the MEF.",
+                "However, every insurance policy must be approved by the MEF (Article 90, Sub-Decree No. 106, 22 October 2001)."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Insurance and reinsurance policy claims",
+      "questions": [
+        {
+          "question_number": "23",
+          "question_text": "What must be established to trigger coverage under an insurance policy?",
+          "answer_parts": [
+            {
+              "sub_heading": "Establishing an insurance claim",
+              "content": [
+                "To trigger coverage under an insurance policy, the insured must notify the insurer that a loss has occurred as soon as possible. The insurance policy must include the claims notification procedure (Article 6, Sub-Decree No. 106, 22 October 2001). The regulation does not specify whether the insured's failure to give timely notice would entitle the insurer to deny coverage. However, it is possible for the insurer to claim compensation for any prejudice suffered as a result of the late notice.",
+                "The insurer has rights to pursue third parties for claims that the insurer may be liable to the insured and the insured will give the subrogation right to the insurer once the insurer has paid the claim (Article 25, Insurance Law 2014)."
+              ]
+            }
+          ]
+        },
+        {
+          "question_number": "24",
+          "question_text": "What are the circumstances in which third parties can claim under an insurance policy?",
+          "answer_parts": [
+            {
+              "sub_heading": "Third party insurance claims",
+              "content": "In liability insurance, if the insured causes loss or damage to a third party, the insurer must directly indemnify the third party. A third party is any person who has suffered bodily injury or property damage as a result of the acts of the insured (Article 21, Insurance Law 2014)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Time limits",
+      "questions": [
+        {
+          "question_number": "25",
+          "question_text": "Is there a time limit outside of which the insured/reinsured is barred from making a claim?",
+          "answer_parts": [
+            {
+              "content": "The time limit for the insured/reinsured to make a claim is five years from the date that the insured/reinsured can make a claim (Articles 481 and 482, Civil Code)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Enforcement",
+      "questions": [
+        {
+          "question_number": "26",
+          "question_text": "Can the original policyholder or other third party enforce the reinsurance contract against a reinsurer?",
+          "answer_parts": [
+            {
+              "content": "In the case of reinsurance, the insurance company continues to be liable to the insured. However, the Insurance Law 2014 is silent on the rights of the original policyholder or other third party to enforce the reinsurance contract against the reinsurer."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Remedies",
+      "questions": [
+        {
+          "question_number": "27",
+          "question_text": "What remedies are available for breach of an insurance policy?",
+          "answer_parts": [
+            {
+              "sub_heading": "Insurer",
+              "content": [
+                "An insurance contract can be terminated if the insurer discovers that the insured concealed the truth, or wilfully misrepresented any material fact. However, forgetful, unintentional and/or unclear declarations of the insured will not be grounds for cancelling the policy (Article 19, Insurance Law 2014).",
+                "If it is found that the risks are intentionally created by the insured, the insurer has the right to deny the insured's claim, and if a claim has already been paid, the insurer has the right to demand reimbursement.",
+                "The insurer has no liability in respect of the loss caused by the wilful conduct or fraudulent acts of the insured (Article 18, Insurance Law 2014)."
+              ]
+            },
+            {
+              "sub_heading": "Insured",
+              "content": [
+                "An insurance contract must be entered into based on the principles of honesty, mutual benefit, unanimity through negotiation, and without harming the public interest (Article 9, Insurance Law 2014). However, the law does not expressly provide punitive damages or other remedies for the insured if an insurance company acts in bad faith.",
+                "Under the Civil Code, an insured can bring a court action for damages, compensation, or specific performance. The Civil Code also provides that if the non-performance is the result of the obligor's malicious intent or bad faith conduct, the court can, based on the obligee's demand for damages, order that the obligor pay the obligee the profit or benefit obtained from the conduct comprising the non-performance (Article 401, Civil Code)."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Punitive damage claims",
+      "questions": [
+        {
+          "question_number": "28",
+          "question_text": "Are punitive damages insurable? Can punitive damages be reinsured if they are covered by an underlying policy?",
+          "answer_parts": [
+            {
+              "content": [
+                "The Civil Code and the Insurance Law 2014 are both silent on whether punitive damages are insurable.",
+                "However, as the insurer is not liable to indemnify any loss caused by the wilful conduct or fraudulent acts of the insured, only a few punitive damages awards are likely to be insurable."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Insolvency of insurance and reinsurance providers",
+      "questions": [
+        {
+          "question_number": "29",
+          "question_text": "What is the legal and regulatory framework for dealing with distressed or insolvent insurance or reinsurance companies, or other persons or entities providing insurance or reinsurance related services? What regulatory and/or other protections exist for policyholders if the insurance company is insolvent?",
+          "answer_parts": [
+            {
+              "content": [
+                "In the event that an insurer/reinsurer becomes insolvent, their debts will be paid off in the following order:",
+                {
+                  "list": [
+                    "Cost of the provisional administration and liquidation.",
+                    "Insurance claims.",
+                    "Claims by policyholders.",
+                    "Employee salaries, administrative fees, court fees and other court levies.",
+                    "Secured debts.",
+                    "Tax liabilities.",
+                    "Unsecured claims."
+                  ]
+                },
+                "(Article 86, Insurance Law 2014.)",
+                "Prior to commencing business, a Cambodian insurance company and any branch office of a foreign insurance company must fully finance their minimum statutory capital and reserve obligations with the National Treasury and a commercial bank licensed by the National Bank of Cambodia.",
+                "All classes of insurance companies must maintain a solvency margin, which is set by regulation and generally equals a percentage of annual premiums. The purpose of the solvency margin is to finance claims that exceed the insurer's reserve funds.",
+                "Additionally, insurance companies must permanently deposit and maintain at least 10% of the registered capital in an account of the National Treasury until the insurance company ceases its business operation (Article 48, Insurance Law 2014). This deposit cannot be included in the solvency margin."
+              ]
+            }
+          ]
+        },
+        {
+          "question_number": "30",
+          "question_text": "Can excess insurance policies \"drop down\" to provide coverage if the primary insurer goes into insolvency?",
+          "answer_parts": [
+            {
+              "content": [
+                "There are no legal requirements for excess insurance policies to \"drop down\" to provide coverage if the primary insurer goes into insolvency.",
+                "Therefore, this would be determined by the express terms of the excess insurance policy."
+              ]
+            }
+          ]
+        },
+        {
+          "question_number": "31",
+          "question_text": "Is a right to set-off mutual debts and credits recognised in an insolvency proceeding involving an insurer or reinsurer?",
+          "answer_parts": [
+            {
+              "content": [
+                "A right to set-off mutual debts and credits is generally recognised in an insolvency proceeding involving an insurer or reinsurer under the Civil Code, if both obligations are due for performance.",
+                "Article 34 of the Law on Insolvency 2007 states that a creditor can assert set-off rights to his claim in the proceedings against an obligation owed to a debtor, unless:",
+                {
+                  "list": [
+                    "The creditor only became a debtor after the opening of the insolvency proceedings.",
+                    "The creditor acquired his claim from another creditor after the opening of the insolvency proceedings.",
+                    "The creditor acquired the right of set-off by means of a transaction which is subject to contest or avoidance under the insolvency law.",
+                    "The creditor's claim is not admissible in insolvency proceedings."
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Taxation of insurance and reinsurance providers",
+      "questions": [
+        {
+          "question_number": "32",
+          "question_text": "What is the tax treatment for insurers, reinsurers, and other persons or entities providing insurance and reinsurance-related services?",
+          "answer_parts": [
+            {
+              "content": [
+                "Generally, the tax on profit rate of legal entities is 20%.",
+                "However, an entity that is mainly engaged in the insurance/reinsurance of life, property or other risks, is subject to a 5% rate on gross premiums (Article 21, Law on Taxation 1997).",
+                "In addition, insurance businesses must withhold and pay a tax rate of 20% of the total value of fringe benefits given to their employees. Insurance products are not subject to VAT."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Insurance and reinsurance dispute resolution",
+      "questions": [
+        {
+          "question_number": "33",
+          "question_text": "Are there special procedures or venues for dealing with insurance or reinsurance complaints or disputes?",
+          "answer_parts": [
+            {
+              "content": [
+                "Article 89 of the Insurance Law 2014 provides that either party to an insurance contract can bring a dispute to the MEF for mediation before pursuing other methods, such as arbitration or litigation. The same law also provides that if the MEF discovers a mistake made by the insured and the insured admits to the mistake during the mediation, the insured's claims against the insurer will be null and void.",
+                "The results of the mediation are recorded by the MEF and the report states whether the parties have reached an agreement. Any mediation agreement certified by the MEF will be effective immediately, and the right to an arbitration or litigation will automatically be lost.",
+                "If the MEF is unable to resolve the dispute through mediation, it must send its mediation report to the arbitration tribunal or to a competent court. The parties will then have 90 days to file an action with the arbitration tribunal or the court, commencing from the date the mediation failed. Failure to comply with this requirement will result in the loss of the right to arbitrate or litigate the dispute."
+              ]
+            }
+          ]
+        },
+        {
+          "question_number": "34",
+          "question_text": "Are arbitration clauses in insurance and reinsurance agreements enforceable?",
+          "answer_parts": [
+            {
+              "content": "Under Cambodia's Commercial Arbitration Law, arbitration clauses are enforceable. Further, Cambodia is a signatory to the UN Convention on the Recognition and Enforcement of Foreign Arbitral Awards 1958 (New York Convention) and therefore arbitration clauses in insurance and reinsurance agreements are generally enforceable as a matter of law."
+            }
+          ]
+        },
+        {
+          "question_number": "35",
+          "question_text": "Are choice of forum, venue and applicable law clauses in an insurance or reinsurance contract recognised and enforced?",
+          "answer_parts": [
+            {
+              "sub_heading": "Forum",
+              "content": "The Insurance Law 2014 permits the parties to choose the forum in their contract, and foreign arbitration awards are enforceable in Cambodia (see Question 34)."
+            },
+            {
+              "sub_heading": "Venue",
+              "content": "In theory, the choice of venue clauses, including the choice of foreign courts in insurance and reinsurance contracts are recognised and enforceable in Cambodia. However, Cambodia is not a party to any treaties on the mutual enforcement of court judgments (except with Vietnam), and therefore foreign judgments are not enforceable in Cambodia. For this reason, there is a strong equitable argument that the choice of foreign venues should be voided, except in the case of arbitration."
+            },
+            {
+              "sub_heading": "Governing law",
+              "content": "The Civil Code generally supports the concept of freedom of contract between parties and therefore freedom to choose governing law. The parties are free to select the law of any country as the governing law of their contract, provided that the Cambodian authorities and courts will not enforce a foreign law to the extent that it would produce a result that contravenes the \"public order and good customs\" of Cambodia. However, all policy wordings are subject to the approval of MEF, and it is uncertain whether they would approve a foreign governing law for a policy issued in Cambodia to cover Cambodian risks."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_title": "Reform",
+      "questions": [
+        {
+          "question_number": "36",
+          "question_text": "What proposals are there for reform of the law, regulation or rules relating to the provision of insurance or reinsurance services?",
+          "answer_parts": [
+            {
+              "content": "Cambodia's insurance regulations remain under-developed. The Insurance Law 2014 replaced the Insurance Law 2000, but the old insurance regulations have not yet been replaced. As a result, the regulatory scheme in Cambodia remains in flux. With the new 2014 law, a number of new regulations are expected in order to improve the insurance industry as well as to protect insurance consumers."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contributor_profiles": [
+    {
+      "name": "Jay Cohen",
+      "firm": "Tilleke & Gibbins",
+      "contact": {
+        "telephone": "+855 23 964 210",
+        "fax": "+855 23 964 215",
+        "email": "jay.c@tilleke.com",
+        "website": "www.tilleke.com"
+      },
+      "professional_qualifications": "JD, Washington University School of Law; MA, Washington University School of Law; BA, Emory University",
+      "areas_of_practice": "Insurance; banking and finance; corporate services; commercial transactions and M&A; employment; property; anti-corruption; intellectual property; technologies, media and telecommunication.",
+      "recent_transactions": [
+        "Providing market entry advice for insurance company desiring to provide reinsurance services in Cambodia.",
+        "Advised insurance company on joint venture in Cambodia and prepared transaction documentation.",
+        "Advised on the regulatory framework for bancassurance in Cambodia."
+      ],
+      "languages": "English, Chinese",
+      "professional_associations_memberships": "Association of International Petroleum Negotiators (AIPN)."
+    },
+    {
+      "name": "Nitikar Nith",
+      "firm": "Tilleke & Gibbins",
+      "contact": {
+        "telephone": "+855 23 964 210",
+        "fax": "+855 23 964 215",
+        "email": "nitikar.n@tilleke.com",
+        "website": "www.tilleke.com"
+      },
+      "professional_qualifications": "LLM, Université Paris 8 Vincennes-Saint-Denis; LLB, Royal University of Law and Economics and University of Lumiere Lyon II",
+      "areas_of_practice": "Insurance; banking and finance; corporate services; commercial transactions and M&A; intellectual property enforcement; employment; immigration; real estate.",
+      "languages": "Khmer, English, French",
+      "publications": "WTR Anti-counterfeiting: A Global Guide 2019, Cambodia Chapter, 16 May 2019."
+    }
+  ],
+  "document_footer": "© 2019 Thomson Reuters. All rights reserved.",
+  "metadata": {
+    "version": "2.0",
+    "last_updated": "2025-05-27",
+    "enhanced": true
+  }
+}

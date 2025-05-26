@@ -1,6 +1,6 @@
-import lawDatabase from "../Database/Law on Insurance.json";
-import insuranceQnADatabase from "../Database/Insurance and reinsurance in Cambodia(QnA format).json";
-import consumerProtectionDatabase from "../Database/Law on Consumer Protection.json";
+import lawDatabase from "../Database/Enhanced_Law_on_Insurance.json";
+import insuranceQnADatabase from "../Database/Enhanced_Insurance and reinsurance in Cambodia(QnA format).json";
+import consumerProtectionDatabase from "../Database/Enhanced_Law_on_Consumer_Protection.json";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
