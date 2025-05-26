@@ -81,9 +81,17 @@ interface LawDatabase {
   chapters: LawChapter[];
 }
 
+// Helper function to ensure a value is a string for safe processing
+const ensureString = (value: any): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value);
+};
+
 // Function to query the law database
 const calculateScore = (text: string, keywords: string[]) => {
-  const lowerText = text.toLowerCase();
+  const lowerText = ensureString(text).toLowerCase();
   let score = 0;
   for (const keyword of keywords) {
     if (lowerText.includes(keyword)) {
@@ -94,144 +102,159 @@ const calculateScore = (text: string, keywords: string[]) => {
 };
 
 const processArticleContent = (article: LawArticle, queryKeywords: string[], calculateScore: (text: string, keywords: string[]) => number) => {
-  let articleText = `Article ${article.article_number}: ${article.content}`;
-  let articleScore = calculateScore(article.content, queryKeywords);
+  let articleText = `Article ${ensureString(article.article_number)}: ${ensureString(article.content)}`;
+  let articleScore = calculateScore(ensureString(article.content), queryKeywords);
 
     if (article.points) {
       article.points.forEach(point => {
-        if (calculateScore(point, queryKeywords) > 0) {
-          articleText += `\n  - ${point}`;
-          articleScore += calculateScore(point, queryKeywords);
+        if (calculateScore(ensureString(point), queryKeywords) > 0) {
+          articleText += `\n  - ${ensureString(point)}`;
+          articleScore += calculateScore(ensureString(point), queryKeywords);
         }
       });
     }
     if (article.definitions) {
       for (const term in article.definitions) {
-        if (calculateScore(term, queryKeywords) > 0 || calculateScore(article.definitions[term], queryKeywords) > 0) {
-          articleText += `\n  Definition of ${term}: ${article.definitions[term]}`;
-          articleScore += calculateScore(term, queryKeywords) + calculateScore(article.definitions[term], queryKeywords);
+        const definitionContent = ensureString(article.definitions[term]);
+        if (calculateScore(ensureString(term), queryKeywords) > 0 || calculateScore(definitionContent, queryKeywords) > 0) {
+          articleText += `\n  Definition of ${ensureString(term)}: ${definitionContent}`;
+          articleScore += calculateScore(ensureString(term), queryKeywords) + calculateScore(definitionContent, queryKeywords);
         }
       }
     }
     if (article.sub_types) {
       article.sub_types.forEach(sub => {
-        if (calculateScore(sub.type, queryKeywords) > 0 || calculateScore(sub.description, queryKeywords) > 0) {
-          articleText += `\n  Sub-type ${sub.type}: ${sub.description}`;
-          articleScore += calculateScore(sub.type, queryKeywords) + calculateScore(sub.description, queryKeywords);
+        const subType = ensureString(sub.type);
+        const subDescription = ensureString(sub.description);
+        if (calculateScore(subType, queryKeywords) > 0 || calculateScore(subDescription, queryKeywords) > 0) {
+          articleText += `\n  Sub-type ${subType}: ${subDescription}`;
+          articleScore += calculateScore(subType, queryKeywords) + calculateScore(subDescription, queryKeywords);
         }
       });
     }
     if (article.prohibitions) {
       article.prohibitions.forEach(prohibition => {
-        if (calculateScore(prohibition, queryKeywords) > 0) {
-          articleText += `\n  Prohibition: ${prohibition}`;
-          articleScore += calculateScore(prohibition, queryKeywords);
+        if (calculateScore(ensureString(prohibition), queryKeywords) > 0) {
+          articleText += `\n  Prohibition: ${ensureString(prohibition)}`;
+          articleScore += calculateScore(ensureString(prohibition), queryKeywords);
         }
       });
     }
     if (article.business_types) {
       article.business_types.forEach(type => {
-        if (calculateScore(type, queryKeywords) > 0) {
-          articleText += `\n  Business Type: ${type}`;
-          articleScore += calculateScore(type, queryKeywords);
+        if (calculateScore(ensureString(type), queryKeywords) > 0) {
+          articleText += `\n  Business Type: ${ensureString(type)}`;
+          articleScore += calculateScore(ensureString(type), queryKeywords);
         }
       });
     }
     if (article.priority_order) {
       article.priority_order.forEach(item => {
-        if (calculateScore(item, queryKeywords) > 0) {
-          articleText += `\n  Priority: ${item}`;
-          articleScore += calculateScore(item, queryKeywords);
+        if (calculateScore(ensureString(item), queryKeywords) > 0) {
+          articleText += `\n  Priority: ${ensureString(item)}`;
+          articleScore += calculateScore(ensureString(item), queryKeywords);
         }
       });
     }
     if (article.conditions) {
       article.conditions.forEach(condition => {
-        if (calculateScore(condition, queryKeywords) > 0) {
-          articleText += `\n  Condition: ${condition}`;
-          articleScore += calculateScore(condition, queryKeywords);
+        if (calculateScore(ensureString(condition), queryKeywords) > 0) {
+          articleText += `\n  Condition: ${ensureString(condition)}`;
+          articleScore += calculateScore(ensureString(condition), queryKeywords);
         }
       });
     }
     if (article.punishments) {
       article.punishments.forEach(punishment => {
-        if (calculateScore(punishment, queryKeywords) > 0) {
-          articleText += `\n  Punishment: ${punishment}`;
-          articleScore += calculateScore(punishment, queryKeywords);
+        if (calculateScore(ensureString(punishment), queryKeywords) > 0) {
+          articleText += `\n  Punishment: ${ensureString(punishment)}`;
+          articleScore += calculateScore(ensureString(punishment), queryKeywords);
         }
       });
     }
-    if (article.punishment_natural_person && calculateScore(article.punishment_natural_person, queryKeywords) > 0) {
-      articleText += `\n  Punishment (Natural Person): ${article.punishment_natural_person}`;
-      articleScore += calculateScore(article.punishment_natural_person, queryKeywords);
+    if (article.punishment_natural_person) { // Removed direct check for calculateScore > 0 here, as ensureString handles null/undefined
+      const punishmentNaturalPerson = ensureString(article.punishment_natural_person);
+      if (calculateScore(punishmentNaturalPerson, queryKeywords) > 0) {
+        articleText += `\n  Punishment (Natural Person): ${punishmentNaturalPerson}`;
+        articleScore += calculateScore(punishmentNaturalPerson, queryKeywords);
+      }
     }
-    if (article.punishment_legal_person && calculateScore(article.punishment_legal_person, queryKeywords) > 0) {
-      articleText += `\n  Punishment (Legal Person): ${article.punishment_legal_person}`;
-      articleScore += calculateScore(article.punishment_legal_person, queryKeywords);
+    if (article.punishment_legal_person) { // Removed direct check for calculateScore > 0 here, as ensureString handles null/undefined
+      const punishmentLegalPerson = ensureString(article.punishment_legal_person);
+      if (calculateScore(punishmentLegalPerson, queryKeywords) > 0) {
+        articleText += `\n  Punishment (Legal Person): ${punishmentLegalPerson}`;
+        articleScore += calculateScore(punishmentLegalPerson, queryKeywords);
+      }
     }
     return { articleText, articleScore };
   };
 
   const scoreChaptersAndSections = (lawDatabase: LawDatabase, queryKeywords: string[], scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[], calculateScore: (text: string, keywords: string[]) => number) => {
-    lawDatabase.chapters.forEach(chapter => {
-      const chapterTitle = `Chapter ${chapter.chapter_number}: ${chapter.chapter_title}`;
-      const chapterScore = calculateScore(chapter.chapter_title, queryKeywords);
+    if (lawDatabase.chapters && Array.isArray(lawDatabase.chapters)) {
+      lawDatabase.chapters.forEach(chapter => {
+        const chapterTitle = `Chapter ${ensureString(chapter.chapter_number)}: ${ensureString(chapter.chapter_title)}`;
+        const chapterScore = calculateScore(ensureString(chapter.chapter_title), queryKeywords);
 
-      if (chapterScore > 0) {
-        scoredResults.push({
-          content: `\n--- ${chapterTitle} ---`,
-          score: chapterScore * 10, // Boost score for chapter title matches
-          chapterTitle: chapterTitle
-        });
-      }
+        if (chapterScore > 0) {
+          scoredResults.push({
+            content: `\n--- ${chapterTitle} ---`,
+            score: chapterScore * 10, // Boost score for chapter title matches
+            chapterTitle: chapterTitle
+          });
+        }
 
-      if (chapter.sections) {
-        chapter.sections.forEach(section => {
-          const sectionTitle = `Section ${section.section_number}: ${section.section_title}`;
-          const sectionScore = calculateScore(section.section_title, queryKeywords);
-          if (sectionScore > 0) {
-            scoredResults.push({
-              content: `\n--- ${chapterTitle} - ${sectionTitle} ---`,
-              score: sectionScore * 5, // Boost score for section title matches
-              chapterTitle: chapterTitle,
-              sectionTitle: sectionTitle
-            });
-          }
-        });
-      }
-    });
+        if (chapter.sections) {
+          chapter.sections.forEach(section => {
+            const sectionTitle = `Section ${ensureString(section.section_number)}: ${ensureString(section.section_title)}`;
+            const sectionScore = calculateScore(ensureString(section.section_title), queryKeywords);
+            if (sectionScore > 0) {
+              scoredResults.push({
+                content: `\n--- ${chapterTitle} - ${sectionTitle} ---`,
+                score: sectionScore * 5, // Boost score for section title matches
+                chapterTitle: chapterTitle,
+                sectionTitle: sectionTitle
+              });
+            }
+          });
+        }
+      });
+    }
   };
 
   const scoreAndProcessArticles = (lawDatabase: LawDatabase, queryKeywords: string[], scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[], processArticleContent: (article: LawArticle, queryKeywords: string[], calculateScore: (text: string, keywords: string[]) => number) => { articleText: string; articleScore: number; }, calculateScore: (text: string, keywords: string[]) => number) => {
-    lawDatabase.chapters.forEach(chapter => {
-      const chapterTitle = `Chapter ${chapter.chapter_number}: ${chapter.chapter_title}`;
+    if (lawDatabase.chapters && Array.isArray(lawDatabase.chapters)) {
+      lawDatabase.chapters.forEach(chapter => {
+        const chapterTitle = `Chapter ${ensureString(chapter.chapter_number)}: ${ensureString(chapter.chapter_title)}`;
 
-      const processArticle = (article: LawArticle, currentSectionTitle?: string) => {
-        const { articleText, articleScore } = processArticleContent(article, queryKeywords, calculateScore);
+        const processArticle = (article: LawArticle, currentSectionTitle?: string) => {
+          const { articleText, articleScore } = processArticleContent(article, queryKeywords, calculateScore);
 
-        if (articleScore > 0) {
-          scoredResults.push({
-            content: articleText,
-            score: articleScore,
-            chapterTitle: chapterTitle,
-            sectionTitle: currentSectionTitle
+          if (articleScore > 0) {
+            scoredResults.push({
+              content: articleText,
+              score: articleScore,
+              chapterTitle: chapterTitle,
+              sectionTitle: currentSectionTitle
+            });
+          }
+        };
+
+        if (chapter.articles) {
+          chapter.articles.forEach(article => processArticle(article));
+        }
+        if (chapter.sections) {
+          chapter.sections.forEach(section => {
+            const sectionTitle = `Section ${ensureString(section.section_number)}: ${ensureString(section.section_title)}`;
+            section.articles.forEach(article => processArticle(article, sectionTitle));
           });
         }
-      };
-
-      if (chapter.articles) {
-        chapter.articles.forEach(article => processArticle(article));
-      }
-      if (chapter.sections) {
-        chapter.sections.forEach(section => {
-          const sectionTitle = `Section ${section.section_number}: ${section.section_title}`;
-          section.articles.forEach(article => processArticle(article, sectionTitle));
-        });
-      }
-    });
+      });
+    }
   };
 
   const aggregateAndSortResults = (scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[]) => {
+    const MAX_SNIPPETS = 30;
+    const MAX_SNIPPET_LENGTH = 3000; // characters
     scoredResults.sort((a, b) => b.score - a.score);
 
     const finalRelevantContent: string[] = [];
@@ -239,6 +262,7 @@ const processArticleContent = (article: LawArticle, queryKeywords: string[], cal
     const addedArticles = new Set<string>();
 
     for (const result of scoredResults) {
+      if (finalRelevantContent.length >= MAX_SNIPPETS) break;
       let header = "";
       if (result.chapterTitle) {
         header += result.chapterTitle;
@@ -252,9 +276,14 @@ const processArticleContent = (article: LawArticle, queryKeywords: string[], cal
         addedHeaders.add(header);
       }
 
-      if (!addedArticles.has(result.content)) {
-        finalRelevantContent.push(result.content);
-        addedArticles.add(result.content);
+      // Truncate long snippets if needed
+      let content = result.content;
+      if (content.length > MAX_SNIPPET_LENGTH) {
+        content = content.slice(0, MAX_SNIPPET_LENGTH) + " ...[truncated]";
+      }
+      if (!addedArticles.has(content)) {
+        finalRelevantContent.push(content);
+        addedArticles.add(content);
       }
     }
     return finalRelevantContent;
@@ -383,6 +412,40 @@ Search Query for Law Database:`;
   }
 }
 
+async function determineRelevantDatabases(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], selectedModel: string | undefined, genAI: GoogleGenerativeAI): Promise<string[]> {
+  try {
+    const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
+    const prompt = `Based on the following user message and conversation history, identify which of the following law databases are most relevant to answer the query.
+    
+    Available Databases:
+    - "Law on Insurance"
+    - "Insurance and Reinsurance QnA"
+    - "Law on Consumer Protection"
+
+    Output a comma-separated list of the relevant database names. If no database is relevant, output "NONE".
+
+    **Conversation History (most recent last):**
+    ${history.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
+
+    User Message: "${userMessage}"
+
+    Relevant Databases (comma-separated, or NONE):`;
+
+    console.log("[determineRelevantDatabases] Prompting to decide on relevant databases for user message:", userMessage);
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text().trim();
+    console.log(`[determineRelevantDatabases] Decision for "${userMessage}": ${responseText}`);
+
+    if (responseText.toUpperCase() === "NONE" || responseText === "") {
+      return [];
+    }
+    return responseText.split(',').map(db => db.trim());
+  } catch (error) {
+    console.error("[determineRelevantDatabases] Error determining relevant databases:", error);
+    return []; // Default to no databases on error
+  }
+}
+
 
 export const getAIResponse = action({
   args: {
@@ -393,11 +456,12 @@ export const getAIResponse = action({
     policyPrompt: v.optional(v.string()),
     selectedModel: v.optional(v.string()),
     paneId: v.string(), // Add paneId here
-    disableSystemPrompt: v.optional(v.boolean()), // New argument
+    disableSystemPrompt: v.optional(v.boolean()), // Argument for system prompt
+    disableTools: v.optional(v.boolean()), // Argument for tool use
   },
   handler: async (ctx, args): Promise<Id<"messages">> => {
-    const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel, paneId, disableSystemPrompt } = args;
-    console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}". Pane ID: "${paneId}". System Prompt Disabled: ${!!disableSystemPrompt}`);
+    const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel, paneId, disableSystemPrompt, disableTools } = args;
+    console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}". Pane ID: "${paneId}". Disable System Prompt: ${!!disableSystemPrompt}. Disable Tools: ${!!disableTools}`);
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
 
     // Correct instantiation of Tool and GoogleSearch
@@ -424,48 +488,75 @@ export const getAIResponse = action({
       const decision = await decideInformationSource(userMessage, formattedHistory, selectedModel, genAI);
       console.log(`[decideInformationSource] decideInformationSource returned: ${decision}`);
 
-      // Load the law database content
-      const lawDatabaseContent = await ctx.runQuery(api.chat.getLawDatabaseContent); // Assuming this query exists and returns the JSON content
-      const lawDatabase: LawDatabase = JSON.parse(lawDatabaseContent);
-
+      let relevantDatabaseNames: string[] = [];
       if (decision === "LAW_DATABASE_ONLY" || decision === "BOTH") {
-        console.log("[getAIResponse] Decision: Accessing law database.");
-        let lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", false); // Initial search
-        let lawResultsOrErrorKey = await queryLawDatabase(lawQuery, lawDatabase);
+        console.log("[getAIResponse] Decision: Law database access indicated. Using all law databases.");
+        relevantDatabaseNames = [
+          "Law on Insurance",
+          "Insurance and Reinsurance QnA",
+          "Law on Consumer Protection"
+        ];
+        console.log(`[getAIResponse] Using all law databases: ${JSON.stringify(relevantDatabaseNames)}`);
 
-        if (lawResultsOrErrorKey === "LAW_DATABASE_NO_RESULTS") {
-          console.log("[getAIResponse] First law database search yielded no results. Attempting retry with broader query.");
-          // Retry: Generate a broader query and try again
-          lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", true); // Retry with isRetry = true
-          lawResultsOrErrorKey = await queryLawDatabase(lawQuery, lawDatabase);
+        if (relevantDatabaseNames.length > 0) {
+          console.log("[getAIResponse] Accessing law database(s).");
+          let lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", false); // Initial search
+          const lawDatabaseContent = await ctx.runQuery(api.chat.getLawDatabaseContent, { databaseNames: relevantDatabaseNames });
+          const lawDatabaseResults = JSON.parse(lawDatabaseContent);
 
-          if (lawResultsOrErrorKey === "LAW_DATABASE_NO_RESULTS") {
-            lawDatabaseInfoForSystemPrompt = `A search of the law database (query: "${lawQuery}") found no relevant results after two attempts.`;
-          } else if (lawResultsOrErrorKey) {
-            lawDatabaseInfoForSystemPrompt = `Relevant information from the law database for query "${lawQuery}" (after retry) is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
-            lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}" - after retry):
----
-${lawResultsOrErrorKey}
----
-Use this information to help answer the user's original question.`;
+          let combinedLawResults = "";
+          for (const dbName of relevantDatabaseNames) {
+            if (lawDatabaseResults[dbName]) {
+              const dbContent = lawDatabaseResults[dbName];
+              // Assuming queryLawDatabase can take a specific database content and query
+              const resultsForDb = await queryLawDatabase(lawQuery, dbContent); // Pass specific database content
+              if (resultsForDb !== "LAW_DATABASE_NO_RESULTS") {
+                combinedLawResults += `\n\n--- Results from ${dbName} ---\n${resultsForDb}`;
+              }
+            }
           }
-        } else if (lawResultsOrErrorKey) {
-          lawDatabaseInfoForSystemPrompt = `Relevant information from the law database for query "${lawQuery}" is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
-          lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}"):
----
-${lawResultsOrErrorKey}
----
-Use this information to help answer the user's original question.`;
+
+          if (combinedLawResults.trim() === "") {
+            console.log("[getAIResponse] First law database search yielded no results across selected databases. Attempting retry with broader query.");
+            // Retry: Generate a broader query and try again
+            lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", true); // Retry with isRetry = true
+            
+            combinedLawResults = ""; // Reset for retry
+            for (const dbName of relevantDatabaseNames) {
+              if (lawDatabaseResults[dbName]) {
+                const dbContent = lawDatabaseResults[dbName];
+                const resultsForDb = await queryLawDatabase(lawQuery, dbContent);
+                if (resultsForDb !== "LAW_DATABASE_NO_RESULTS") {
+                  combinedLawResults += `\n\n--- Results from ${dbName} (after retry) ---\n${resultsForDb}`;
+                }
+              }
+            }
+
+            if (combinedLawResults.trim() === "") {
+              lawDatabaseInfoForSystemPrompt = `A search of the law database(s) (query: "${lawQuery}") found no relevant results after two attempts across selected databases: ${relevantDatabaseNames.join(", ")}.`;
+            } else {
+              lawDatabaseInfoForSystemPrompt = `Relevant information from the law database(s) for query "${lawQuery}" (after retry) is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
+              lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}" - after retry) from databases: ${relevantDatabaseNames.join(", ")}:\n---\n${combinedLawResults.trim()}\n---\nUse this information to help answer the user's original question.`;
+            }
+          } else {
+            lawDatabaseInfoForSystemPrompt = `Relevant information from the law database(s) for query "${lawQuery}" is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
+            lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}") from databases: ${relevantDatabaseNames.join(", ")}:\n---\n${combinedLawResults.trim()}\n---\nUse this information to help answer the user's original question.`;
+          }
+        } else {
+          lawDatabaseInfoForSystemPrompt = "No specific law databases were determined to be relevant for this query.";
         }
       }
 
       const toolsToUse: any[] = []; // Use any[] for the array type
-      if (decision === "WEB_SEARCH_ONLY" || decision === "BOTH") {
-        console.log("[getAIResponse] Decision: Enabling Google Search tool.");
+      if (!disableTools && (decision === "WEB_SEARCH_ONLY" || decision === "BOTH")) {
+        console.log(`[getAIResponse] Decision: Enabling Google Search tool for pane ${paneId}. disableTools=${disableTools}, decision=${decision}`);
         toolsToUse.push(googleSearchTool);
         webSearchInfoForSystemPrompt = `Google Search tool was enabled. If the model uses the tool, relevant web search results will be provided in groundingMetadata. You MUST synthesize this information to answer the user's query if it's relevant, strictly adhering to any specific number of items requested by the user (e.g., "top 5"). Format any list of items as a Markdown bulleted list, each item starting with '- '. Follow WEB_SEARCH_USAGE_INSTRUCTIONS for how to present this information.`;
+      } else if (disableTools) {
+        console.log(`[getAIResponse] Decision: Tools explicitly disabled for pane ${paneId}, therefore NOT performing any external search. Answering from general knowledge. disableTools=${disableTools}, decision=${decision}`);
+        webSearchInfoForSystemPrompt = "External search (neither law database nor web) was explicitly disabled for this query. Answer from general knowledge.";
       } else if (decision === "NONE") {
-        console.log("[getAIResponse] Decision: NOT performing any external search. Answering from general knowledge.");
+        console.log(`[getAIResponse] Decision: NOT performing any external search for pane ${paneId}. Answering from general knowledge. disableTools=${disableTools}, decision=${decision}`);
         webSearchInfoForSystemPrompt = "No external search (neither law database nor web) was performed for this query. Answer from general knowledge.";
       }
 
@@ -536,34 +627,97 @@ Your primary goal is to answer the user's question.
       console.log("[getAIResponse] Gemini API call returned stream result. Starting to process chunks...");
 
       let accumulatedResponse = "";
-      for await (const chunk of streamResult.stream) {
-        const textChunk = chunk.text();
-        if (textChunk) {
-          accumulatedResponse += textChunk;
+      let bufferToSend = "";
+      let errorCount = 0;
+      const MAX_RETRIES = 3;
+      const CHUNK_SIZE = 3; // Smaller chunk size for more frequent updates
+      const RETRY_DELAY_MS = 200; // Slightly reduced delay between retries
+      
+      // Helper function to delay execution
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      
+      // Helper function to append content with retry logic
+      const appendWithRetry = async (content: string): Promise<boolean> => {
+        // If messageId is null, we can't append content
+        if (!messageId) {
+          console.error(`[getAIResponse] Cannot append content: messageId is null`);
+          return false;
+        }
+        
+        let retries = 0;
+        while (retries <= MAX_RETRIES) {
           try {
             await ctx.runMutation(api.chat.appendMessageContent, {
               messageId,
-              content: textChunk,
+              content,
             });
-            console.log(`[getAIResponse] Appended chunk to message ${messageId}. Current length: ${accumulatedResponse.length}`);
+            return true; // Success
           } catch (appendError) {
-            console.error(`[getAIResponse] Error appending content to message ${messageId}:`, appendError);
-            // If appending fails, assume message might be gone (e.g., chat cleared)
-            // Terminate streaming gracefully
-            if (messageId) {
-              await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
-                messageId,
-                isStreaming: false,
-              });
-              const currentMessage = await ctx.runQuery(api.chat.getMessage, { messageId });
-              if (currentMessage && currentMessage.content.length < 50) {
-                await ctx.runMutation(api.chat.appendMessageContent, {
-                  messageId,
-                  content: `Error: Streaming interrupted. Please try again.`,
-                });
+            retries++;
+            console.error(`[getAIResponse] Error appending content (attempt ${retries}/${MAX_RETRIES}):`, appendError);
+            if (retries <= MAX_RETRIES) {
+              // Wait before retrying
+              await delay(RETRY_DELAY_MS);
+            }
+          }
+        }
+        return false; // Failed after all retries
+      };
+      
+      try {
+        for await (const chunk of streamResult.stream) {
+          // Check if there's a text part in the chunk
+          const textPart = chunk.candidates?.[0]?.content?.parts?.find(part => part.text);
+          if (textPart) {
+            const chunkText = textPart.text;
+            accumulatedResponse += chunkText;
+            bufferToSend += chunkText;
+            
+            // Log streaming response chunks for debugging
+            if (accumulatedResponse.length % 100 === 0 || accumulatedResponse.length < 100) {
+              console.log(`[getAIResponse] Streaming response for pane ${paneId} (disableTools=${disableTools}): Current length: ${accumulatedResponse.length} chars. Latest chunk: "${chunkText ? chunkText.substring(0, 50) : ''}${chunkText && chunkText.length > 50 ? '...' : ''}"`);
+            }
+            
+            // Send buffer in chunks to avoid too many small DB updates
+            if (bufferToSend.length >= CHUNK_SIZE) {
+              const success = await appendWithRetry(bufferToSend);
+              if (success) {
+                bufferToSend = ""; // Clear buffer after successful append
+                errorCount = 0; // Reset error count on success
+              } else {
+                errorCount++;
+                if (errorCount > MAX_RETRIES) {
+                  throw new Error(`Failed to append content after ${MAX_RETRIES} retries.`);
+                }
               }
             }
-            break; // Exit the streaming loop
+          }
+        }
+        
+        // Send any remaining characters in the buffer
+        if (bufferToSend.length > 0) {
+          await appendWithRetry(bufferToSend);
+        }
+      } catch (streamError) {
+        console.error(`[getAIResponse] Error during streaming:`, streamError);
+        // Handle streaming error gracefully
+        if (messageId) {
+          try {
+            await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+              messageId,
+              isStreaming: false,
+            });
+            
+            // Only append error message if the content is very short
+            const currentMessage = await ctx.runQuery(api.chat.getMessage, { messageId });
+            if (currentMessage && currentMessage.content.length < 50) {
+              await ctx.runMutation(api.chat.appendMessageContent, {
+                messageId,
+                content: `Error: Streaming interrupted. Please try again.`,
+              });
+            }
+          } catch (finalError) {
+            console.error(`[getAIResponse] Error finalizing message after streaming error:`, finalError);
           }
         }
       }

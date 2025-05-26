@@ -75,7 +75,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100 text-slate-800">
+    <div className="h-screen flex flex-col bg-gray-100 text-slate-800">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md p-3 sm:p-4 flex justify-between items-center border-b border-slate-200 h-16 shadow-sm">
         <div className="flex items-center gap-2">
           <Authenticated>
@@ -118,7 +118,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex flex-1 mt-16">
+      <div className="flex flex-grow mt-16 overflow-hidden">
         <Unauthenticated>
           <div className="flex-1 flex flex-col items-center justify-center p-4">
             <div className="w-full max-w-sm bg-white p-6 sm:p-8 rounded-xl shadow-xl">
@@ -157,11 +157,13 @@ export default function App() {
 
   const chatPaneResetStatesHandlers = useRef<Record<string, () => void>>({}); // New ref to store reset state handlers for each pane
 
+  const clearPaneMessagesMutation = useMutation(api.chat.clearPaneMessages); // For per-pane clearing
+
   const savedPrompts = useQuery(api.chat.getSystemPrompts) || { lawPrompt: "", tonePrompt: "", policyPrompt: "" };
 
   const sendMessageMutation = useMutation(api.chat.sendMessage)
     .withOptimisticUpdate(
-      (optimisticStore, args: { content: string; lawPrompt?: string; tonePrompt?: string; policyPrompt?: string; selectedModel?: string; paneId: string; }) => {
+      (optimisticStore, args: { content: string; lawPrompt?: string; tonePrompt?: string; policyPrompt?: string; selectedModel?: string; paneId: string; disableSystemPrompt?: boolean; disableTools?: boolean; }) => {
         if (user?._id) {
           const currentMessages = optimisticStore.getQuery(api.chat.getMessages, { userId: user._id, paneId: args.paneId }) || [];
           const timestamp = Date.now();
@@ -172,6 +174,8 @@ export default function App() {
             content: args.content,
             userId: user._id,
             paneId: args.paneId,
+            disableSystemPrompt: args.disableSystemPrompt, // Include in optimistic update
+            disableTools: args.disableTools, // Include in optimistic update
           };
           optimisticStore.setQuery(api.chat.getMessages, { userId: user._id, paneId: args.paneId }, [...currentMessages, optimisticUserMessage]);
         } else {
@@ -183,7 +187,6 @@ export default function App() {
   const clearChatMutation = useMutation(api.chat.clearChat);
 
   const [currentInputMessage, setCurrentInputMessage] = useState(""); // New state for input field
-  // const [messageToSend, setMessageToSend] = useState(""); // Removed: No longer needed as a global trigger
   const chatPaneSendHandlers = useRef<Record<string, (content: string) => Promise<void>>>({}); // New ref to store send handlers for each pane
   const [lawPrompt, setLawPrompt] = useState(savedPrompts.lawPrompt);
   const [tonePrompt, setTonePrompt] = useState(savedPrompts.tonePrompt);
@@ -221,12 +224,22 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, savedPrompts]);
 
-  const handleSendMessage = async (content: string, model: string, paneId: string, disableSystemPrompt: boolean) => {
+  const handleSendMessage = async (content: string, model: string, paneId: string, disableSystemPrompt: boolean, disableTools: boolean) => {
     if (!user?._id) {
       console.error("User not loaded, cannot send message.");
       toast.error("User not loaded. Please wait a moment.");
       return;
     }
+    
+    // Add detailed logging to track which pane is sending what request with what settings
+    console.log(`[App] Sending message to pane ${paneId}:`, {
+      content: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+      model,
+      disableSystemPrompt,
+      disableTools,
+      timestamp: new Date().toISOString()
+    });
+    
     await sendMessageMutation({
       content,
       lawPrompt: disableSystemPrompt ? undefined : lawPrompt,
@@ -234,6 +247,8 @@ export default function App() {
       policyPrompt: disableSystemPrompt ? undefined : policyPrompt,
       selectedModel: model,
       paneId,
+      disableSystemPrompt, // Pass the disableSystemPrompt state
+      disableTools, // Pass the disableTools state
     });
   };
 
@@ -286,6 +301,23 @@ export default function App() {
   const isAnyPaneStreaming = Object.values(paneStreamingStatus).some(status => status);
 
 
+  // Pane-specific clear chat handler
+  const handlePaneClearChat = async (paneId: string) => {
+    if (window.confirm("Are you sure you want to clear all messages in this panel? This action cannot be undone.")) {
+      try {
+        await clearPaneMessagesMutation({ paneId });
+        const resetHandler = chatPaneResetStatesHandlers.current[paneId];
+        if (resetHandler) {
+          resetHandler();
+        }
+        toast.success("Chat history cleared for this panel.");
+      } catch (error) {
+        console.error("Failed to clear chat for pane:", paneId, error);
+        toast.error("Failed to clear chat history for this panel.");
+      }
+    }
+  };
+
   return (
     <>
       <Sidebar
@@ -310,14 +342,14 @@ export default function App() {
       )}
       <main
         className={`
-          flex-1 flex flex-col bg-white
+          flex-1 flex flex-col bg-white overflow-hidden
           md:my-4 md:mr-4 md:rounded-lg md:shadow-lg
           transition-[margin-left] duration-300 ease-in-out
           `}
         style={{ marginLeft: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
       >
 
-        <div className="flex-1 flex flex-row pb-[70px] sm:pb-[80px]"> {/* Added padding-bottom to account for fixed input */}
+        <div className="flex-1 flex flex-row pb-[90px] sm:pb-[50px] overflow-hidden"> {/* Adjusted padding-bottom to account for fixed input */}
           {chatPanes.map(pane => (
             <ChatPane
               key={pane.id}
@@ -327,7 +359,9 @@ export default function App() {
               tonePrompt={tonePrompt}
               policyPrompt={policyPrompt}
               onSendMessage={handleSendMessage}
-              onClearChat={handleClearChat} // Pass clear chat for now, though it's global
+              onClearChat={async () => {
+                await handlePaneClearChat(pane.id);
+              }}
               onStreamingStatusChange={handlePaneStreamingStatusChange} // Pass the new callback
               registerSendHandler={(paneId, handler) => {
                 chatPaneSendHandlers.current[paneId] = handler;
