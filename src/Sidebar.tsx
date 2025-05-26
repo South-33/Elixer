@@ -1,33 +1,45 @@
 // src/Sidebar.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronDownIcon, ChevronUpIcon, TrashIcon, XMarkIcon, ArrowsPointingOutIcon } from '@heroicons/react/20/solid';
 
-// Placeholder SVG icons
-const ChevronDownIcon = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-);
-const ChevronUpIcon = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd"></path></svg>
-);
-const TrashIcon = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path></svg>
-);
-const CloseIcon = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-);
+const DEFAULT_TONE_PROMPT = `Your Identity: You are the ELIXIR AI, a friendly, insightful, and motivating presence within the ELIXIR app, designed to assist users in Cambodia. While your core expertise relates to navigating insurance through the ELIXIR platform, you are also here to be a generally helpful, engaging, and supportive AI friend.
 
-const DEFAULT_TONE_PROMPT = `Your Identity: You are the ELIXIR AI Assistant, specifically designed to serve users in Cambodia. Your persona is that of a friendly, highly knowledgeable, consistently trustworthy, and approachable guide for users navigating insurance through the ELIXIR platform within the Cambodian context.
 Your Voice & Personality:
-Empathetic & Patient: Always be understanding of user concerns, potential confusion, or frustration, being mindful of cultural nuances in communication.
-Helpful & Proactive: Anticipate user needs. Don't just answer direct questions; guide them towards useful information or next steps relevant to the Cambodian insurance market.
-Clear & Concise: Use simple, straightforward language, preferably in Khmer if your AI and platform support it, or clear English if that's the primary interaction language. If using English, be mindful of terms that might not translate directly or easily. Avoid complex jargon; if a technical term is necessary, explain it immediately and simply. Deliver information in digestible chunks, avoiding long monologues. Prioritize getting to the main point quickly, especially when the user's query is straightforward.
-Positive & Solution-Oriented: Focus on how ELIXIR can help Cambodian users and provide solutions relevant to their needs.
-Professional yet Conversational: Maintain a professional demeanor but use a natural, friendly conversational flow appropriate for interaction in Cambodia.
-Core Mission: Your primary objective is to facilitate user understanding of insurance in Cambodia, support them in making informed decisions tailored to their coverage needs within the local market, and ensure they can interact seamlessly with all facets of the ELIXIR platform. You are tasked with addressing their concerns, accurately answering their questions, and guiding them through processes related to buying insurance, understanding policies, and managing claims, all in accordance with Cambodian practices.
+*   Language: Match the user's language (If they speak in English repsond in English, If user speak's in Khmer make sure to respond in khmer. 
+*   Warm & Approachable: Be like a kind, understanding, and encouraging friend.
+*   High EQ (Emotional Intelligence): Show empathy, understanding, and sensitivity. Acknowledge feelings.
+*   Motivating & Positive: Offer encouragement and maintain an optimistic outlook.
+*   Curious & Engaging: Show genuine interest in the user's questions.
+*   Helpful & Resourceful: Strive to provide useful information or a thoughtful perspective.
+*   **Ultra-Concise & Iterative (Crucial):**
+    *   **Keep initial responses and guiding statements VERY short and to the point.** Avoid long paragraphs or listing too many options at once.
+    *   **Prioritize asking a clarifying question or offering one or two key pieces of information before elaborating further.**
+    *   **Break down complex topics into smaller, digestible conversational turns.** Aim for a back-and-forth exchange rather than a monologue.
+    *   **"Don't make the user read 'allat'."** If a concept requires more explanation, offer to elaborate *after* confirming the user wants more detail on that specific point.
+*   Clear & Simple: Communicate complex ideas simply. Explain necessary jargon clearly.
+*   Respectful of Cambodian Culture: Always interact with awareness and respect.
+
+Your Primary Role (Core ELIXIR Purpose):
+Your primary function is to guide users through the ELIXIR platform, helping them understand insurance in Cambodia, explore policies, and navigate related processes. You should seamlessly transition to this role when insurance-related queries arise, maintaining conciseness.
+
+Your Expanded Role (General AI Companion):
+Beyond insurance, you are a versatile AI companion. Users can ask general knowledge questions, seek light advice on everyday topics, or chat. Maintain conciseness here too.
+*   General Knowledge: Answer factual questions briefly.
+*   Light Conversational Support: Engage in friendly, supportive, brief exchanges.
+*   Everyday Topics: Discuss general topics concisely. Avoid deep dives unless explicitly requested.
+*   Motivation & Encouragement: Offer short, impactful words of support.
+
 Interaction Style:
-Direct Assumption of Relevance for Core Terms: When users ask about 'ELIXIR', 'the project', 'your company', 'what you do', or similar direct terms, directly assume they are referring to this ELIXIR platform and its services in Cambodia. Immediately provide information about the ELIXIR platform without unnecessary preambles about other potential meanings of the word 'elixir' or similar terms, unless the user's query explicitly and unambiguously points to a different context (e.g., 'Tell me about the Elixir programming language'). Your primary focus is the ELIXIR Insurtech platform.
-Proactive and Inferential Guidance for Uncertainty: When a user expresses significant uncertainty (e.g., "what should I do?", "I don't know what I need"), do not simply ask them what they want to do next or list broad, generic options. Instead, actively synthesize information from the current conversation (their concerns, demographics, stated problems) to offer reasoned suggestions, potential avenues for exploration, or sensible next steps relevant to their implied needs within the Cambodian context. Frame these as helpful starting points and follow up with targeted questions to confirm or refine the direction.
-Guiding Questions: Use questions to build on the conversation, narrow down options, or confirm understanding.
-Action-Oriented Assistance: Whenever appropriate, guide users towards a clear action or provide distinct next steps.`;
+*   Natural Transition: When a conversation shifts, make the transition smooth.
+*   Prioritize ELIXIR Context for Core Terms: When users ask about 'ELIXIR', 'the project', etc., directly assume they mean this platform.
+*   **Highly Iterative Guidance:**
+    *   When guiding users (e.g., choosing insurance), **offer one key question or consideration at a time.**
+    *   Instead of listing all types of insurance, ask "What are you primarily looking to protect right now?" or "Are you thinking more about health, your vehicle, or something else?"
+    *   Based on their answer, provide a *brief* next step or a *single* follow-up question.
+*   Use of Emojis (Optional & brief): Sparingly use relevant emojis to show friendliness and the feeling of wanting to help the user. 😊👍💡
+*   Clarity on Limitations (Gently & Briefly): If a question is beyond scope, politely and concisely state limitations.
+*   Less Robotic, More Human-like (and Concise): Strive for thoughtful but brief responses.
+*   Assume that the user is a local resident in Cambodia but if unsure, please ask kindly for confirmation.`;
 
 const DEFAULT_POLICY_PROMPT = `Knowledge Source Priority:
 ELIXIR's Internal Knowledge Base (Convex knowledgeBase table): Your primary source of truth for ELIXIR-specific information and details about how ELIXIR operates within Cambodia. This includes Cambodian-specific product details, local partnerships, and processes tailored for the Cambodian market.
@@ -53,10 +65,7 @@ const DEFAULT_LAW_PROMPT = `Compliance with Cambodian Law (Crucial - Requires Ex
 Insurance Law of Cambodia: Your operations and information must align with the prevailing Insurance Law and related Prakas (sub-decrees) and regulations issued by the Ministry of Economy and Finance and the Insurance Regulator of Cambodia (IRC).
 Consumer Protection Laws: Adhere to Cambodian consumer protection principles as they apply to financial services and insurance.
 Data Protection and Privacy Law: Comply with any Cambodian laws regarding data privacy and the handling of personal information (e.g., Law on E-Commerce, any specific data protection laws). Do not ask for or store PII beyond what is absolutely necessary and ensure your application handles such data securely and in compliance with Cambodian regulations.
-Strict Prohibition on Advice (Universal, with Cambodian context):
-No Financial Advice: You must NEVER provide financial advice. This includes recommending specific investment strategies or products available in Cambodia beyond general descriptions of insurance.
-No Legal Advice: You must NEVER provide legal advice regarding Cambodian law. Do not interpret Cambodian laws or advise on legal disputes.
-No Medical Advice: While you can share general preventive health tips relevant to Cambodia (from ELIXIR's content), you must NEVER provide medical advice, diagnose conditions, or recommend specific treatments. Direct users to qualified Cambodian healthcare professionals.
+You are able to Provide advice that is shallow, but not too deep into it as you should direct them to an Expert then.
 Policy Information and Guarantees (in Cambodia):
 You can explain policy features, benefits, and terms based on information from the ELIXIR knowledgeBase concerning products available in Cambodia.
 You must NEVER make guarantees regarding policy approval from Cambodian insurers, claim payouts, or specific coverage outcomes. Frame discussions with disclaimers appropriate for the Cambodian market.
@@ -81,6 +90,7 @@ export interface SidebarProps {
   onPolicyPromptChange: (value: string) => void;
   onClearChat: () => void;
   hasActivePrompts: boolean;
+  onWidthChange: (width: number) => void; // New prop for width change
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -94,8 +104,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onPolicyPromptChange,
   onClearChat,
   hasActivePrompts,
+  onWidthChange, // Destructure new prop
 }) => {
   const [arePromptsExpanded, setArePromptsExpanded] = useState(true);
+  const [showToneFullscreen, setShowToneFullscreen] = useState(false);
+  const [showPolicyFullscreen, setShowPolicyFullscreen] = useState(false);
+  const [showLawFullscreen, setShowLawFullscreen] = useState(false);
+
+  const [sidebarWidth, setSidebarWidth] = useState(320); // Default width, e.g., 320px for md:w-72 or lg:w-80
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  // Update parent component with current width
+  useEffect(() => {
+    onWidthChange(isOpen ? sidebarWidth : 0);
+  }, [sidebarWidth, isOpen, onWidthChange]);
+
+  const MIN_WIDTH = 240; // Minimum sidebar width
+  const MAX_WIDTH = 600; // Maximum sidebar width
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault(); // Prevent text selection during drag
+  };
+
+  const animationFrameRef = useRef<number | null>(null);
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isResizing) return;
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const newWidth = e.clientX - (sidebarRef.current?.getBoundingClientRect().left || 0);
+      setSidebarWidth(Math.min(Math.max(newWidth, MIN_WIDTH), MAX_WIDTH));
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsResizing(false);
+  };
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    } else {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   const handleLoadDefaultPrompts = () => {
     onTonePromptChange(DEFAULT_TONE_PROMPT);
@@ -104,101 +169,239 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside className={`
-      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-      transform transition-transform duration-300 ease-in-out
-      fixed top-16 bottom-0 left-0 z-40
-      w-4/5 sm:w-72 md:w-72 lg:w-80
-      flex flex-col bg-slate-50 border-r border-slate-200
-      p-4 space-y-4 shadow-xl
-    `}>
-      <div className="flex justify-between items-start">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-700">System Prompts</h3>
-          {hasActivePrompts && arePromptsExpanded && (
-            <span className="text-xs text-slate-500 -mt-1 block">Prompts active</span>
+    <aside
+      ref={sidebarRef}
+      className={`
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        transform ${isResizing ? '' : 'transition-all duration-300 ease-in-out'}
+        fixed top-16 bottom-0 left-0 z-40
+        flex flex-col bg-slate-50 shadow-xl
+      `}
+      style={{
+        width: isOpen ? `${sidebarWidth}px` : '0px',
+        padding: isOpen ? '1rem' : '0', // p-4 = 1rem
+        borderRight: isOpen ? '1px solid #e2e8f0' : 'none', // border-r border-slate-200
+        overflow: isOpen ? 'auto' : 'hidden', // Hide overflow when closed
+      }}
+    >
+      {isOpen && ( // Only render content when sidebar is open
+        <>
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-700">System Prompts</h3>
+              {hasActivePrompts && arePromptsExpanded && (
+                <span className="text-xs text-slate-500 -mt-1 block">Prompts active</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1 -mr-2">
+              <button
+                title={arePromptsExpanded ? "Collapse Prompts" : "Expand Prompts"}
+                onClick={() => setArePromptsExpanded(!arePromptsExpanded)}
+                className="p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200"
+              >
+                {arePromptsExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                <span className="sr-only">{arePromptsExpanded ? "Collapse Prompts" : "Expand Prompts"}</span>
+              </button>
+              <button
+                title="Close Sidebar"
+                onClick={onClose}
+                className="p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 md:hidden"
+              >
+                <XMarkIcon className="h-6 w-6" />
+                <span className="sr-only">Close Sidebar</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Resizer Handle */}
+          <div
+            className="absolute top-0 right-0 w-2 h-full cursor-ew-resize z-50"
+            onMouseDown={handleMouseDown}
+          />
+
+          <div className={`flex-1 flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar pb-[70px] ${arePromptsExpanded ? 'flex' : 'hidden'}`}>
+            {/* Removed AI Model Select from Sidebar */}
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="tonePromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
+                  Tone (How the AI respond):
+                </label>
+                <button
+                  title="Expand Tone Prompt"
+                  onClick={() => setShowToneFullscreen(true)}
+                  className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+                >
+                  <ArrowsPointingOutIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <textarea
+                id="tonePromptAreaSidebar"
+                className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                placeholder="e.g., Formal, empathetic, expert role..."
+                value={tonePrompt}
+                onChange={(e) => onTonePromptChange(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="policyPromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
+                  Company Policy:
+                </label>
+                <button
+                  title="Expand Company Policy Prompt"
+                  onClick={() => setShowPolicyFullscreen(true)}
+                  className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+                >
+                  <ArrowsPointingOutIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <textarea
+                id="policyPromptAreaSidebar"
+                className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                placeholder="e.g., Return policy, code of conduct..."
+                value={policyPrompt}
+                onChange={(e) => onPolicyPromptChange(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="lawPromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
+                  Laws & Regulations:
+                </label>
+                <button
+                  title="Expand Laws & Regulations Prompt"
+                  onClick={() => setShowLawFullscreen(true)}
+                  className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+                >
+                  <ArrowsPointingOutIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <textarea
+                id="lawPromptAreaSidebar"
+                className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                placeholder="e.g., GDPR, HIPAA compliance..."
+                value={lawPrompt}
+                onChange={(e) => onLawPromptChange(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+
+          {!arePromptsExpanded && <div className="flex-1"></div>}
+
+          <button
+              onClick={handleLoadDefaultPrompts}
+              className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
+              title="Load Default Prompts"
+          >
+              Load Default Prompts
+          </button>
+
+          <button
+              onClick={onClearChat}
+              className="w-full px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
+              title="Clear Chat History"
+          >
+              <TrashIcon className="h-5 w-5" /> Clear Chat
+              <span className="sr-only">Clear Chat History</span>
+          </button>
+
+          {showToneFullscreen && (
+            <div
+              className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+              onClick={() => setShowToneFullscreen(false)}
+            >
+              <div
+                className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                  <h4 className="text-lg font-semibold text-gray-800">Edit Tone Prompt</h4>
+                  <button
+                    onClick={() => setShowToneFullscreen(false)}
+                    className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+                    title="Close Fullscreen Editor"
+                    aria-label="Close Fullscreen Editor"
+                    tabIndex={0}
+                    role="button"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+                <textarea
+                  className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+                  value={tonePrompt}
+                  onChange={(e) => onTonePromptChange(e.target.value)}
+                />
+              </div>
+            </div>
           )}
-        </div>
-        <div className="flex items-center gap-1 -mr-2">
-          <button
-            title={arePromptsExpanded ? "Collapse Prompts" : "Expand Prompts"}
-            onClick={() => setArePromptsExpanded(!arePromptsExpanded)}
-            className="p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200"
-          >
-            {arePromptsExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-            <span className="sr-only">{arePromptsExpanded ? "Collapse Prompts" : "Expand Prompts"}</span>
-          </button>
-          <button
-            title="Close Sidebar"
-            onClick={onClose}
-            className="p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 md:hidden" // Kept md:hidden as header toggle is primary on desktop
-          >
-            <CloseIcon />
-            <span className="sr-only">Close Sidebar</span>
-          </button>
-        </div>
-      </div>
 
-      <div className={`flex-1 flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar ${arePromptsExpanded ? 'flex' : 'hidden'}`}> {/* Added custom-scrollbar if you uncomment CSS */}
-        <div>
-          <label htmlFor="lawPromptAreaSidebar" className="block text-sm font-medium text-gray-700 mb-1">
-            Laws & Regulations:
-          </label>
-          <textarea
-            id="lawPromptAreaSidebar"
-            className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="e.g., GDPR, HIPAA compliance..."
-            value={lawPrompt}
-            onChange={(e) => onLawPromptChange(e.target.value)}
-            rows={4}
-          />
-        </div>
-        <div>
-          <label htmlFor="policyPromptAreaSidebar" className="block text-sm font-medium text-gray-700 mb-1">
-            Company Policy:
-          </label>
-          <textarea
-            id="policyPromptAreaSidebar"
-            className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="e.g., Return policy, code of conduct..."
-            value={policyPrompt}
-            onChange={(e) => onPolicyPromptChange(e.target.value)}
-            rows={4}
-          />
-        </div>
-        <div>
-          <label htmlFor="tonePromptAreaSidebar" className="block text-sm font-medium text-gray-700 mb-1">
-            Tone & Role-Play:
-          </label>
-          <textarea
-            id="tonePromptAreaSidebar"
-            className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="e.g., Formal, empathetic, expert role..."
-            value={tonePrompt}
-            onChange={(e) => onTonePromptChange(e.target.value)}
-            rows={4}
-          />
-        </div>
-      </div>
+          {showPolicyFullscreen && (
+            <div
+              className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+              onClick={() => setShowPolicyFullscreen(false)}
+            >
+              <div
+                className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                  <h4 className="text-lg font-semibold text-gray-800">Edit Company Policy Prompt</h4>
+                  <button
+                    onClick={() => setShowPolicyFullscreen(false)}
+                    className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+                    title="Close Fullscreen Editor"
+                    aria-label="Close Fullscreen Editor"
+                    tabIndex={0}
+                    role="button"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+                <textarea
+                  className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+                  value={policyPrompt}
+                  onChange={(e) => onPolicyPromptChange(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
-      {!arePromptsExpanded && <div className="flex-1"></div>}
-
-      <button
-          onClick={handleLoadDefaultPrompts}
-          className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
-          title="Load Default Prompts"
-      >
-          Load Default Prompts
-      </button>
-
-      <button
-          onClick={onClearChat}
-          className="w-full px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
-          title="Clear Chat History"
-      >
-          <TrashIcon /> Clear Chat
-          <span className="sr-only">Clear Chat History</span>
-      </button>
+          {showLawFullscreen && (
+            <div
+              className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+              onClick={() => setShowLawFullscreen(false)}
+            >
+              <div
+                className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                  <h4 className="text-lg font-semibold text-gray-800">Edit Laws & Regulations Prompt</h4>
+                  <button
+                    onClick={() => setShowLawFullscreen(false)}
+                    className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+                    title="Close Fullscreen Editor"
+                    aria-label="Close Fullscreen Editor"
+                    tabIndex={0}
+                    role="button"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+                <textarea
+                  className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+                  value={lawPrompt}
+                  onChange={(e) => onLawPromptChange(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </aside>
   );
 };
