@@ -1,33 +1,51 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { api } from "./_generated/api";
-import { queryEnhancedLawDatabase } from "./enhancedSearch";
 
-// Helper function to load the enhanced law database
-async function loadEnhancedLawDatabaseHelper(databaseName: string): Promise<any> {
+import { LawDatabase } from "./chatAI";
+
+// Helper function to load the enhanced law database from Convex database
+async function loadEnhancedLawDatabaseHelper(ctx: any, databaseName: string): Promise<LawDatabase> {
   try {
-    // Construct the file path
-    const filePath = `Database/Enhanced_${databaseName}.json`;
+    // Format the database name for lookup
+    const normalizedDbName = databaseName.replace(/\.json$/, "").replace(/ /g, "_");
     
-    // Read the file using Node.js fs module
-    const fs = require('fs');
-    const data = fs.readFileSync(filePath, 'utf8');
+    // Try to get the database from Convex
+    const dbDoc = await ctx.db
+      .query("lawDatabases")
+      .withIndex("by_name", (q: any) => q.eq("name", normalizedDbName))
+      .first();
     
-    // Parse the JSON data
-    const lawDatabase = JSON.parse(data);
+    if (!dbDoc) {
+      throw new Error(`Database not found: ${databaseName}`);
+    }
     
-    return lawDatabase;
+    return dbDoc.content as LawDatabase;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("Error loading enhanced law database:", errorMessage);
-    throw new Error(`Failed to load enhanced law database: ${errorMessage}`);
+    console.error("Error loading law database from Convex:", errorMessage);
+    throw new Error(`Failed to load law database from Convex: ${errorMessage}`);
   }
 }
 
 /**
- * Update the main application's search function to use the enhanced databases
- * This function modifies the existing generateSearchQuery function to use the enhanced search
+ * Query the enhanced law database with a user query
+ * This function returns the full database content instead of searching for specific articles
  */
+async function queryEnhancedLawDatabase(query: string, lawDatabase: LawDatabase): Promise<string> {
+  try {
+    console.log(`[queryEnhancedLawDatabase] Returning full database content for query: "${query}"`);
+    
+    // Return the full database content as JSON
+    const fullDatabaseContext = JSON.stringify(lawDatabase);
+    return `\n# Full Database Context\n${fullDatabaseContext}\n`;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error in queryEnhancedLawDatabase:", errorMessage);
+    return `Failed to query enhanced law database: ${errorMessage}`;
+  }
+}
+
 export const generateEnhancedSearchQuery = query({
   args: {
     query: v.string(),
@@ -42,31 +60,41 @@ export const generateEnhancedSearchQuery = query({
       
       // Try to load the enhanced database
       try {
-        const lawDatabase = await loadEnhancedLawDatabaseHelper(`Enhanced_${enhancedDbName}`);
+        const lawDatabase = await loadEnhancedLawDatabaseHelper(ctx, `Enhanced_${enhancedDbName}`);
         
         // Use the enhanced search function
         const results = await queryEnhancedLawDatabase(query, lawDatabase);
         return {
           response: results,
-          source: `Enhanced_${enhancedDbName}.json`,
+          source: `Enhanced_${enhancedDbName}`,
           enhanced: true
         };
       } catch (enhancedError) {
         console.error("Error using enhanced database:", enhancedError);
         
-        // Fall back to original database and search function
-        const { queryLawDatabase } = require('./chatAI');
-        const fs = require('fs');
-        const filePath = `Database/${databaseName}`;
-        const data = fs.readFileSync(filePath, 'utf8');
-        const originalDatabase = JSON.parse(data);
-        
-        const results = await queryLawDatabase(query, originalDatabase);
-        return {
-          response: results,
-          source: databaseName,
-          enhanced: false
-        };
+        try {
+          // Fall back to original database
+          const originalDatabase = await loadEnhancedLawDatabaseHelper(ctx, enhancedDbName);
+          
+          // Import the queryLawDatabase function from chatAI
+          const { queryLawDatabase } = await import('./chatAI');
+          
+          // Use the original search function
+          const results = await queryLawDatabase(query, originalDatabase);
+          return {
+            response: results,
+            source: databaseName,
+            enhanced: false
+          };
+        } catch (originalError) {
+          console.error("Error using original database:", originalError);
+          return {
+            response: `Could not find database '${databaseName}'. Please upload it using the uploadLawDatabases functions.`,
+            source: "none",
+            enhanced: false,
+            error: true
+          };
+        }
       }
     } catch (error) {
       console.error("Error in generateEnhancedSearchQuery:", error);
@@ -102,18 +130,17 @@ export const initializeEnhancedSearch = mutation({
           databaseMap[originalName] = enhancedDb;
         }
         
+        // Store the database mapping for future reference
         return {
           success: true,
-          message: `Updated search functions to use ${enhancedDatabases.length} enhanced databases.`,
-          databases: enhancedDatabases,
+          message: `Enhanced search initialized with ${enhancedDatabases.length} databases`,
           databaseMap
         };
       } else {
         console.log("No enhanced databases found. Using original search functions.");
         return {
           success: false,
-          message: "No enhanced databases found. Using original search functions.",
-          databases: [],
+          message: "No enhanced databases found",
           databaseMap: {}
         };
       }
@@ -122,7 +149,6 @@ export const initializeEnhancedSearch = mutation({
       return {
         success: false,
         message: `Error initializing enhanced search: ${error instanceof Error ? error.message : String(error)}`,
-        databases: [],
         databaseMap: {}
       };
     }
@@ -140,35 +166,38 @@ export const getDatabaseInfo = query({
       const databaseDir = 'Database';
       const files = fs.readdirSync(databaseDir);
       
-      // Get all JSON files
-      const jsonFiles = files.filter((file: string) => file.endsWith('.json'));
+      const databases = files.filter((file: string) => file.endsWith('.json'));
+      const enhancedDatabases = databases.filter((file: string) => file.startsWith('Enhanced_'));
+      const regularDatabases = databases.filter((file: string) => !file.startsWith('Enhanced_'));
       
-      // Separate enhanced and original databases
-      const enhancedDatabases = jsonFiles.filter((file: string) => file.startsWith('Enhanced_'));
-      const originalDatabases = jsonFiles.filter((file: string) => !file.startsWith('Enhanced_'));
+      // Create a mapping of database names to their enhanced status
+      const databaseInfo: Record<string, any> = {};
       
-      // Get file sizes
-      const databaseSizes: Record<string, number> = {};
-      for (const file of jsonFiles) {
-        const stats = fs.statSync(`${databaseDir}/${file}`);
-        databaseSizes[file] = stats.size;
+      for (const db of regularDatabases) {
+        const enhancedVersion = `Enhanced_${db.replace(/\.json$/, "").replace(/ /g, "_")}.json`;
+        const hasEnhanced = enhancedDatabases.includes(enhancedVersion);
+        
+        databaseInfo[db] = {
+          name: db,
+          hasEnhanced,
+          enhancedName: hasEnhanced ? enhancedVersion : null
+        };
       }
       
       return {
-        enhanced: enhancedDatabases,
-        original: originalDatabases,
-        all: jsonFiles,
-        sizes: databaseSizes,
-        enhancedAvailable: enhancedDatabases.length > 0
+        total: databases.length,
+        regular: regularDatabases.length,
+        enhanced: enhancedDatabases.length,
+        databases: databaseInfo
       };
     } catch (error) {
       console.error("Error getting database info:", error);
       return {
-        enhanced: [],
-        original: [],
-        all: [],
-        sizes: {},
-        enhancedAvailable: false
+        error: `Failed to get database info: ${error instanceof Error ? error.message : String(error)}`,
+        total: 0,
+        regular: 0,
+        enhanced: 0,
+        databases: {}
       };
     }
   },

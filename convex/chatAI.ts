@@ -47,7 +47,7 @@ const WEB_SEARCH_USAGE_INSTRUCTIONS = `
 
 
 // Define the structure of the law database for type safety
-interface LawArticle {
+export interface LawArticle {
   article_number: string;
   content: string;
   points?: string[];
@@ -62,20 +62,20 @@ interface LawArticle {
   punishment_legal_person?: string;
 }
 
-interface LawSection {
+export interface LawSection {
   section_number: string;
   section_title: string;
   articles: LawArticle[];
 }
 
-interface LawChapter {
+export interface LawChapter {
   chapter_number: string;
   chapter_title: string;
   articles?: LawArticle[];
   sections?: LawSection[];
 }
 
-interface LawDatabase {
+export interface LawDatabase {
   metadata: any;
   preamble: string[];
   chapters: LawChapter[];
@@ -290,7 +290,7 @@ const processArticleContent = (article: LawArticle, queryKeywords: string[], cal
   };
 
 // Function to query the law database
-async function queryLawDatabase(query: string, lawDatabase: LawDatabase): Promise<string> {
+export async function queryLawDatabase(query: string, lawDatabase: LawDatabase): Promise<string> {
   const queryKeywords = query.toLowerCase().split(/\s+/);
   const scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[] = [];
 
@@ -511,64 +511,109 @@ async function queryLawDatabase(query: string, lawDatabase: LawDatabase): Promis
     return "LAW_DATABASE_NO_RESULTS";
   }
 }
+// Define the available information sources as a type
+type InformationSource = "WEB_SEARCH" | "LAW_ON_INSURANCE" | "LAW_ON_CONSUMER_PROTECTION" | "INSURANCE_QNA" | "ALL_DATABASES";
 
-// New function to decide if law database access or web search is needed
-async function decideInformationSource(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], selectedModel: string | undefined, genAI: GoogleGenerativeAI): Promise<"LAW_DATABASE_ONLY" | "WEB_SEARCH_ONLY" | "BOTH" | "NONE"> {
+// Function to decide which specific information sources to use
+export const decideInformationSource = async (
+  userMessage: string, 
+  history: { role: string; parts: { text: string; }[]; }[], 
+  selectedModel: string | undefined, 
+  genAI: GoogleGenerativeAI
+): Promise<InformationSource[]> => {
+  console.log(`[decideInformationSource] Using AI to decide information sources for: '${userMessage}'`);
+  
   try {
     const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-    const prompt = `Analyze the following user message in the context of the provided conversation history. Your task is to decide the optimal information source(s) to answer the query. Output only one of the following: "LAW_DATABASE_ONLY", "WEB_SEARCH_ONLY", "BOTH", or "NONE".
-
-**Conversation History (most recent last):**
-${history.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
-
-**Decision Criteria:**
-
-*   **LAW_DATABASE_ONLY:**
-    *   The query explicitly asks about "law", "legal provisions", "articles of the law", "chapter", "section", "definition", "liquidation", "dissolution", "company", "enterprise", or similar terms directly related to the provided law database.
-    *   The query is about definitions, procedures, rights, obligations, or specific content *within* the provided law document.
-    *   The query can be fully and accurately answered *solely* by the content of the law database without needing external, real-time, or broader information.
-    *   Examples: "What does Article 10 say about contracts?", "Define 'Company' according to the law.", "Which chapter discusses penalties?", "What are the general provisions of the law?", "What are the procedures for company liquidation?"
-
-*   **WEB_SEARCH_ONLY:**
-    *   The query explicitly asks for current or real-time information (e.g., "latest news on X", "current stock price of Y").
-    *   The query is about very recent events or developments (e.g., things that happened in the last few days/weeks, post-dating your knowledge cutoff).
-    *   The query asks for specific, niche, or technical facts, statistics, or details about entities (people, places, organizations, products) that are not common knowledge or where precision is important, and are *not* directly covered by the law database.
-    *   The query pertains to local information (businesses, services, events) and implies a need for current, location-specific data.
-    *   The user is asking for a comparison or list of specific items where web data would provide comprehensive options (e.g., "top 5 laptops for students").
-    *   The query is clearly outside the scope of the "Law on Insurance" database (e.g., "What is the capital of France?").
-
-*   **BOTH:**
-    *   The query has components that could benefit from both the law database and a web search. For example, asking about a specific legal concept *and* its current real-world application or recent news (e.g., "What is compulsory insurance and are there any recent cases related to it?").
-    *   The query asks for a legal definition or provision *and* examples of companies or situations related to it that might require current information (e.g., "What is a 'Motor Vehicle' according to the law, and what are current examples of compulsory motor vehicle insurance in practice?").
-    *   The query is about a legal topic that might have recent interpretations, cases, or related news that are not in the static law document, but the core concept is in the law database.
-
-*   **NONE:**
-    *   The query is a simple greeting, conversational filler, or a personal statement not seeking external information (e.g., "hello", "my name is Alice", "I feel happy today").
-    *   The query is for creative content generation (e.g., "write a poem", "tell me a story") unless it specifically asks for factual elements to be included from external sources.
-    *   The query asks for your own opinions, or internal AI instructions (unless the question is specifically about how you *use* external tools).
-    *   The query is about extremely broad, common knowledge that is highly unlikely to have changed (e.g., "What is the capital of France?", "How many days in a week?").
-    *   The query is excessively vague, and neither a law database search nor a web search would yield a focused or useful answer.
-
-User Message: "${userMessage}"
-
-Decision (LAW_DATABASE_ONLY, WEB_SEARCH_ONLY, BOTH, or NONE):`;
-
-    console.log("[decideInformationSource] Prompting to decide on information source for user message:", userMessage);
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text().trim().toUpperCase();
-    console.log(`[decideInformationSource] Decision for "${userMessage}": ${responseText}`);
-
-    if (["LAW_DATABASE_ONLY", "WEB_SEARCH_ONLY", "BOTH", "NONE"].includes(responseText)) {
-      return responseText as "LAW_DATABASE_ONLY" | "WEB_SEARCH_ONLY" | "BOTH" | "NONE";
-    } else {
-      console.log(`[decideInformationSource] Unexpected response: ${responseText}, defaulting to NONE`);
-      return "NONE";
+    const prompt = `Analyze the following user message and decide which information sources would be most appropriate to answer it. 
+    User message: "${userMessage}"
+    
+    Available information sources and their descriptions:
+    - WEB_SEARCH: Search the web for general information, current events, news, or any information not in the specialized legal databases.
+    
+    - LAW_ON_INSURANCE: Comprehensive legal database containing Cambodia's Law on Insurance. Includes detailed articles on:
+      * Insurance contracts, policies, and premiums
+      * Rights and obligations of insurers and insured parties
+      * Insurance claim procedures and requirements
+      * Insurance company regulations and licensing
+      * Types of insurance (life, non-life, micro-insurance)
+      * Insurance intermediaries and brokers
+      * Penalties for insurance-related violations
+    
+    - LAW_ON_CONSUMER_PROTECTION: Complete legal database on Cambodia's Consumer Protection Law. Covers:
+      * Consumer rights and remedies
+      * Unfair practices and prohibited conduct
+      * Product safety and liability
+      * Consumer contracts and warranties
+      * Advertising and labeling requirements
+      * Dispute resolution mechanisms
+      * Penalties for violations of consumer rights
+    
+    - INSURANCE_QNA: Question and answer database about insurance and reinsurance in Cambodia. Contains:
+      * Practical explanations of insurance concepts
+      * Common questions about insurance policies
+      * Explanations of insurance terms and conditions
+      * Guidance on insurance claims and disputes
+      * Answers about insurance company operations
+      * Information on reinsurance practices
+    
+    - ALL_DATABASES: Access all three law databases at once (recommended for complex questions that might require information from multiple sources)
+    
+    Return ONLY a JSON array with the most relevant information sources, e.g., ["WEB_SEARCH"] or ["LAW_ON_INSURANCE"] or ["ALL_DATABASES"].
+    If the query mentions a specific article number or section from a law, select the appropriate law database.
+    If the query might need information from multiple law databases, use ["ALL_DATABASES"] instead of listing individual databases.
+    For general questions not related to Cambodia's legal system, use ["WEB_SEARCH"].
+    `;
+    
+    const response = await model.generateContent(prompt);
+    const responseText = response.response.text();
+    console.log(`[decideInformationSource] AI suggested response: ${responseText}`);
+    
+    // Try to parse the response as JSON
+    try {
+      // Look for JSON array in the response
+      const match = responseText.match(/\[.*\]/);
+      if (match) {
+        const suggestedSources = JSON.parse(match[0]);
+        // Filter to valid information sources
+        const validSources = suggestedSources.filter((source: string) => 
+          ["WEB_SEARCH", "LAW_ON_INSURANCE", "LAW_ON_CONSUMER_PROTECTION", "INSURANCE_QNA", "ALL_DATABASES"].includes(source)
+        );
+        
+        if (validSources.length > 0) {
+          console.log(`[decideInformationSource] AI suggested sources: ${JSON.stringify(validSources)}`);
+          return validSources as InformationSource[];
+        }
+      }
+    } catch (parseError) {
+      console.error(`[decideInformationSource] Error parsing AI suggestion: ${parseError}`);
+    }
+    
+    // Fallback if parsing fails: check for keywords in the response
+    if (responseText.toLowerCase().includes("insurance") && !responseText.toLowerCase().includes("consumer") && !responseText.toLowerCase().includes("q&a") && !responseText.toLowerCase().includes("qna")) {
+      console.log(`[decideInformationSource] Fallback to LAW_ON_INSURANCE based on AI response keywords`);
+      return ["LAW_ON_INSURANCE"];
+    } else if (responseText.toLowerCase().includes("consumer")) {
+      console.log(`[decideInformationSource] Fallback to LAW_ON_CONSUMER_PROTECTION based on AI response keywords`);
+      return ["LAW_ON_CONSUMER_PROTECTION"];
+    } else if (responseText.toLowerCase().includes("question") || responseText.toLowerCase().includes("answer") || responseText.toLowerCase().includes("qna") || responseText.toLowerCase().includes("q&a")) {
+      console.log(`[decideInformationSource] Fallback to INSURANCE_QNA based on AI response keywords`);
+      return ["INSURANCE_QNA"];
+    } else if (responseText.toLowerCase().includes("all") || responseText.toLowerCase().includes("multiple") || responseText.toLowerCase().includes("databases")) {
+      console.log(`[decideInformationSource] Fallback to ALL_DATABASES based on AI response keywords`);
+      return ["ALL_DATABASES"];
+    } else if (responseText.toLowerCase().includes("web") || responseText.toLowerCase().includes("search") || responseText.toLowerCase().includes("general")) {
+      console.log(`[decideInformationSource] Fallback to WEB_SEARCH based on AI response keywords`);
+      return ["WEB_SEARCH"];
     }
   } catch (error) {
-    console.error("[decideInformationSource] Error deciding information source:", error);
-    return "NONE"; // Default to NONE on error
+    console.error(`[decideInformationSource] Error getting AI suggestion: ${error}`);
   }
-}
+
+  // Final fallback: use ALL_DATABASES as default to ensure the user gets comprehensive information
+  console.log(`[decideInformationSource] Using default source: ALL_DATABASES`);
+  return ["ALL_DATABASES"];
+};
 
 // Function to generate a structured search query for the law database
 async function generateSearchQuery(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], lawPrompt: string | undefined, tonePrompt: string | undefined, policyPrompt: string | undefined, selectedModel: string | undefined, genAI: GoogleGenerativeAI, searchType: "LAW_DATABASE", isRetry: boolean = false): Promise<string> {
@@ -720,7 +765,20 @@ export const getAIResponse = action({
     disableSystemPrompt: v.optional(v.boolean()), // Argument for system prompt
     disableTools: v.optional(v.boolean()), // Argument for tool use
   },
-  handler: async (ctx, args): Promise<Id<"messages">> => {
+  handler: async (
+  ctx: any,
+  args: {
+    userMessage: string;
+    userId: Id<"users">;
+    lawPrompt?: string;
+    tonePrompt?: string;
+    policyPrompt?: string;
+    selectedModel?: string;
+    paneId: string;
+    disableSystemPrompt?: boolean;
+    disableTools?: boolean;
+  }
+): Promise<Id<"messages">> => {
     const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel, paneId, disableSystemPrompt, disableTools } = args;
     console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}". Pane ID: "${paneId}". Disable System Prompt: ${!!disableSystemPrompt}. Disable Tools: ${!!disableTools}`);
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
@@ -739,114 +797,95 @@ export const getAIResponse = action({
 
     try {
       const previousMessages = await ctx.runQuery(api.chat.getMessages, { userId: userId, paneId: paneId }); // Pass paneId to getMessages
-      const formattedHistory = previousMessages.map(msg => ({
+      const formattedHistory = previousMessages.map((msg: { role: string; content: string }) => ({
         role: msg.role === "user" ? "user" : "model",
         parts: [{ text: msg.content }],
       }));
       console.log("[getAIResponse] Formatted conversation history:", JSON.stringify(formattedHistory, null, 2));
 
       console.log("[getAIResponse] Calling decideInformationSource with user message, history, and selectedModel...");
-      const decision = await decideInformationSource(userMessage, formattedHistory, selectedModel, genAI);
-      console.log(`[decideInformationSource] decideInformationSource returned: ${decision}`);
+      const informationSources: string[] = await decideInformationSource(userMessage, formattedHistory, selectedModel, genAI);
+      console.log(`[decideInformationSource] decideInformationSource returned: ${JSON.stringify(informationSources)}`);
 
+      // Map the information sources to database names
+      const sourceToDbNameMap: Record<string, string> = {
+        "LAW_ON_INSURANCE": "Law_on_Insurance",
+        "LAW_ON_CONSUMER_PROTECTION": "Law_on_Consumer_Protection",
+        "INSURANCE_QNA": "Insurance_and_reinsurance_in_Cambodia_QnA_format",
+        "ALL_DATABASES": "All Databases"
+      };
+      
+      // Get the relevant database names based on the selected information sources
       let relevantDatabaseNames: string[] = [];
-      if (!disableTools && (decision === "LAW_DATABASE_ONLY" || decision === "BOTH")) {
-        console.log("[getAIResponse] Decision: Law database access indicated. Using all law databases.");
-        relevantDatabaseNames = [
-          "Law on Insurance",
-          "Insurance and Reinsurance QnA",
-          "Law on Consumer Protection"
-        ];
-        console.log(`[getAIResponse] Using all law databases: ${JSON.stringify(relevantDatabaseNames)}`);
-
-        if (relevantDatabaseNames.length > 0) {
-          console.log("[getAIResponse] Accessing law database(s).");
-          let lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", false); // Initial search
-          const lawDatabaseContent = await ctx.runQuery(api.chat.getLawDatabaseContent, { databaseNames: relevantDatabaseNames });
-          const lawDatabaseResults = JSON.parse(lawDatabaseContent);
-
-          let combinedLawResults = "";
-          for (const dbName of relevantDatabaseNames) {
-            if (lawDatabaseResults[dbName]) {
-              const dbContent = lawDatabaseResults[dbName];
-              
-              // Check if enhanced database is available
-              const enhancedDbName = dbName.replace(/\.json$/, "").replace(/ /g, "_");
-              const isEnhancedAvailable = await ctx.runQuery(api.integrateDatabases.isEnhancedDatabaseAvailable, { databaseName: enhancedDbName });
-              
-              console.log(`[getAIResponse] Database: ${dbName}, Enhanced available: ${isEnhancedAvailable}`);
-              
-              let resultsForDb;
-              if (isEnhancedAvailable) {
-                // Use enhanced search if available
-                console.log(`[getAIResponse] Using enhanced search for ${dbName}`);
-                try {
-                    // Use the Convex query to load the enhanced database
-                  const enhancedDb = await ctx.runQuery(api.integrateDatabases.queryWithEnhancedDatabase, { 
-                    query: lawQuery,
-                    databaseName: enhancedDbName
-                  });
-                  
-                  // The enhanced search is already performed in queryWithEnhancedDatabase
-                  resultsForDb = enhancedDb || "LAW_DATABASE_NO_RESULTS";
-                } catch (error) {
-                  console.error(`[getAIResponse] Error using enhanced database: ${error}. Falling back to original.`);
-                  resultsForDb = await queryLawDatabase(lawQuery, dbContent);
-                }
-              } else {
-                // Fall back to original search
-                console.log(`[getAIResponse] Using original search for ${dbName}`);
-                resultsForDb = await queryLawDatabase(lawQuery, dbContent);
-              }
-              
-              if (resultsForDb !== "LAW_DATABASE_NO_RESULTS") {
-                combinedLawResults += `\n\n--- Results from ${dbName} ---\n${resultsForDb}`;
-              }
-            }
-          }
-
-          if (combinedLawResults.trim() === "") {
-            console.log("[getAIResponse] First law database search yielded no results across selected databases. Attempting retry with broader query.");
-            // Retry: Generate a broader query and try again
-            lawQuery = await generateSearchQuery(userMessage, formattedHistory, lawPrompt, tonePrompt, policyPrompt, selectedModel, genAI, "LAW_DATABASE", true); // Retry with isRetry = true
-            
-            combinedLawResults = ""; // Reset for retry
-            for (const dbName of relevantDatabaseNames) {
-              if (lawDatabaseResults[dbName]) {
-                const dbContent = lawDatabaseResults[dbName];
-                const resultsForDb = await queryLawDatabase(lawQuery, dbContent);
-                if (resultsForDb !== "LAW_DATABASE_NO_RESULTS") {
-                  combinedLawResults += `\n\n--- Results from ${dbName} (after retry) ---\n${resultsForDb}`;
-                }
-              }
-            }
-
-            if (combinedLawResults.trim() === "") {
-              lawDatabaseInfoForSystemPrompt = `A search of the law database(s) (query: "${lawQuery}") found no relevant results after two attempts across selected databases: ${relevantDatabaseNames.join(", ")}.`;
-            } else {
-              lawDatabaseInfoForSystemPrompt = `Relevant information from the law database(s) for query "${lawQuery}" (after retry) is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
-              lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}" - after retry) from databases: ${relevantDatabaseNames.join(", ")}:\n---\n${combinedLawResults.trim()}\n---\nUse this information to help answer the user's original question.`;
-            }
-          } else {
-            lawDatabaseInfoForSystemPrompt = `Relevant information from the law database(s) for query "${lawQuery}" is provided below. You MUST synthesize this information to answer the user's query if it's relevant.`;
-            lawDatabaseContextForLLM = `\n\nRelevant law database snippets (search term used: "${lawQuery}") from databases: ${relevantDatabaseNames.join(", ")}:\n---\n${combinedLawResults.trim()}\n---\nUse this information to help answer the user's original question.`;
-          }
+      
+      // Add selected law databases to the list
+      if (!disableTools) {
+        if (informationSources.includes("ALL_DATABASES")) {
+          // If ALL_DATABASES is selected, include all three law databases
+          relevantDatabaseNames = ["Law_on_Insurance", "Law_on_Consumer_Protection", "Insurance_and_reinsurance_in_Cambodia_QnA_format"];
         } else {
-          lawDatabaseInfoForSystemPrompt = "No specific law databases were determined to be relevant for this query.";
+          for (const source of informationSources) {
+            if (source !== "WEB_SEARCH" && sourceToDbNameMap[source]) {
+              relevantDatabaseNames.push(sourceToDbNameMap[source]);
+            }
+          }
         }
       }
+      
+      if (relevantDatabaseNames.length > 0) {
+        console.log(`[getAIResponse] Using selected law databases: ${JSON.stringify(relevantDatabaseNames)}`);
+        
+        // Log the database names that we're requesting to help with debugging
+        console.log(`[getAIResponse] Database names being requested: ${JSON.stringify(relevantDatabaseNames)}`);
 
-      const toolsToUse: any[] = []; // Use any[] for the array type
-      if (!disableTools && (decision === "WEB_SEARCH_ONLY" || decision === "BOTH")) {
-        console.log(`[getAIResponse] Decision: Enabling Google Search tool for pane ${paneId}. disableTools=${disableTools}, decision=${decision}`);
+        try {
+          console.log("[getAIResponse] Accessing full law database(s).");
+          const lawDatabaseContent: string = await ctx.runQuery(api.chat.getLawDatabaseContent, { databaseNames: relevantDatabaseNames });
+          console.log(`[getAIResponse] Raw database content length: ${lawDatabaseContent?.length || 0} characters`);
+          const lawDatabaseResults = JSON.parse(lawDatabaseContent);
+
+          // For each selected database, add the full content to the context
+          for (const dbName of relevantDatabaseNames) {
+            if (!lawDatabaseResults[dbName] || lawDatabaseResults[dbName].error) {
+              console.log(`[getAIResponse] Database not available or error: ${dbName}`);
+              continue;
+            }
+
+            console.log(`[getAIResponse] Adding full database content for: ${dbName}`);
+            lawDatabaseContextForLLM += `\n\n--- FULL DATABASE: ${dbName} ---\n${JSON.stringify(lawDatabaseResults[dbName])}\n---\n`;
+          }
+
+          if (lawDatabaseContextForLLM) {
+            lawDatabaseInfoForSystemPrompt = `Full content from the following law databases is provided below: ${relevantDatabaseNames.join(", ")}. You MUST use this information to answer the user's query.`;
+          } else {
+            lawDatabaseInfoForSystemPrompt = "The requested law databases could not be accessed. Answering from general knowledge.";
+          }
+        } catch (error) {
+          console.error(`[getAIResponse] Error accessing law database: ${error}`);
+          console.error(`[getAIResponse] Error details: ${JSON.stringify(error)}`);
+          lawDatabaseInfoForSystemPrompt = "An error occurred while accessing the law database. Answering from general knowledge. If you mentioned a specific article or law, I might not have access to that particular information.";
+        }
+      } else {
+        lawDatabaseInfoForSystemPrompt = "No specific law databases were determined to be relevant for this query.";
+      }
+
+     // At the top of the handler:
+let useWebSearch: boolean = false;
+const toolsToUse: any[] = [];
+// ...
+// Later in the handler, after informationSources is available:
+useWebSearch = !disableTools && informationSources.includes("WEB_SEARCH");
+if (!disableTools && useWebSearch) {
+        console.log(`[getAIResponse] Decision: Enabling Google Search tool for pane ${paneId}. disableTools=${disableTools}, informationSources=${JSON.stringify(informationSources)}`);
+        // ... (rest of the code remains the same)
         toolsToUse.push(googleSearchTool);
         webSearchInfoForSystemPrompt = `Google Search tool was enabled. If the model uses the tool, relevant web search results will be provided in groundingMetadata. You MUST synthesize this information to answer the user's query if it's relevant, strictly adhering to any specific number of items requested by the user (e.g., "top 5"). Format any list of items as a Markdown bulleted list, each item starting with '- '. Follow WEB_SEARCH_USAGE_INSTRUCTIONS for how to present this information.`;
       } else if (disableTools) {
-        console.log(`[getAIResponse] Decision: Tools explicitly disabled for pane ${paneId}, therefore NOT performing any external search or database access. Answering from general knowledge only. disableTools=${disableTools}, decision=${decision}`);
+        console.log(`[getAIResponse] Decision: Tools explicitly disabled for pane ${paneId}, therefore NOT performing any external search or database access. Answering from general knowledge only. disableTools=${disableTools}, informationSources=${JSON.stringify(informationSources)}`);
         webSearchInfoForSystemPrompt = "All external information sources (both law database and web search) were explicitly disabled for this query. Answer from general knowledge only.";
         lawDatabaseInfoForSystemPrompt = "Law database access was explicitly disabled for this query. Answer from general knowledge only.";
-      } else if (decision === "NONE") {
-        console.log(`[getAIResponse] Decision: NOT performing any external search for pane ${paneId}. Answering from general knowledge. disableTools=${disableTools}, decision=${decision}`);
+      } else if (informationSources.length === 0) {
+        console.log(`[getAIResponse] Decision: NOT performing any external search for pane ${paneId}. Answering from general knowledge. disableTools=${disableTools}, informationSources=${JSON.stringify(informationSources)}`);
         webSearchInfoForSystemPrompt = "No external search (neither law database nor web) was performed for this query. Answer from general knowledge.";
       }
 
@@ -869,11 +908,15 @@ ${WEB_SEARCH_USAGE_INSTRUCTIONS}
 
 ${lawDatabaseInfoForSystemPrompt}
 ${webSearchInfoForSystemPrompt}
-// The lines above give you crucial context: EITHER the outcome of a law database search, a web search, both, or an instruction that no search was performed and you should rely on general knowledge.
+// The lines above give you crucial context about the law databases that were provided to you.
 
 Your primary goal is to answer the user's question.
-- If external search results (law database and/or web) were provided (see context above), integrate them according to the specific instructions for each.
-- If no search was performed, or if search yielded no results for the specific information sought, answer from your general training knowledge to the best of your ability. Do not invent search results.
+- You have been provided with FULL DATABASE CONTENT for the selected law databases. Use this information to answer the user's question.
+- If the user's question asks about a specific article, search through the provided database to find that article.
+- For article references, look for both the exact article number and any variations (e.g., for "Article 3", look for "Article 3", "Article III", etc.)
+- The databases have enhanced structure with unique IDs, full-text fields, keywords, tags, and related articles. Use this structure to find the most relevant information.
+- If multiple databases were provided, prioritize the most relevant one for the user's query.
+- If no law databases were provided, or if the provided databases don't contain the information sought, answer from your general training knowledge to the best of your ability.
 - Always be concise and directly address the user's original question.
 `;
       console.log("[getAIResponse] Final System Instruction (first 500 chars):", finalSystemInstruction.substring(0, 500) + "...");
@@ -1029,7 +1072,8 @@ Your primary goal is to answer the user's question.
       });
       console.log(`[getAIResponse] Finalized message ${messageId}.`);
 
-      return messageId;
+      if (messageId === null) throw new Error("Failed to generate messageId");
+return messageId;
     } catch (error) {
       console.error("[getAIResponse] Error during AI response generation:", error);
 

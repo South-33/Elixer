@@ -30,6 +30,15 @@ const applicationTables = {
       searchField: "title",
       filterFields: ["category"],
     }),
+  // Add a new table for storing law databases
+  lawDatabases: defineTable({
+    name: v.string(),                // Database name (used for lookups)
+    displayName: v.string(),         // Human-readable name
+    fileId: v.string(),              // File storage ID (required)
+    isEnhanced: v.boolean(),         // Whether this is an enhanced version
+    lastUpdated: v.number(),         // Timestamp of last update
+    cachedContent: v.optional(v.any()), // Optional cache for performance
+  }).index("by_name", ["name"]),
 };
 
 export default defineSchema({
