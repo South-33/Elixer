@@ -16,6 +16,8 @@ type MessageDoc = {
   systemPrompt?: string;
   isStreaming?: boolean;
   paneId?: string; // Added paneId, now optional
+  metadata?: any; // Added metadata field for search suggestions HTML and other data
+  processingPhase?: string; // Added processingPhase field to track current AI operation
 };
 
 interface ChatPaneProps {
@@ -68,8 +70,33 @@ const typewriterStyles = `
   }
 })();
 
+// Processing phase component to show different AI states with a pulsing animation
+const ProcessingPhase = ({ phase }: { phase: string }) => {
+  // Icon mapping for different phases
+  const getPhaseIcon = (phaseText: string) => {
+    if (phaseText.includes("Searching") || phaseText.includes("search_web")) {
+      return "🔍 ";
+    } else if (phaseText.includes("Thinking") || phaseText.includes("Analyzing")) {
+      return "💭 ";
+    } else if (phaseText.includes("Generating") || phaseText.includes("Writing")) {
+      return "✏️ ";
+    } else if (phaseText.includes("Ranking") || phaseText.includes("Prioritizing")) {
+      return "🔢 ";
+    } else if (phaseText.includes("Query") || phaseText.includes("Database")) {
+      return "🗃️ ";
+    }
+    return "";
+  };
+
+  return (
+    <span className="processing-phase-content">
+      {getPhaseIcon(phase)}{phase}
+    </span>
+  );
+};
+
 // Chat message component with DOM-based streaming for assistant messages
-const ChatMessage = ({ message, displayContent }: { message: MessageDoc, displayContent: string }) => {
+const ChatMessage = ({ message, displayContent, currentPhase }: { message: MessageDoc, displayContent: string, currentPhase: string }) => {
   // Create a ref to directly manipulate the DOM for streaming text
   const streamingTextRef = useRef<HTMLDivElement>(null);
   
@@ -78,6 +105,29 @@ const ChatMessage = ({ message, displayContent }: { message: MessageDoc, display
   
   // Use this ID to identify the streaming container
   const streamingContainerId = `streaming-content-${message._id}`;
+
+  // Determine the current processing phase based on metadata or message state
+  const getProcessingPhase = () => {
+    if (message.role !== 'assistant' || !message.isStreaming) return null;
+    
+    // If there's explicit phase information in the metadata, use that
+    if (message.metadata && (message.metadata as any).processingPhase) {
+      return (message.metadata as any).processingPhase;
+    }
+    
+    // Always show the global phase state while streaming if content is empty
+    // or less than a certain length (meaning we're still in early stages)
+    if (displayContent === '' || displayContent.length < 20) {
+      return currentPhase;
+    }
+    
+    // When we have significant content, assume we're in the final generating phase
+    if (displayContent.length >= 20) {
+      return "Generating response";
+    }
+    
+    return null;
+  };
   
   // Update the DOM directly when streaming content changes
   useEffect(() => {
@@ -106,12 +156,18 @@ const ChatMessage = ({ message, displayContent }: { message: MessageDoc, display
   // Check if the message content contains the error message
   const hasStreamingError = message.role === "assistant" && 
                            displayContent.includes("Error: Streaming interrupted");
+                           
+  // Check if the message has search suggestions HTML in metadata
+  const hasSearchSuggestions = message.role === "assistant" && 
+                              message.metadata && 
+                              (message.metadata as any).searchSuggestionsHtml;
+
+  // Determine the current processing phase
+  const processingPhase = getProcessingPhase();
 
   return (
     <div
-      className={`flex ${
-        message.role === "user" ? "justify-end" : "justify-start"
-      }`}
+      className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}
     >
       <div
         className={`max-w-[85%] sm:max-w-[80%] p-3 rounded-xl shadow-sm ${
@@ -122,8 +178,10 @@ const ChatMessage = ({ message, displayContent }: { message: MessageDoc, display
               : "bg-slate-100 text-slate-800 prose"
         }`}
       >
-        {message.role === "assistant" && message.isStreaming && displayContent === "" ? (
-          <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
+        {message.role === "assistant" && message.isStreaming && displayContent === "" && processingPhase ? (
+          <div className="processing-phase">
+            <ProcessingPhase phase={processingPhase} />
+          </div>
         ) : message.role === "assistant" && message.isStreaming ? (
           <div className="prose streaming-text-container" ref={streamingTextRef}>
             <span id={streamingContainerId}>{displayContent}</span>
@@ -138,6 +196,14 @@ const ChatMessage = ({ message, displayContent }: { message: MessageDoc, display
           <ReactMarkdown>{displayContent}</ReactMarkdown>
         )}
       </div>
+      
+      {/* Render search suggestions HTML if available */}
+      {hasSearchSuggestions && !message.isStreaming && (
+        <div 
+          className="mt-2 search-suggestions-container"
+          dangerouslySetInnerHTML={{ __html: (message.metadata as any).searchSuggestionsHtml }}
+        />
+      )}
     </div>
   );
 };
@@ -149,8 +215,8 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
   ) || [] as MessageDoc[];
 
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-04-17"); // Default model for this pane
-  const [disableSystemPrompt, setDisableSystemPrompt] = useState(false); // New state for disabling system prompt
-  const [disableToolUse, setDisableToolUse] = useState(false); // New state for disabling tool use
+  const [disableSystemPrompt, setDisableSystemPrompt] = useState(false); // New state for disabling system prompt - off by default
+  const [disableToolUse, setDisableToolUse] = useState(false); // New state for disabling tool use - off by default
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -158,6 +224,13 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
   const [streamingIntervalId, setStreamingIntervalId] = useState<number | null>(null);
   const contentBuffer = useRef("");
   const [showLocalPendingIndicator, setShowLocalPendingIndicator] = useState(false);
+  
+  // Current processing phase for the assistant
+  const [currentProcessingPhase, setCurrentProcessingPhase] = useState<string>("Thinking");
+  const [phaseVisibility, setPhaseVisibility] = useState<boolean>(true);
+  
+  // Timer to cycle through phases when we don't have real-time phase info
+  const phaseTimerRef = useRef<number | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -172,11 +245,24 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
       setStreamingIntervalId(null);
     }
     setShowLocalPendingIndicator(false);
+    setCurrentProcessingPhase("Thinking");
+    
+    // Clear phase timer if it exists
+    if (phaseTimerRef.current) {
+      clearTimeout(phaseTimerRef.current);
+      phaseTimerRef.current = null;
+    }
   };
 
   useEffect(() => {
     console.log("[ChatPane] useEffect triggered. Messages updated."); // Log when messages update
     const streamingDbMessage = messages.find((msg: MessageDoc) => msg.role === "assistant" && msg.isStreaming);
+
+    // Update processing phase if available from the backend
+    if (streamingDbMessage && streamingDbMessage.processingPhase) {
+      console.log(`[ChatPane] Setting processing phase from backend: ${streamingDbMessage.processingPhase}`);
+      setCurrentProcessingPhase(streamingDbMessage.processingPhase);
+    }
 
     if (streamingDbMessage) {
       console.log("[ChatPane] Streaming DB message found:", streamingDbMessage._id, "Content length:", streamingDbMessage.content.length);
@@ -320,8 +406,38 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
     if (isStreaming) {
       console.log("[ChatPane] Streaming state active, content length:", liveStreamingContent.length, 
                  "buffer size:", contentBuffer.current.length);
+      
+      // Only update phases when we have actual backend phase information
+      const streamingMessage = messages.find((msg: MessageDoc) => msg.isStreaming);
+      const hasBackendPhase = streamingMessage && streamingMessage.processingPhase;
+      
+      // If we don't have a real phase from the backend, just show 'Thinking'
+      if (!phaseTimerRef.current && showLocalPendingIndicator && !hasBackendPhase) {
+        // Only show 'Thinking' until we get real phase information from the backend
+        setCurrentProcessingPhase("Thinking");
+        console.log(`[ChatPane] No backend phase available. Setting default phase: Thinking`);
+        
+        // Set a timer to keep phaseTimerRef.current non-null to prevent multiple timers
+        phaseTimerRef.current = window.setTimeout(() => {
+          console.log(`[ChatPane] Still waiting for backend phase...`);
+        }, 10000); // Long timeout just to occupy the ref
+      }
+    } else {
+      // Clear phase timer when not streaming
+      if (phaseTimerRef.current) {
+        clearTimeout(phaseTimerRef.current);
+        phaseTimerRef.current = null;
+      }
     }
-  }, [isStreaming, liveStreamingContent.length]);
+    
+    // Cleanup on unmount
+    return () => {
+      if (phaseTimerRef.current) {
+        clearTimeout(phaseTimerRef.current);
+        phaseTimerRef.current = null;
+      }
+    };
+  }, [isStreaming, liveStreamingContent.length, showLocalPendingIndicator]);
 
   useEffect(() => {
     onStreamingStatusChange(paneId, isStreaming);
@@ -349,6 +465,17 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
         clearInterval(streamingIntervalId);
         setStreamingIntervalId(null);
     }
+    
+    // Reset the current phase to thinking and ensure it's visible
+    setCurrentProcessingPhase("Thinking");
+    setPhaseVisibility(true);
+    
+    // Clear any existing phase timer
+    if (phaseTimerRef.current) {
+      clearTimeout(phaseTimerRef.current);
+      phaseTimerRef.current = null;
+    }
+    
     setShowLocalPendingIndicator(true); // Show local pending state immediately
 
     try {
@@ -421,7 +548,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             }`}
             disabled={isStreaming}
           >
-            {disableSystemPrompt ? "Enable System Prompt" : "Disable System Prompt"}
+            {disableSystemPrompt ? "System Prompt Disabled" : "System Prompt Enabled"}
           </button>
           <button
             onClick={() => setDisableToolUse(prev => !prev)}
@@ -432,7 +559,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             }`}
             disabled={isStreaming}
           >
-            {disableToolUse ? "Enable External Sources" : "Raw AI Only"}
+            {disableToolUse ? "Agent Disabled" : "Agent Enabled"}
           </button>
           <select
             value={selectedModel}
@@ -461,13 +588,16 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             key={`${message._id}-${message.isStreaming ? 'streaming' : 'static'}`}
             message={message}
             displayContent={message.role === 'assistant' && message.isStreaming ? liveStreamingContent : message.content}
+            currentPhase={currentProcessingPhase}
           />
         ))}
         {showLocalPendingIndicator &&
           !messages.some((msg: MessageDoc) => msg.role === 'assistant' && msg.isStreaming) && (
           <div className="flex justify-start" key="local-pending-jsx-indicator">
             <div className="max-w-[80%] p-3 rounded-lg bg-slate-100 text-slate-800 prose">
-              <p className="typing-indicator"><span>.</span><span>.</span><span>.</span></p>
+              <div className="processing-phase">
+                <ProcessingPhase phase={currentProcessingPhase} />
+              </div>
             </div>
           </div>
         )}

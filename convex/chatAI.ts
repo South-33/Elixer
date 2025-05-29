@@ -5,6 +5,7 @@ import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from "@google/generative-ai";
 import { Id } from "./_generated/dataModel";
+import { rankInformationSources, executeToolsSequentially, estimateTokenCount } from "./agentTools";
 
 // --- Hardcoded Prompts ---
 const STYLING_PROMPT = `Use standard Markdown for formatting your responses.
@@ -49,7 +50,11 @@ const WEB_SEARCH_USAGE_INSTRUCTIONS = `
 // Define the structure of the law database for type safety
 export interface LawArticle {
   article_number: string;
-  content: string;
+  article_title?: string;
+  content: string | string[];
+  source_page_number?: number;
+  
+  // Keep these fields as optional for backward compatibility
   points?: string[];
   definitions?: { [key: string]: string };
   sub_types?: { type: string; description: string }[];
@@ -511,8 +516,12 @@ export async function queryLawDatabase(query: string, lawDatabase: LawDatabase):
     return "LAW_DATABASE_NO_RESULTS";
   }
 }
+
 // Define the available information sources as a type
-type InformationSource = "WEB_SEARCH" | "LAW_ON_INSURANCE" | "LAW_ON_CONSUMER_PROTECTION" | "INSURANCE_QNA" | "ALL_DATABASES";
+export type InformationSource = "WEB_SEARCH" | "LAW_ON_INSURANCE" | "LAW_ON_CONSUMER_PROTECTION" | "INSURANCE_QNA" | "ALL_DATABASES";
+
+// Define agent tool names
+export type AgentTool = "query_law_on_insurance" | "query_law_on_consumer_protection" | "query_insurance_qna" | "search_web";
 
 // Function to decide which specific information sources to use
 export const decideInformationSource = async (
@@ -615,144 +624,6 @@ export const decideInformationSource = async (
   return ["ALL_DATABASES"];
 };
 
-// Function to generate a structured search query for the law database
-async function generateSearchQuery(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], lawPrompt: string | undefined, tonePrompt: string | undefined, policyPrompt: string | undefined, selectedModel: string | undefined, genAI: GoogleGenerativeAI, searchType: "LAW_DATABASE", isRetry: boolean = false): Promise<string> {
-  try {
-    const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-    const systemPrompt = `You are a legal search query generator. Your task is to analyze the user's question and generate an effective search query for our law database.
-
-QUERY GUIDELINES:
-1. Extract key legal concepts, terms, and entities from the user's question
-2. Include specific article numbers if mentioned or implied
-3. Include chapter or section titles if relevant
-4. For definitions, include the term being defined
-5. For penalties or punishments, include relevant terms like "fine", "imprisonment", etc.
-6. For procedural questions, include terms like "procedure", "process", "steps", etc.
-7. Format your response as a JSON object with the following structure:
-   {
-     "mainTerms": ["term1", "term2"],  // 2-5 primary search terms
-     "relatedTerms": ["term3", "term4"],  // 2-5 secondary terms
-     "articleNumbers": ["7", "8"],  // specific article numbers if mentioned
-     "chapterTitles": ["INSURANCE CONTRACT"],  // chapter titles if relevant
-     "sectionTitles": ["GENERAL FORMS"]  // section titles if relevant
-   }
-
-${isRetry ? "IMPORTANT: The previous query did not yield good results. Please reformulate the query to be more specific and use different keywords." : ""}
-
-Output ONLY the JSON search query object, nothing else. No explanations, no additional text.`;
-
-    // Start a chat to generate the search query
-    const chat = model.startChat({
-      history: history,
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 500,
-      },
-    });
-
-    const result = await chat.sendMessage(systemPrompt + "\n\nUser's message: " + userMessage);
-    let searchQuery = result.response.text().trim();
-    
-    // Extract direct chapter and article references from the user message
-    const chapterMatch = userMessage.match(/chapter\s*(\d+|[ivx]+)/i);
-    const articleMatch = userMessage.match(/article\s*(\d+)/i);
-    let directReferences = [];
-    
-    if (chapterMatch && chapterMatch[1]) {
-      directReferences.push(`Chapter ${chapterMatch[1].toUpperCase()}`);
-    }
-    
-    if (articleMatch && articleMatch[1]) {
-      directReferences.push(`Article ${articleMatch[1]}`);
-    }
-    
-    // Try to parse the JSON response
-    try {
-      // Remove any markdown code block formatting if present
-      let cleanedResponse = searchQuery.replace(/```json|```/g, "").trim();
-      
-      // Handle non-standard JSON format that might be returned
-      if (!cleanedResponse.startsWith("{")) {
-        // Try to convert a key-value format to proper JSON
-        cleanedResponse = cleanedResponse
-          .replace(/([\w]+)\s*:\s*/g, '"$1":') // Convert keys to quoted format
-          .replace(/,\s*([\w]+)\s*:/g, ',"$1":') // Fix keys after commas
-          .replace(/:\s*([\w\s]+)(?=,|$)/g, ':"$1"') // Quote string values
-          .replace(/"([\d]+)"/g, '$1'); // Remove quotes from numbers
-          
-        // Ensure it's wrapped in braces
-        if (!cleanedResponse.startsWith("{")) {
-          cleanedResponse = "{" + cleanedResponse + "}";
-        }
-      }
-      
-      const jsonQuery = JSON.parse(cleanedResponse);
-      // Convert the structured query into a format that works with the existing search system
-      const allTerms = [
-        ...(jsonQuery.mainTerms || []),
-        ...(jsonQuery.relatedTerms || []),
-        ...(jsonQuery.articleNumbers || []).map((num: string) => `Article ${num}`),
-        ...(jsonQuery.chapterTitles || []),
-        ...(jsonQuery.sectionTitles || []),
-        ...directReferences // Add direct references from user message
-      ].filter(Boolean);
-      
-      searchQuery = allTerms.join(" ");
-      console.log(`[generateSearchQuery] Structured query parsed successfully: ${searchQuery}`);
-    } catch (error) {
-      // If JSON parsing fails, use the raw text and direct references
-      console.error("[generateSearchQuery] Error parsing JSON query:", error);
-      // Clean up the text and add direct references
-      searchQuery = searchQuery.replace(/[\{\}\[\]\"\'`]/g, " ").replace(/\s+/g, " ").trim();
-      if (directReferences.length > 0) {
-        searchQuery = directReferences.join(" ") + " " + searchQuery;
-      }
-      console.log(`[generateSearchQuery] Using cleaned raw text: ${searchQuery}`);
-    }
-    
-    console.log(`[generateSearchQuery] Final query for "${userMessage}": "${searchQuery}"`);
-    return searchQuery || userMessage; // Fallback to userMessage if generation fails or is empty
-  } catch (error) {
-    console.error("[generateSearchQuery] Error generating search query:", error);
-    return userMessage; // Fallback to userMessage on error
-  }
-}
-
-async function determineRelevantDatabases(userMessage: string, history: { role: string; parts: { text: string; }[]; }[], selectedModel: string | undefined, genAI: GoogleGenerativeAI): Promise<string[]> {
-  try {
-    const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-    const prompt = `Based on the following user message and conversation history, identify which of the following law databases are most relevant to answer the query.
-    
-    Available Databases:
-    - "Law on Insurance"
-    - "Insurance and Reinsurance QnA"
-    - "Law on Consumer Protection"
-
-    Output a comma-separated list of the relevant database names. If no database is relevant, output "NONE".
-
-    **Conversation History (most recent last):**
-    ${history.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
-
-    User Message: "${userMessage}"
-
-    Relevant Databases (comma-separated, or NONE):`;
-
-    console.log("[determineRelevantDatabases] Prompting to decide on relevant databases for user message:", userMessage);
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text().trim();
-    console.log(`[determineRelevantDatabases] Decision for "${userMessage}": ${responseText}`);
-
-    if (responseText.toUpperCase() === "NONE" || responseText === "") {
-      return [];
-    }
-    return responseText.split(',').map(db => db.trim());
-  } catch (error) {
-    console.error("[determineRelevantDatabases] Error determining relevant databases:", error);
-    return []; // Default to no databases on error
-  }
-}
-
-
 export const getAIResponse = action({
   args: {
     userMessage: v.string(),
@@ -761,24 +632,14 @@ export const getAIResponse = action({
     tonePrompt: v.optional(v.string()),
     policyPrompt: v.optional(v.string()),
     selectedModel: v.optional(v.string()),
-    paneId: v.string(), // Add paneId here
-    disableSystemPrompt: v.optional(v.boolean()), // Argument for system prompt
-    disableTools: v.optional(v.boolean()), // Argument for tool use
+    paneId: v.string(),
+    disableSystemPrompt: v.optional(v.boolean()),
+    disableTools: v.optional(v.boolean()),
   },
   handler: async (
-  ctx: any,
-  args: {
-    userMessage: string;
-    userId: Id<"users">;
-    lawPrompt?: string;
-    tonePrompt?: string;
-    policyPrompt?: string;
-    selectedModel?: string;
-    paneId: string;
-    disableSystemPrompt?: boolean;
-    disableTools?: boolean;
-  }
-): Promise<Id<"messages">> => {
+    ctx,
+    args
+  ): Promise<Id<"messages">> => {
     const { userMessage, userId, lawPrompt, tonePrompt, policyPrompt, selectedModel, paneId, disableSystemPrompt, disableTools } = args;
     console.log(`[getAIResponse] Received request for user ${userId}. Message: "${userMessage}". Selected Model: "${selectedModel || "gemini-2.5-flash-preview-04-17"}". Pane ID: "${paneId}". Disable System Prompt: ${!!disableSystemPrompt}. Disable Tools: ${!!disableTools}`);
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
@@ -803,319 +664,468 @@ export const getAIResponse = action({
       }));
       console.log("[getAIResponse] Formatted conversation history:", JSON.stringify(formattedHistory, null, 2));
 
-      console.log("[getAIResponse] Calling decideInformationSource with user message, history, and selectedModel...");
-      const informationSources: string[] = await decideInformationSource(userMessage, formattedHistory, selectedModel, genAI);
-      console.log(`[decideInformationSource] decideInformationSource returned: ${JSON.stringify(informationSources)}`);
-
-      // Map the information sources to database names
-      const sourceToDbNameMap: Record<string, string> = {
-        "LAW_ON_INSURANCE": "Law_on_Insurance",
-        "LAW_ON_CONSUMER_PROTECTION": "Law_on_Consumer_Protection",
-        "INSURANCE_QNA": "Insurance_and_reinsurance_in_Cambodia_QnA_format",
-        "ALL_DATABASES": "All Databases"
-      };
+      // Skip the old decideInformationSource function and directly use our new agent-based approach
+      console.log("[getAIResponse] Using new agent-based approach directly");
       
-      // Get the relevant database names based on the selected information sources
-      let relevantDatabaseNames: string[] = [];
+      // Set default values for the system prompt
+      lawDatabaseInfoForSystemPrompt = "Using agent-based approach to determine the most relevant information sources.";
+      webSearchInfoForSystemPrompt = "Using agent-based approach to determine if web search is needed.";
       
-      // Add selected law databases to the list
-      if (!disableTools) {
-        if (informationSources.includes("ALL_DATABASES")) {
-          // If ALL_DATABASES is selected, include all three law databases
-          relevantDatabaseNames = ["Law_on_Insurance", "Law_on_Consumer_Protection", "Insurance_and_reinsurance_in_Cambodia_QnA_format"];
-        } else {
-          for (const source of informationSources) {
-            if (source !== "WEB_SEARCH" && sourceToDbNameMap[source]) {
-              relevantDatabaseNames.push(sourceToDbNameMap[source]);
-            }
-          }
-        }
-      }
+      // We'll handle the tool selection in the agent-based approach
+
+      // Agent-based approach: Rank information sources and execute tools sequentially
+      console.log("[getAIResponse] Using new agent-based approach with tool calling");
       
-      if (relevantDatabaseNames.length > 0) {
-        console.log(`[getAIResponse] Using selected law databases: ${JSON.stringify(relevantDatabaseNames)}`);
-        
-        // Log the database names that we're requesting to help with debugging
-        console.log(`[getAIResponse] Database names being requested: ${JSON.stringify(relevantDatabaseNames)}`);
-
-        try {
-          console.log("[getAIResponse] Accessing full law database(s).");
-          const lawDatabaseContent: string = await ctx.runQuery(api.chat.getLawDatabaseContent, { databaseNames: relevantDatabaseNames });
-          console.log(`[getAIResponse] Raw database content length: ${lawDatabaseContent?.length || 0} characters`);
-          const lawDatabaseResults = JSON.parse(lawDatabaseContent);
-
-          // For each selected database, add the full content to the context
-          for (const dbName of relevantDatabaseNames) {
-            if (!lawDatabaseResults[dbName] || lawDatabaseResults[dbName].error) {
-              console.log(`[getAIResponse] Database not available or error: ${dbName}`);
-              continue;
-            }
-
-            console.log(`[getAIResponse] Adding full database content for: ${dbName}`);
-            lawDatabaseContextForLLM += `\n\n--- FULL DATABASE: ${dbName} ---\n${JSON.stringify(lawDatabaseResults[dbName])}\n---\n`;
-          }
-
-          if (lawDatabaseContextForLLM) {
-            lawDatabaseInfoForSystemPrompt = `Full content from the following law databases is provided below: ${relevantDatabaseNames.join(", ")}. You MUST use this information to answer the user's query.`;
-          } else {
-            lawDatabaseInfoForSystemPrompt = "The requested law databases could not be accessed. Answering from general knowledge.";
-          }
-        } catch (error) {
-          console.error(`[getAIResponse] Error accessing law database: ${error}`);
-          console.error(`[getAIResponse] Error details: ${JSON.stringify(error)}`);
-          lawDatabaseInfoForSystemPrompt = "An error occurred while accessing the law database. Answering from general knowledge. If you mentioned a specific article or law, I might not have access to that particular information.";
-        }
-      } else {
-        lawDatabaseInfoForSystemPrompt = "No specific law databases were determined to be relevant for this query.";
-      }
-
-     // At the top of the handler:
-let useWebSearch: boolean = false;
-const toolsToUse: any[] = [];
-// ...
-// Later in the handler, after informationSources is available:
-useWebSearch = !disableTools && informationSources.includes("WEB_SEARCH");
-if (!disableTools && useWebSearch) {
-        console.log(`[getAIResponse] Decision: Enabling Google Search tool for pane ${paneId}. disableTools=${disableTools}, informationSources=${JSON.stringify(informationSources)}`);
-        // ... (rest of the code remains the same)
-        toolsToUse.push(googleSearchTool);
-        webSearchInfoForSystemPrompt = `Google Search tool was enabled. If the model uses the tool, relevant web search results will be provided in groundingMetadata. You MUST synthesize this information to answer the user's query if it's relevant, strictly adhering to any specific number of items requested by the user (e.g., "top 5"). Format any list of items as a Markdown bulleted list, each item starting with '- '. Follow WEB_SEARCH_USAGE_INSTRUCTIONS for how to present this information.`;
-      } else if (disableTools) {
-        console.log(`[getAIResponse] Decision: Tools explicitly disabled for pane ${paneId}, therefore NOT performing any external search or database access. Answering from general knowledge only. disableTools=${disableTools}, informationSources=${JSON.stringify(informationSources)}`);
-        webSearchInfoForSystemPrompt = "All external information sources (both law database and web search) were explicitly disabled for this query. Answer from general knowledge only.";
-        lawDatabaseInfoForSystemPrompt = "Law database access was explicitly disabled for this query. Answer from general knowledge only.";
-      } else if (informationSources.length === 0) {
-        console.log(`[getAIResponse] Decision: NOT performing any external search for pane ${paneId}. Answering from general knowledge. disableTools=${disableTools}, informationSources=${JSON.stringify(informationSources)}`);
-        webSearchInfoForSystemPrompt = "No external search (neither law database nor web) was performed for this query. Answer from general knowledge.";
-      }
-
-      const dynamicPrompts = disableSystemPrompt ? "" : [
-        lawPrompt,
-        policyPrompt,
-        tonePrompt,
-      ].filter(Boolean).join("\n\n");
-
-      const finalSystemInstruction = `You are a helpful assistant.
-${STYLING_PROMPT}
-// The prompt above defines how you MUST format your output using Markdown. Adhere to it strictly.
-
-${dynamicPrompts}
-// The dynamic prompts above (if any) define your general persona, legal constraints, and company policies.
-${disableSystemPrompt ? "" : "You are a helpful assistant designed to assist users in Cambodia. You can provide information, answer questions, and offer support on a variety of topics. I am here to be your friendly AI companion."}
-
-${WEB_SEARCH_USAGE_INSTRUCTIONS}
-// The instructions above specifically guide how you MUST use and refer to any web search information IF IT IS PROVIDED to you.
-
-${lawDatabaseInfoForSystemPrompt}
-${webSearchInfoForSystemPrompt}
-// The lines above give you crucial context about the law databases that were provided to you.
-
-Your primary goal is to answer the user's question.
-- You have been provided with FULL DATABASE CONTENT for the selected law databases. Use this information to answer the user's question.
-- If the user's question asks about a specific article, search through the provided database to find that article.
-- For article references, look for both the exact article number and any variations (e.g., for "Article 3", look for "Article 3", "Article III", etc.)
-- The databases have enhanced structure with unique IDs, full-text fields, keywords, tags, and related articles. Use this structure to find the most relevant information.
-- If multiple databases were provided, prioritize the most relevant one for the user's query.
-- If no law databases were provided, or if the provided databases don't contain the information sought, answer from your general training knowledge to the best of your ability.
-- Always be concise and directly address the user's original question.
-`;
-      console.log("[getAIResponse] Final System Instruction (first 500 chars):", finalSystemInstruction.substring(0, 500) + "...");
-
+      // Initialize the model
       const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-      console.log("[getAIResponse] Tools to be used in chat session:", JSON.stringify(toolsToUse));
-      const chat = model.startChat({
-        history: [
-          { role: "user", parts: [{ text: finalSystemInstruction }] },
-          { role: "model", parts: [{ text: "Understood. I will follow all instructions. If external data is provided, I will use it as guided. Otherwise, I will rely on my general knowledge." }] },
-          ...formattedHistory,
-        ],
-        tools: toolsToUse as any, // Pass the tools here
-      });
-
+      
+      // 1. Create a placeholder message for streaming
       messageId = await ctx.runMutation(api.chat.createMessage, {
         userId,
         role: "assistant",
         content: "",
         isStreaming: true,
-        paneId, // Pass paneId here
+        paneId,
       });
       console.log(`[getAIResponse] Created placeholder message ${messageId} for streaming response.`);
-
-      // Construct the final message to send to the LLM for response generation
-      // It includes the law database context, web search context (if any), and then the user's original question.
-      let messageToSendToGemini = "";
-      if (lawDatabaseContextForLLM) {
-        messageToSendToGemini += lawDatabaseContextForLLM;
-      }
-      // No webSearchContextForLLM here, as Gemini will handle the search internally
-      if (messageToSendToGemini) {
-        messageToSendToGemini += "\n\nUser's original question: " + userMessage;
+      
+      // 2. Rank information sources to determine tool calling order
+      // If disableTools is true, we should skip tool calls and just use the model directly
+      let rankingResult;
+      if (disableTools) {
+        console.log(`[getAIResponse] Tools disabled by user setting, using only no_tool`);
+        rankingResult = { rankedTools: ["no_tool"] };
       } else {
-        messageToSendToGemini = "User's original question: " + userMessage;
-      }
-
-      console.log(`[getAIResponse] Sending to Gemini for response generation (first 500 chars): "${messageToSendToGemini.substring(0,500)}..."`);
-      console.log("[getAIResponse] Initiating Gemini API call (sendMessageStream)...");
-      const streamResult = await chat.sendMessageStream(messageToSendToGemini);
-      console.log("[getAIResponse] Gemini API call returned stream result. Starting to process chunks...");
-
-      let accumulatedResponse = "";
-      let bufferToSend = "";
-      let errorCount = 0;
-      const MAX_RETRIES = 3;
-      const CHUNK_SIZE = 3; // Smaller chunk size for more frequent updates
-      const RETRY_DELAY_MS = 200; // Slightly reduced delay between retries
-      
-      // Helper function to delay execution
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-      
-      // Helper function to append content with retry logic
-      const appendWithRetry = async (content: string): Promise<boolean> => {
-        // If messageId is null, we can't append content
-        if (!messageId) {
-          console.error(`[getAIResponse] Cannot append content: messageId is null`);
-          return false;
-        }
+        // Only pass system prompts if they're not disabled
+        const systemPromptsToUse = disableSystemPrompt ? undefined : {
+          stylingPrompt: STYLING_PROMPT,
+          lawPrompt: lawPrompt,
+          tonePrompt: tonePrompt,
+          policyPrompt: policyPrompt
+        };
         
-        let retries = 0;
-        while (retries <= MAX_RETRIES) {
-          try {
-            await ctx.runMutation(api.chat.appendMessageContent, {
-              messageId,
-              content,
-            });
-            return true; // Success
-          } catch (appendError) {
-            retries++;
-            console.error(`[getAIResponse] Error appending content (attempt ${retries}/${MAX_RETRIES}):`, appendError);
-            if (retries <= MAX_RETRIES) {
-              // Wait before retrying
-              await delay(RETRY_DELAY_MS);
-            }
-          }
-        }
-        return false; // Failed after all retries
-      };
-      
-      try {
-        for await (const chunk of streamResult.stream) {
-          // Check if there's a text part in the chunk
-          const textPart = chunk.candidates?.[0]?.content?.parts?.find(part => part.text);
-          if (textPart) {
-            const chunkText = textPart.text;
-            accumulatedResponse += chunkText;
-            bufferToSend += chunkText;
-            
-            // Log streaming response chunks for debugging
-            if (accumulatedResponse.length % 100 === 0 || accumulatedResponse.length < 100) {
-              console.log(`[getAIResponse] Streaming response for pane ${paneId} (disableTools=${disableTools}): Current length: ${accumulatedResponse.length} chars. Latest chunk: "${chunkText ? chunkText.substring(0, 50) : ''}${chunkText && chunkText.length > 50 ? '...' : ''}"`);
-            }
-            
-            // Send buffer in chunks to avoid too many small DB updates
-            if (bufferToSend.length >= CHUNK_SIZE) {
-              const success = await appendWithRetry(bufferToSend);
-              if (success) {
-                bufferToSend = ""; // Clear buffer after successful append
-                errorCount = 0; // Reset error count on success
-              } else {
-                errorCount++;
-                if (errorCount > MAX_RETRIES) {
-                  throw new Error(`Failed to append content after ${MAX_RETRIES} retries.`);
-                }
-              }
-            }
-          }
-        }
+        console.log(`[getAIResponse] System prompts ${disableSystemPrompt ? 'disabled' : 'enabled'} by user setting`);
         
-        // Send any remaining characters in the buffer
-        if (bufferToSend.length > 0) {
-          await appendWithRetry(bufferToSend);
-        }
-      } catch (streamError) {
-        console.error(`[getAIResponse] Error during streaming:`, streamError);
-        // Handle streaming error gracefully
-        if (messageId) {
-          try {
-            await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
-              messageId,
-              isStreaming: false,
-            });
-            
-            // Only append error message if the content is very short
-            const currentMessage = await ctx.runQuery(api.chat.getMessage, { messageId });
-            if (currentMessage && currentMessage.content.length < 50) {
-              await ctx.runMutation(api.chat.appendMessageContent, {
-                messageId,
-                content: `Error: Streaming interrupted. Please try again.`,
-              });
-            }
-          } catch (finalError) {
-            console.error(`[getAIResponse] Error finalizing message after streaming error:`, finalError);
-          }
-        }
+        rankingResult = await rankInformationSources(
+          userMessage,
+          formattedHistory,
+          selectedModel,
+          genAI,
+          systemPromptsToUse
+        );
       }
-      console.log(`[getAIResponse] Finished streaming for ${messageId}. Total response length: ${accumulatedResponse.length}`);
-
-      // Check for grounding metadata and extract search suggestions from the final response
-      const finalResponse = await streamResult.response; // Await the full response
-      if (finalResponse.candidates && finalResponse.candidates[0] && finalResponse.candidates[0].groundingMetadata && finalResponse.candidates[0].groundingMetadata.searchEntryPoint && finalResponse.candidates[0].groundingMetadata.searchEntryPoint.renderedContent) {
-        searchSuggestionsHtml = finalResponse.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
-        console.log("[getAIResponse] Extracted search suggestions from groundingMetadata.");
-      } else {
-        console.log("[getAIResponse] No search suggestions (groundingMetadata) found in the final response.");
-      }
-
-
-      await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
-        messageId,
-        isStreaming: false,
-      });
-      console.log(`[getAIResponse] Finalized message ${messageId}.`);
-
-      if (messageId === null) throw new Error("Failed to generate messageId");
-return messageId;
-    } catch (error) {
-      console.error("[getAIResponse] Error during AI response generation:", error);
-
-      // Handle "Too Many Requests" error specifically
-      if (error instanceof GoogleGenerativeAIFetchError && error.status === 429) {
-        console.error("[getAIResponse] Caught 429 Too Many Requests error.");
-        // If a message was already created, update its status and content
-        if (messageId) {
-          await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
-            messageId,
-            isStreaming: false,
-          });
-          await ctx.runMutation(api.chat.appendMessageContent, {
-            messageId,
-            content: "Error: You've exceeded your API quota. Please try again later.",
-          });
-        }
-        throw new ConvexError({
-          code: "TOO_MANY_REQUESTS",
-          message: "You've exceeded your API quota. Please try again later.",
+      
+      const { rankedTools, directResponse } = rankingResult;
+      
+      // Log the ranked tools
+      console.log(`[getAIResponse] Ranked tools: ${JSON.stringify(rankedTools)}`);
+      
+      // Fast path: If no_tool is ranked first and we have a direct response, use it immediately
+      // The rankInformationSources function already includes conversation history in the prompt
+      if (rankedTools[0] === "no_tool" && directResponse) {
+        console.log(`[getAIResponse] OPTIMIZATION: Using direct response from ranking call (${directResponse.length} chars)`);
+        
+        // Set appropriate processing phase for the direct response path
+        await ctx.runMutation(api.chat.updateProcessingPhase, {
+          messageId,
+          phase: "Thinking"
         });
-      } else if (messageId) {
-        // For any other error, ensure the message is marked as not streaming
-        // and append a generic error message if it's not already done.
+        console.log(`[getAIResponse] Fast path - set processing phase to: Thinking`);
+        
+        // Update the message with the direct response
+        await ctx.runMutation(api.chat.appendMessageContent, {
+          messageId,
+          content: directResponse,
+        });
+        
+        // Mark the message as no longer streaming
         await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
           messageId,
           isStreaming: false,
         });
-        // Only append if the message content is still empty or very short,
-        // to avoid overwriting partial valid responses.
-        const currentMessage = await ctx.runQuery(api.chat.getMessage, { messageId });
-        if (currentMessage && currentMessage.content.length < 50) { // Arbitrary threshold
+        
+        // Important: For the fast path, we need to make sure the message gets properly
+        // recognized as a streamed message in the frontend before it's marked as done.
+        // This ensures the local pending indicator gets properly turned off.
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        console.log(`[getAIResponse] Finalized message ${messageId} with direct response from ranking call.`);
+        return messageId;
+      }
+      
+      // Define the types for tool results
+      type BasicToolResult = { source: string; result: string; };
+      type ExtendedToolResult = BasicToolResult & { 
+        isFullyFormatted: boolean; 
+        responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL";
+      };
+      
+      // 3. Execute tools sequentially until an answer is found
+      const toolResults = await executeToolsSequentially(
+        rankedTools,
+        userMessage,
+        ctx,
+        genAI,
+        selectedModel,
+        formattedHistory, // Pass conversation history for context-aware tool execution
+        // Only pass system prompts if they're not disabled
+        disableSystemPrompt ? undefined : {
+          stylingPrompt: STYLING_PROMPT,
+          lawPrompt: lawPrompt,
+          tonePrompt: tonePrompt,
+          policyPrompt: policyPrompt
+        },
+        messageId // Pass messageId to update processing phase
+      );
+      
+      // Cast toolResults to the basic type first to ensure we can access source and result
+      const basicResults = toolResults as BasicToolResult;
+      
+      console.log(`[getAIResponse] Tool execution completed. Source: ${basicResults.source}, Result length: ${basicResults.result.length}`);
+
+      // 4. Generate the final answer based on tool results
+      // Check if system prompt is disabled
+      console.log(`[getAIResponse] System prompt disabled: ${disableSystemPrompt}`);
+      
+      let dynamicPrompts = "";
+      if (!disableSystemPrompt) {
+        dynamicPrompts = [
+          lawPrompt,
+          policyPrompt,
+          tonePrompt,
+        ].filter(Boolean).join("\n\n");
+      }
+
+      // Build the final system instruction based on whether system prompt is disabled
+      let finalSystemInstruction = `You are a helpful assistant.
+${STYLING_PROMPT}
+// The prompt above defines how you MUST format your output using Markdown. Adhere to it strictly.
+`;
+      
+      // Only include these parts if system prompt is not disabled
+      if (!disableSystemPrompt) {
+        finalSystemInstruction += `
+${dynamicPrompts}
+// The dynamic prompts above define your general persona, legal constraints, and company policies.
+`;
+      }
+      
+      // Always include these parts regardless of system prompt setting
+      finalSystemInstruction += `
+${WEB_SEARCH_USAGE_INSTRUCTIONS}
+// The instructions above specifically guide how you MUST use and refer to any web search information IF IT IS PROVIDED to you.
+
+Your primary goal is to answer the user's question.
+- Generate a complete and helpful response to the user's question based on the information provided.
+- Format any lists as proper Markdown bulleted lists.
+- Be concise and directly address the user's original question.
+- Do not mention where the information came from, just provide the answer.
+`;
+      console.log("[getAIResponse] Final System Instruction (first 500 chars):", finalSystemInstruction.substring(0, 500) + "...");
+
+      // Note: We already created the message placeholder and ranked tools above
+      // No need to create another chat session or message placeholder
+
+      // Check if toolResults has the new properties (isFullyFormatted and responseType)
+      // This is for backward compatibility with older versions of executeToolsSequentially
+      const hasExtendedProperties = 'isFullyFormatted' in basicResults && 'responseType' in basicResults;
+      const extendedResults = hasExtendedProperties ? (basicResults as ExtendedToolResult) : null;
+      
+      // If the tool result is fully formatted and is a final answer, use it directly
+      if (hasExtendedProperties && 
+          extendedResults && 
+          extendedResults.isFullyFormatted && 
+          extendedResults.responseType === "FINAL_ANSWER") {
+        // For fully formatted tools, we can use the result directly without additional processing
+        console.log(`[getAIResponse] Using pre-formatted response from ${basicResults.source} directly`);
+        
+        // Update the message with the final response directly
+        await ctx.runMutation(api.chat.appendMessageContent, {
+          messageId,
+          content: basicResults.result,
+        });
+        
+        // Mark the message as no longer streaming
+        await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+          messageId,
+          isStreaming: false,
+        });
+        
+        console.log(`[getAIResponse] Finalized message ${messageId} with pre-formatted response from ${basicResults.source}.`);
+        return messageId;
+      }
+      
+      // For non-formatted responses or TRY_NEXT_TOOL responses, we need to generate a response
+      let messageToSendToGemini = "";
+      
+      // For backward compatibility with the old implementation
+      if (!hasExtendedProperties && basicResults.source === "no_tool") {
+        // For no_tool in old implementation, we can use the result directly
+        console.log("[getAIResponse] Using no_tool response directly (legacy path)");
+        
+        // Update the message with the final response directly
+        await ctx.runMutation(api.chat.appendMessageContent, {
+          messageId,
+          content: basicResults.result,
+        });
+        
+        // Mark the message as no longer streaming
+        await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+          messageId,
+          isStreaming: false,
+        });
+        
+        console.log(`[getAIResponse] Finalized message ${messageId} with no_tool response.`);
+        return messageId;
+      } else {
+        // For other sources or non-final answers, generate a response based on the information found
+        // Include system prompts in the final response generation
+        // Only use the tonePrompt from the sidebar when available, with no hardcoded defaults
+        const identityPrompt = tonePrompt ? 
+          `IDENTITY AND PERSONALITY:\n${tonePrompt}\n\n` : 
+          '';
+        
+        const policyPromptText = policyPrompt ? `COMPANY POLICY:\n${policyPrompt}\n\n` : '';
+        const lawPromptText = lawPrompt ? `LAWS AND REGULATIONS:\n${lawPrompt}\n\n` : '';
+        
+        // Only include system prompts if not disabled
+        const promptPrefix = disableSystemPrompt ? '' : `${identityPrompt}${policyPromptText}${lawPromptText}`;
+        
+        messageToSendToGemini = `
+${promptPrefix}
+
+Answer the user's question based on the information provided.
+
+User question: "${userMessage}"
+
+`;
+        
+        // Include full conversation history
+        if (formattedHistory && formattedHistory.length > 0) {
+          messageToSendToGemini += "Conversation history:\n";
+          for (const msg of formattedHistory) {
+            if (msg.role === "user") {
+              messageToSendToGemini += `- User: "${msg.parts[0]?.text}"\n`;
+            } else if (msg.role === "model") {
+              // Include a summarized version of system responses to avoid token limits
+              const responsePreview = msg.parts[0]?.text.length > 100 
+                ? `${msg.parts[0]?.text.substring(0, 100)}...` 
+                : msg.parts[0]?.text;
+              messageToSendToGemini += `- System: "${responsePreview}"\n`;
+            }
+          }
+          messageToSendToGemini += "\n";
+        }
+        
+        // Add information from the current tool
+        messageToSendToGemini += `Information found from ${basicResults.source}:\n${basicResults.result}\n\nProvide a comprehensive and helpful response.`;
+      }
+
+      console.log(`[getAIResponse] Sending to Gemini for response generation (first 500 chars): "${messageToSendToGemini.substring(0,500)}..."`);
+      console.log("[getAIResponse] Initiating Gemini API call for final response...");
+      
+      // Log token estimation for prompt sent to model
+      const promptTokens = estimateTokenCount(messageToSendToGemini);
+      console.log(`[getAIResponse] Sending prompt to Gemini. Length: ${messageToSendToGemini.length} chars, ~${promptTokens} tokens`);
+      
+      // If this came from a database and we have multiple tools, ask the AI if it needs to check another source
+      if (toolResults.source.startsWith('query_') && rankedTools.length > 1) {
+        // Add a check to see if the AI should continue searching other databases
+        const checkMoreSources = `\n\n--- IMPORTANT INSTRUCTION FOR AI ONLY ---\nBased on the information from ${toolResults.source}, can you find the specific information about "${userMessage}"?\nIf you found the exact information requested, respond with your normal answer.\nIf you CANNOT find the specific information requested, add this EXACT text at the end of your response: \"[CHECK_NEXT_SOURCE]\"\n--- END OF INSTRUCTION ---`;
+        
+        // Add this instruction to the message without telling the user
+        messageToSendToGemini += checkMoreSources;
+      }
+      
+      // Generate the final response with the model
+      const finalResult = await model.generateContent(messageToSendToGemini);
+      let finalResponse = finalResult.response.text();
+      
+      // Log token estimation for generated response
+      const responseTokens = estimateTokenCount(finalResponse);
+      console.log(`[getAIResponse] Final response generated. Length: ${finalResponse.length} chars, ~${responseTokens} tokens`);
+      console.log(`[getAIResponse] Total tokens for this exchange: ~${promptTokens + responseTokens} tokens`);
+      
+      // Check if we need to try another source
+      if (finalResponse.includes('[CHECK_NEXT_SOURCE]')) {
+        console.log(`[getAIResponse] AI indicated it needs to check additional sources`);
+        
+        // Remove the special marker
+        finalResponse = finalResponse.replace('[CHECK_NEXT_SOURCE]', '');
+        
+        // Try the next source if available
+        if (rankedTools.length > 1) {
+          const nextTools = rankedTools.slice(1); // Remove the first tool we already tried
+          console.log(`[getAIResponse] Trying next source in ranking: ${nextTools[0]}`);
+          
+          // Store message indicating we're checking more sources
           await ctx.runMutation(api.chat.appendMessageContent, {
             messageId,
-            content: `Error: An unexpected error occurred. Please try again.`,
+            content: "\n\n*Checking additional sources...*"
           });
+          
+          // Execute next tool
+          console.log(`[getAIResponse] Executing next tool: ${nextTools[0]}`);
+          const nextToolResults = await executeToolsSequentially(
+            nextTools,
+            userMessage,
+            ctx,
+            genAI,
+            selectedModel,
+            formattedHistory // Pass conversation history for context-aware tool execution
+          );
+          
+          // Prepare message for next tool result with full conversation context
+          // Include system prompts in the next tool response generation
+          // Only use the tonePrompt from the sidebar when available, with no hardcoded defaults
+          const nextIdentityPrompt = tonePrompt ? 
+            `IDENTITY AND PERSONALITY:\n${tonePrompt}\n\n` : 
+            '';
+          
+          const nextPolicyPromptText = policyPrompt ? `COMPANY POLICY:\n${policyPrompt}\n\n` : '';
+          const nextLawPromptText = lawPrompt ? `LAWS AND REGULATIONS:\n${lawPrompt}\n\n` : '';
+          
+          // Only include system prompts if not disabled
+          const nextPromptPrefix = disableSystemPrompt ? '' : `${nextIdentityPrompt}${nextPolicyPromptText}${nextLawPromptText}`;
+          
+          let nextMessageToSendToGemini = `
+${nextPromptPrefix}
+
+Answer the user's question based on the information provided.
+
+User question: "${userMessage}"
+
+`;
+          
+          // Include full conversation history
+          if (formattedHistory && formattedHistory.length > 0) {
+            nextMessageToSendToGemini += "Conversation history:\n";
+            for (const msg of formattedHistory) {
+              if (msg.role === "user") {
+                nextMessageToSendToGemini += `- User: "${msg.parts[0]?.text}"\n`;
+              } else if (msg.role === "model") {
+                // Include a summarized version of system responses to avoid token limits
+                const responsePreview = msg.parts[0]?.text.length > 100 
+                  ? `${msg.parts[0]?.text.substring(0, 100)}...` 
+                  : msg.parts[0]?.text;
+                nextMessageToSendToGemini += `- System: "${responsePreview}"\n`;
+              }
+            }
+            nextMessageToSendToGemini += "\n";
+          }
+          
+          // Add the information from the current tool
+          nextMessageToSendToGemini += `Information found from ${nextToolResults.source}:\n${nextToolResults.result}\n`;
+          
+          // Log token estimation
+          const nextPromptTokens = estimateTokenCount(nextMessageToSendToGemini);
+          console.log(`[getAIResponse] Sending next source prompt to Gemini. Length: ${nextMessageToSendToGemini.length} chars, ~${nextPromptTokens} tokens`);
+          
+          // Generate response with next tool
+          const nextFinalResult = await model.generateContent(nextMessageToSendToGemini);
+          const nextFinalResponse = nextFinalResult.response.text();
+          
+          // Log token usage for next tool
+          const nextResponseTokens = estimateTokenCount(nextFinalResponse);
+          console.log(`[getAIResponse] Next source response generated. Length: ${nextFinalResponse.length} chars, ~${nextResponseTokens} tokens`);
+          console.log(`[getAIResponse] Additional tokens for next source: ~${nextPromptTokens + nextResponseTokens} tokens`);
+          
+          // Replace the current message content with the next result
+          // First clear the current content by creating a replacement message
+          await ctx.runMutation(api.chat.appendMessageContent, {
+            messageId,
+            content: "\n\n*Information from next source:*\n\n" + nextFinalResponse
+          });
+          
+          // If we have search suggestions HTML in the response, extract and store it
+          const nextSearchSuggestionsMatch = nextFinalResponse.match(/<!-- SEARCH_SUGGESTIONS_HTML:(.+?) -->/s);
+          if (nextSearchSuggestionsMatch && nextSearchSuggestionsMatch[1]) {
+            // Extract the search suggestions HTML
+            const nextSearchSuggestionsHtml = nextSearchSuggestionsMatch[1];
+            console.log(`[getAIResponse] Found search suggestions HTML from next source of length: ${nextSearchSuggestionsHtml.length}`);
+            
+            // Store it in the message metadata
+            await ctx.runMutation(api.chat.updateMessageMetadata, {
+              messageId,
+              metadata: {
+                searchSuggestionsHtml: nextSearchSuggestionsHtml
+              }
+            });
+          }
+          
+          // Mark the message as no longer streaming - this is critical to ensure the message is displayed
+          await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+            messageId,
+            isStreaming: false,
+          });
+          
+          console.log(`[getAIResponse] Finalized message after checking additional sources: ${messageId}.`);
+          return messageId;
         }
-        throw error; // Re-throw the original error for other error types
-      } else {
-        // If messageId was never created, just re-throw the error
-        throw error;
       }
+      
+      // Check if the response contains search suggestions HTML
+      const searchSuggestionsMatch = finalResponse.match(/<!-- SEARCH_SUGGESTIONS_HTML:(.+?) -->/s);
+      let searchSuggestionsHtml = "";
+      
+      if (searchSuggestionsMatch && searchSuggestionsMatch[1]) {
+        // Extract the search suggestions HTML
+        searchSuggestionsHtml = searchSuggestionsMatch[1];
+        console.log(`[getAIResponse] Found search suggestions HTML of length: ${searchSuggestionsHtml.length}`);
+        
+        // Remove the HTML comment from the response
+        finalResponse = finalResponse.replace(/<!-- SEARCH_SUGGESTIONS_HTML:.+? -->/s, "");
+      }
+      
+      // Update the message with the final response
+      await ctx.runMutation(api.chat.appendMessageContent, {
+        messageId,
+        content: finalResponse,
+      });
+      
+      // If we have search suggestions HTML, store it in the message metadata
+      if (searchSuggestionsHtml) {
+        await ctx.runMutation(api.chat.updateMessageMetadata, {
+          messageId,
+          metadata: {
+            searchSuggestionsHtml
+          }
+        });
+      }
+      
+      // Mark the message as no longer streaming
+      await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+        messageId,
+        isStreaming: false,
+      });
+      
+      console.log(`[getAIResponse] Finalized message ${messageId}.`);
+      return messageId;
+    } catch (error) {
+      console.error("[getAIResponse] Error in agent-based approach:", error);
+      
+      // Create a fallback message if we encountered an error
+      if (messageId === null) {
+        messageId = await ctx.runMutation(api.chat.createMessage, {
+          userId,
+          role: "assistant",
+          content: "I'm sorry, I encountered an error while processing your request. Please try again.",
+          isStreaming: false,
+          paneId,
+        });
+      } else {
+        // Update the existing message with an error notice
+        await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+          messageId,
+          isStreaming: false,
+        });
+        await ctx.runMutation(api.chat.appendMessageContent, {
+          messageId,
+          content: "I'm sorry, I encountered an error while processing your request. Please try again.",
+        });
+      }
+      
+      return messageId;
     }
   },
 });
