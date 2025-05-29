@@ -1,0 +1,18 @@
+{
+  "useEnhancedDatabases": true,
+  "databaseMap": {
+    "Enhanced Insurance and reinsurance in Cambodia(QnA format).json": "Enhanced_Enhanced_Insurance and reinsurance in Cambodia(QnA format).json",
+    "Insurance and reinsurance in Cambodia(QnA format).json": "Enhanced_Insurance_QnA.json",
+    "Law on Consumer Protection.json": "Enhanced_Law_on_Consumer_Protection.json",
+    "Law on Insurance.json": "Enhanced_Law_on_Insurance.json"
+  },
+  "enhancedDatabases": [
+    "Enhanced_Enhanced_Insurance and reinsurance in Cambodia(QnA format).json",
+    "Enhanced_Insurance and reinsurance in Cambodia(QnA format).json",
+    "Enhanced_Insurance_QnA.json",
+    "Enhanced_Law_on_Consumer_Protection.json",
+    "Enhanced_Law_on_Insurance.json"
+  ],
+  "lastUpdated": "2025-05-26T17:38:09.943Z",
+  "version": "2.0"
+}
