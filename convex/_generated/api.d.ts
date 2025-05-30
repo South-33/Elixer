@@ -22,7 +22,6 @@ import type * as lawDatabaseActions from "../lawDatabaseActions.js";
 import type * as lawDatabases from "../lawDatabases.js";
 import type * as router from "../router.js";
 import type * as search from "../search.js";
-import type * as updateSearchFunctions from "../updateSearchFunctions.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -42,7 +41,6 @@ declare const fullApi: ApiFromModules<{
   lawDatabases: typeof lawDatabases;
   router: typeof router;
   search: typeof search;
-  updateSearchFunctions: typeof updateSearchFunctions;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

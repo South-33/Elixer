@@ -228,11 +228,14 @@ export const rankInformationSources = async (
   
   GUIDELINES:
   - YOU MUST RANK ALL AVAILABLE TOOLS. Do not leave any tool unranked.
+  - Rank tools in order of relevance for answering this specific query
+  - Group tools by priority level, with most relevant tools in the first group [1]
+  - Tools in the same group [n] will be executed in parallel
   - If multiple databases would be equally useful for this query, group them at the same priority level
-  - If the query can be answered without any specialized database, rank "no_tool" first but still rank all other tools in subsequent priority levels
   - If the query requires web search, include "search_web" in an appropriate group
   - Do NOT include "query_all_databases" in your response
   - Your ranking MUST include all 5 tools: no_tool, query_law_on_insurance, query_law_on_consumer_protection, query_insurance_qna, and search_web
+  - IMPORTANT: If the question might benefit from ANY tool, ALWAYS place "no_tool" in the LAST group. Only rank "no_tool" first if you're ABSOLUTELY CERTAIN the question doesn't need any specialized tools or web search
   
   SPECIAL CASE - OPTIMIZATION:
   If you determine that "no_tool" should be ranked first (meaning this is a simple question that can be answered directly without specialized tools),
@@ -297,12 +300,18 @@ export const rankInformationSources = async (
 // We've removed the combineToolResults function as we're now passing labeled raw data to the AI
 
 // Helper function to create a consistent tool result with the new fields
-function createToolResult(source: string, content: string, responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL") {
+function createToolResult(source: string, content: string, responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL", systemPrompts?: {
+  stylingPrompt?: string,
+  lawPrompt?: string,
+  tonePrompt?: string,
+  policyPrompt?: string
+}) {
+  // We don't need to modify the content here as system prompts are now added in tool execution
   return {
     source,
-    content,  // Use content instead of result for consistency
-    result: content, // Keep result for backward compatibility
-    isFullyFormatted: true,
+    content,
+    result: content, // Keep the original content in result field
+    isFullyFormatted: true, // Assuming the content is already formatted
     responseType
   };
 }
@@ -486,7 +495,42 @@ export const executeToolsByGroup = async (
           case "no_tool":
             // Direct response without using specialized tools
             console.log(`[executeToolsByGroup] Using no_tool direct response`);
-            toolResult = "I'll answer based on my general knowledge.";
+            
+            // If system prompts are available, generate a more personalized response
+            if (systemPrompts) {
+              // Use the model to generate a response that incorporates system prompts
+              try {
+                const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
+                const systemPromptsText = combineSystemPrompts(systemPrompts);
+                
+                // Create a prompt that incorporates the system identity and conversation history
+                let conversationContext = '';
+                if (conversationHistory && conversationHistory.length > 0) {
+                  conversationContext = 'Conversation History:\n' + 
+                    conversationHistory.slice(0, -1) // Exclude the current message
+                    .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0].text}`)
+                    .join('\n') + '\n\n';
+                }
+
+                const directPrompt = `${systemPromptsText}
+
+${conversationContext}User asks: "${query}"
+
+Please provide a helpful response that answers the question directly, taking into account the conversation history.`;
+                
+                console.log(`[executeToolsByGroup] Generating no_tool response with system prompts`);
+                const response = await model.generateContent(directPrompt);
+                toolResult = response.response.text();
+                console.log(`[executeToolsByGroup] Generated personalized no_tool response (${toolResult.length} chars)`);
+              } catch (error) {
+                console.error(`[executeToolsByGroup] Error generating personalized no_tool response: ${error}`);
+                // Fallback to generic response
+                toolResult = "I'm Elixer, your friendly AI assistant. How can I help you today?";
+              }
+            } else {
+              // Default response when no system prompts are available
+              toolResult = "I'm Elixer, your friendly AI assistant. How can I help you today?";
+            }
             break;
             
             case "search_web":
@@ -617,7 +661,7 @@ export const executeToolsByGroup = async (
                   }
                   
                   console.log(`[executeToolsByGroup] Using search_web final answer (length: ${result.length})`);
-                  return createToolResult("search_web", result, "FINAL_ANSWER");
+                  return createToolResult("search_web", result, "FINAL_ANSWER", systemPrompts);
                 } else {
                   console.log(`[executeToolsByGroup] search_web suggested trying next tool: ${parsedResponse.reasoning}`);
                   // Continue to next tool
@@ -658,7 +702,7 @@ export const executeToolsByGroup = async (
               // Handle missing database result
               if (!databaseResult) {
                 console.error(`[executeToolsByGroup] Failed to get ${readableName} database (${dbFetchTime}ms)`);
-                toolResult = `I couldn't access the ${readableName} database. The database may be temporarily unavailable.`;
+                toolResult = `I couldn't access the ${readableName} database. It may be temporarily unavailable.`;
                 break;
               }
               
@@ -790,7 +834,7 @@ I have access to the following database:\n\n`;
           // This would use similar logic to executeToolsSequentially
           
           // For now, assume it's a final answer
-          return createToolResult(tool, toolResult, "FINAL_ANSWER");
+          return createToolResult(tool, toolResult, "FINAL_ANSWER", systemPrompts);
         }
       } catch (error) {
         console.error(`[executeToolsByGroup] Error executing tool ${tool}:`, error);
@@ -823,6 +867,7 @@ I have access to the following database:\n\n`;
           let rawDatabase = null;
           let databaseName = "";
           let databaseMetadata = {};
+          let remainingTools = toolGroups.slice(groupIndex).flat().filter(t => t !== tool);
           
           try {
             switch (tool) {
@@ -929,8 +974,28 @@ I have access to the following database:\n\n`;
                       }
                     }
                     
-                    // Execute the search
-                    const searchResponse = await chat.sendMessage(query);
+                    // Add system prompts if available
+                    const systemPromptsText = combineSystemPrompts(systemPrompts);
+                    
+                    // Create a prompt that includes system identity and instructions
+                    // Get remaining tools for context (all tools in the current group and later groups)
+                    const remainingToolGroups = toolGroups.slice(groupIndex);
+                    const remainingTools = remainingToolGroups.flat().filter(t => t !== tool);
+                    console.log(`[executeToolsByGroup] Remaining tools for parallel execution: ${JSON.stringify(remainingTools)}`);
+                    
+                    const searchPrompt = `
+${systemPromptsText}I need information about: "${query}"
+
+TOOLS INFORMATION:
+- Current tool: search_web (Web Search)
+- Remaining tools to try if needed: ${remainingTools.join(", ")}
+
+Please search the web and provide a comprehensive answer based on reliable sources.
+`;
+                    
+                    // Execute the search with system prompts included
+                    console.log(`[executeToolsByGroup] Parallel search with system prompts (${systemPromptsText.length > 0 ? 'included' : 'not available'})`); 
+                    const searchResponse = await chat.sendMessage(searchPrompt);
                     result = searchResponse.response.text();
                     
                     // Check for search suggestions metadata
@@ -953,7 +1018,7 @@ I have access to the following database:\n\n`;
             
             const toolTime = Date.now() - toolStartTime;
             console.log(`[executeToolsByGroup] Tool ${tool} completed in ${toolTime}ms`);
-            return { tool, result, rawDatabase, databaseName, databaseMetadata, executionTime: toolTime };
+            return { tool, result, rawDatabase, databaseName, databaseMetadata, executionTime: toolTime, remainingTools };
           } catch (error) {
             const toolTime = Date.now() - toolStartTime;
             console.error(`[executeToolsByGroup] Error in parallel tool ${tool}: ${error instanceof Error ? error.message : String(error)}`);
@@ -995,7 +1060,7 @@ I have access to the following databases:\n\n`;
         // Add each database with a clear label
         let databaseCount = 0;
         let hasWebSearchResults = false;
-        validResults.forEach(({ tool, databaseName, rawDatabase, result, databaseMetadata }) => {
+        validResults.forEach(({ tool, databaseName, rawDatabase, result, databaseMetadata, remainingTools }) => {
           if (rawDatabase) {
             databaseCount++;
             const readableName = databaseName.replace(/_/g, " ");
@@ -1048,7 +1113,8 @@ I have access to the following databases:\n\n`;
           return createToolResult(
             "parallel_databases", 
             aiResponse,
-            "FINAL_ANSWER"
+            "FINAL_ANSWER",
+            systemPrompts
           );
         } catch (aiError) {
           // Handle AI-specific errors
@@ -1056,7 +1122,8 @@ I have access to the following databases:\n\n`;
           return createToolResult(
             "parallel_databases_error", 
             `I encountered an error while analyzing the databases. The AI processing system may be temporarily unavailable.`,
-            "FINAL_ANSWER"
+            "FINAL_ANSWER",
+            systemPrompts
           );
         }
       } catch (error) {
@@ -1067,7 +1134,8 @@ I have access to the following databases:\n\n`;
         return createToolResult(
           "parallel_error", 
           `I encountered an error while searching multiple databases. The system may be temporarily unavailable.`,
-          "FINAL_ANSWER"
+          "FINAL_ANSWER",
+          systemPrompts
         );
       }
     }
@@ -1080,14 +1148,16 @@ I have access to the following databases:\n\n`;
   return createToolResult(
     "fallback", 
     "I've searched through all available sources but couldn't find specific information to answer your question. You might want to try rephrasing your question or providing more specific details about what you're looking for.",
-    "FINAL_ANSWER"
+    "FINAL_ANSWER",
+    systemPrompts
   );
   // Handle any remaining fallback case
   console.log(`[executeToolsByGroup] Returning generic fallback response`);
   return createToolResult(
     "system_error", 
     `I apologize, but I encountered a system error while processing your request. This might be a temporary issue. Please try again in a moment.`,
-    "FINAL_ANSWER"
+    "FINAL_ANSWER",
+    systemPrompts
   );
 };
 
@@ -1274,7 +1344,7 @@ CONVERSATION HISTORY:
               }
             }
             
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType);
+            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
           } else {
             console.log(`[executeToolsSequentially] no_tool suggested trying next tool: ${parsedResponse.reasoning}`);
             // Continue to next tool
@@ -1408,7 +1478,7 @@ CONVERSATION HISTORY:
           
           if (parsedResponse.responseType === "FINAL_ANSWER") {
             console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${parsedResponse.content.length})`);
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType);
+            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
           } else {
             console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
             // Continue to next tool
@@ -1512,7 +1582,7 @@ CONVERSATION HISTORY:
           
           if (parsedResponse.responseType === "FINAL_ANSWER") {
             console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${parsedResponse.content.length})`);
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType);
+            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
           } else {
             console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
             // Continue to next tool
@@ -1618,7 +1688,7 @@ CONVERSATION HISTORY:
           
           if (parsedResponse.responseType === "FINAL_ANSWER") {
             console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${parsedResponse.content.length})`);
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType);
+            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
           } else {
             console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
             // Continue to next tool
@@ -1631,8 +1701,8 @@ CONVERSATION HISTORY:
         
       case "search_web":
         try {
-          console.log(`[executeToolsSequentially] Using one-call search_web for query: ${query}`);
-          
+          console.log(`[executeToolsSequentially] Using search web for query: ${query}`);
+
           // Get remaining tools for context
           const remainingTools = rankedTools.slice(rankedTools.indexOf(tool) + 1);
           console.log(`[executeToolsSequentially] Remaining tools: ${JSON.stringify(remainingTools)}`);
@@ -1653,11 +1723,9 @@ CONVERSATION HISTORY:
             tools: [googleSearchTool]
           });
           
-          console.log(`[executeToolsSequentially] Preparing one-call search with structured response format`);
-          
           // If we have conversation history, use it for context-aware search
           if (conversationHistory && conversationHistory.length > 0) {
-            console.log(`[executeToolsSequentially] Using conversation history (${conversationHistory.length} messages) for context-aware search`);
+            console.log(`[executeToolsSequentially] Using conversation history for search_web`);
             
             // Initialize the chat with conversation history
             for (let i = 0; i < conversationHistory.length - 1; i++) {
@@ -1666,14 +1734,12 @@ CONVERSATION HISTORY:
                 await chat.sendMessage(msg.parts[0].text);
               }
             }
-          } else {
-            console.log(`[executeToolsSequentially] No conversation history available, using only current query`);
           }
           
-          // Create a specialized search prompt that includes instructions for structured response
           // Add system prompts if available
           const systemPromptsText = combineSystemPrompts(systemPrompts);
           
+          // Create a prompt that includes system identity and instructions
           const searchPrompt = `
 ${systemPromptsText}I need information about: "${query}"
 
@@ -1757,7 +1823,7 @@ CONVERSATION HISTORY:
             }
             
             console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${result.length})`);
-            return createToolResult(tool, result, "FINAL_ANSWER");
+            return createToolResult(tool, result, "FINAL_ANSWER", systemPrompts);
           } else {
             console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
             // Continue to next tool
@@ -1899,7 +1965,7 @@ CONVERSATION HISTORY:
           
           if (parsedResponse.responseType === "FINAL_ANSWER") {
             console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${parsedResponse.content.length})`);
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType);
+            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
           } else {
             console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
             // Continue to next tool
@@ -1921,6 +1987,7 @@ CONVERSATION HISTORY:
   return createToolResult(
     "fallback", 
     "After searching through all available resources, I couldn't find specific information to answer your question completely. You might want to rephrase or provide more details about what you're looking for.",
-    "FINAL_ANSWER"
+    "FINAL_ANSWER",
+    systemPrompts
   );
 };
