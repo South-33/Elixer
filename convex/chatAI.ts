@@ -5,45 +5,35 @@ import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from "@google/generative-ai";
 import { Id } from "./_generated/dataModel";
-import { rankInformationSources, executeToolsSequentially, estimateTokenCount } from "./agentTools";
+import { rankInformationSources, executeToolsByGroup, estimateTokenCount } from "./agentTools";
 
 // --- Hardcoded Prompts ---
 const STYLING_PROMPT = `Use standard Markdown for formatting your responses.
 
+For document structure:
+  - Use ### for section headings (three hash symbols followed by a space)
+  - Use #### for subsection headings (four hash symbols followed by a space)
+  - Separate paragraphs with a blank line between them for better readability
+
 For emphasis (making text stand out):
-  - Use *italic text* for italics (single asterisks or underscores surrounding the text).
-  - Use **bold text** for bold (double asterisks or underscores surrounding the text).
+  - Use *italic text* for italics (single asterisks surrounding the text)
+  - Use **bold text** for bold (double asterisks surrounding the text)
+  - Use ***bold italic text*** for important points or legal definitions
 
 For lists of items:
-  - Each item must be on a new line.
-  - For bulleted lists, consistently start EACH item in the list with \`- \` (a hyphen followed by a space) OR consistently start EACH item in the list with \`* \` (an asterisk followed by a space). Do not mix these markers within a single list. Example of a correct list:
-    - Item A
-    - Item B
-    - Item C
-  - For numbered lists, consistently start EACH item in the list with \`1. \`, \`2. \`, etc. (a number, a period, then a space).
-If you are presenting multiple related items sequentially that form a conceptual list (like a list of names, features, or steps), YOU MUST use one of the above Markdown list formats for ALL items in that list for visual consistency. Do not present some items as plain text lines and others as Markdown list items within the same conceptual list.
-`;
+  - Each item must be on a new line
+  - For bulleted lists, consistently start EACH item with \`- \` (a hyphen followed by a space)
+  - For numbered lists, consistently start EACH item with \`1. \`, \`2. \`, etc. (a number, a period, then a space)
+  - For any list of multiple related items, ALWAYS use proper Markdown list formatting for visual consistency
 
-const WEB_SEARCH_USAGE_INSTRUCTIONS = `
-**Regarding Web Search Information If Provided:**
-*   If web search snippets ARE PROVIDED to you, your primary task is to synthesize information from them to answer the user's question directly and concisely.
-*   If the provided snippets clearly answer the question, use them.
-*   **If the user asks for a specific number of items (e.g., "top 5 companies," "3 main benefits") AND web search results are provided, you MUST attempt to extract that specific number of relevant items from the provided web search snippets.
-    *   If the snippets provide enough distinct and relevant items, list exactly the number requested.
-    *   If the snippets mention fewer relevant items than requested, list what you find and clearly state that the search provided only that many examples.
-    *   If the snippets mention more items than requested but don't offer a clear ranking or criteria to select the "top" ones, you may list a selection up to the requested number, and then state that the snippets mentioned other companies/items as well but a definitive top [number] wasn't clear from the provided information.
-    *   Always prioritize relevance to the user's query when selecting items from search results.
-*   **Crucially: If you are listing multiple distinct items extracted or derived from web search snippets, YOU MUST format this as a Markdown bulleted list. Each item should start with \`- \` (a hyphen followed by a space) on a new line. Be consistent for all items in such a list.**
-    Example of how to list companies from search (if user asked for top 3 and search results were provided):
-    Information from web sources suggests some prominent companies include:
-    - Company X
-    - Company Y
-    - Company Z
-    (If more were mentioned but no clear ranking: "Other companies were also mentioned in the search results.")
-*   If web search snippets are provided but do not contain a direct answer, if the information is conflicting/unclear, or if the search indicated no relevant information was found for the query, state that the web search did not provide a definitive answer for that specific query.
-*   **Under no circumstances should you mention the process of web searching, "scraping data," "technical issues with searching," or imply that you are performing the search yourself if you use web search data.** You are being *provided* with summaries. You should not say things like "Based on my web search..." but rather "Information from web sources suggests..." or "Some mentioned examples include:".
-*   If the web search information (passed to you in the system prompt) indicates a timeout or an error in retrieving data, simply inform the user that the requested information could not be retrieved via web search at this time, without detailing the error.
-*   If NO web search information is provided, answer based on your general knowledge. Do not invent search results or apologize for not searching.
+For legal citations and quotes:
+  - Use > at the beginning of a line to format direct quotes or legal citations (a greater-than symbol followed by a space)
+  - Use \`inline code\` formatting (with backticks) for specific article numbers or section references
+
+For tables (when comparing multiple items):
+  | Column 1 | Column 2 | Column 3 |
+  | -------- | -------- | -------- |
+  | Data     | Data     | Data     |
 `;
 
 
@@ -694,7 +684,7 @@ export const getAIResponse = action({
       let rankingResult;
       if (disableTools) {
         console.log(`[getAIResponse] Tools disabled by user setting, using only no_tool`);
-        rankingResult = { rankedTools: ["no_tool"] };
+        rankingResult = { rankedToolGroups: [["no_tool"]] };
       } else {
         // Only pass system prompts if they're not disabled
         const systemPromptsToUse = disableSystemPrompt ? undefined : {
@@ -715,14 +705,14 @@ export const getAIResponse = action({
         );
       }
       
-      const { rankedTools, directResponse } = rankingResult;
+      const { rankedToolGroups, directResponse } = rankingResult;
       
-      // Log the ranked tools
-      console.log(`[getAIResponse] Ranked tools: ${JSON.stringify(rankedTools)}`);
+      // Log the ranked tool groups
+      console.log(`[getAIResponse] Ranked tool groups: ${JSON.stringify(rankedToolGroups)}`);
       
       // Fast path: If no_tool is ranked first and we have a direct response, use it immediately
       // The rankInformationSources function already includes conversation history in the prompt
-      if (rankedTools[0] === "no_tool" && directResponse) {
+      if (rankedToolGroups.length > 0 && rankedToolGroups[0].length === 1 && rankedToolGroups[0][0] === "no_tool" && directResponse) {
         console.log(`[getAIResponse] OPTIMIZATION: Using direct response from ranking call (${directResponse.length} chars)`);
         
         // Set appropriate processing phase for the direct response path
@@ -760,9 +750,11 @@ export const getAIResponse = action({
         responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL";
       };
       
-      // 3. Execute tools sequentially until an answer is found
-      const toolResults = await executeToolsSequentially(
-        rankedTools,
+      // 3. Execute tools by priority groups, with parallel execution within groups
+      console.log(`[getAIResponse] Using new parallel tool execution with ${rankedToolGroups.length} groups`);
+      
+      const toolResults = await executeToolsByGroup(
+        rankedToolGroups,
         userMessage,
         ctx,
         genAI,
@@ -811,16 +803,7 @@ ${dynamicPrompts}
       }
       
       // Always include these parts regardless of system prompt setting
-      finalSystemInstruction += `
-${WEB_SEARCH_USAGE_INSTRUCTIONS}
-// The instructions above specifically guide how you MUST use and refer to any web search information IF IT IS PROVIDED to you.
 
-Your primary goal is to answer the user's question.
-- Generate a complete and helpful response to the user's question based on the information provided.
-- Format any lists as proper Markdown bulleted lists.
-- Be concise and directly address the user's original question.
-- Do not mention where the information came from, just provide the answer.
-`;
       console.log("[getAIResponse] Final System Instruction (first 500 chars):", finalSystemInstruction.substring(0, 500) + "...");
 
       // Note: We already created the message placeholder and ranked tools above
@@ -929,7 +912,7 @@ User question: "${userMessage}"
       console.log(`[getAIResponse] Sending prompt to Gemini. Length: ${messageToSendToGemini.length} chars, ~${promptTokens} tokens`);
       
       // If this came from a database and we have multiple tools, ask the AI if it needs to check another source
-      if (toolResults.source.startsWith('query_') && rankedTools.length > 1) {
+      if (toolResults.source.startsWith('query_') && rankedToolGroups.flat().length > 1) {
         // Add a check to see if the AI should continue searching other databases
         const checkMoreSources = `\n\n--- IMPORTANT INSTRUCTION FOR AI ONLY ---\nBased on the information from ${toolResults.source}, can you find the specific information about "${userMessage}"?\nIf you found the exact information requested, respond with your normal answer.\nIf you CANNOT find the specific information requested, add this EXACT text at the end of your response: \"[CHECK_NEXT_SOURCE]\"\n--- END OF INSTRUCTION ---`;
         
@@ -954,8 +937,9 @@ User question: "${userMessage}"
         finalResponse = finalResponse.replace('[CHECK_NEXT_SOURCE]', '');
         
         // Try the next source if available
-        if (rankedTools.length > 1) {
-          const nextTools = rankedTools.slice(1); // Remove the first tool we already tried
+        const allTools = rankedToolGroups.flat();
+        if (allTools.length > 1) {
+          const nextTools = allTools.slice(1); // Remove the first tool we already tried
           console.log(`[getAIResponse] Trying next source in ranking: ${nextTools[0]}`);
           
           // Store message indicating we're checking more sources
@@ -966,13 +950,15 @@ User question: "${userMessage}"
           
           // Execute next tool
           console.log(`[getAIResponse] Executing next tool: ${nextTools[0]}`);
-          const nextToolResults = await executeToolsSequentially(
-            nextTools,
+          const nextToolResults = await executeToolsByGroup(
+            [nextTools], // Wrap in array since executeToolsByGroup expects groups
             userMessage,
             ctx,
             genAI,
             selectedModel,
-            formattedHistory // Pass conversation history for context-aware tool execution
+            formattedHistory, // Pass conversation history for context-aware tool execution
+            undefined, // No system prompts needed here
+            messageId // Pass messageId for updating processing phase
           );
           
           // Prepare message for next tool result with full conversation context
