@@ -129,277 +129,25 @@ const ensureString = (value: any): string => {
 // Query a law database and return relevant information based on the query
 export const queryLawDatabase = async (
   query: string, 
-  lawDatabase: LawDatabase,
+  lawDatabase: any, // Allow any type to support different database formats
   conversationHistory?: { role: string; parts: { text: string; }[] }[]
 ): Promise<string> => {
-  if (!lawDatabase || !lawDatabase.chapters || !Array.isArray(lawDatabase.chapters)) {
-    return "The database structure is invalid or empty.";
+  // Just return the raw database as JSON without any validation
+  if (!lawDatabase) {
+    return "The database is empty or could not be accessed.";
   }
   
-  // Log conversation history for context
+  // Log basic database info
+  const dbSize = JSON.stringify(lawDatabase).length;
+  console.log(`[queryLawDatabase] Processing database with ${dbSize} chars of content`);
+  
+  // Log conversation history for context (just for logging purposes)
   if (conversationHistory && conversationHistory.length > 0) {
-    console.log(`[queryLawDatabase] Using conversation history with ${conversationHistory.length} messages`);
-    
-    // Log recent messages for context visibility
-    const recentMessages = conversationHistory.slice(-5); // Get the last 5 messages for context
-    for (let i = 0; i < recentMessages.length; i++) {
-      const msg = recentMessages[i];
-      const truncatedText = msg.parts[0]?.text.substring(0, 100);
-      console.log(`[queryLawDatabase] Message ${i}: ${msg.role} - ${truncatedText}${msg.parts[0]?.text.length > 100 ? '...' : ''}`);
-    }
-  } else {
-    console.log(`[queryLawDatabase] No conversation history available`);
+    console.log(`[queryLawDatabase] Including conversation context with ${conversationHistory.length} messages`);
   }
   
-  // Format the conversation history for the AI
-  let conversationContext = "";
-  if (conversationHistory && conversationHistory.length > 0) {
-    conversationContext = "\n\nConversation history:\n";
-    const recentMessages = conversationHistory.slice(-5); // Last 5 messages for context
-    for (const msg of recentMessages) {
-      if (msg.role === "user") {
-        conversationContext += `- User asked: "${msg.parts[0]?.text}"\n`;
-      } else if (msg.role === "model") {
-        conversationContext += `- AI responded about: "${msg.parts[0]?.text.substring(0, 100)}..."\n`;
-      }
-    }
-  }
-  
-  // Define interface for article collection
-  interface ArticleWithContext {
-    article: LawArticle;
-    chapter?: LawChapter;
-    section?: LawSection;
-  }
-
-  // Collect all articles from the database
-  let allArticles: ArticleWithContext[] = [];
-  
-  // Function to process articles from a chapter or section
-  const processChapterArticles = (item: LawChapter | LawSection) => {
-    if (item.articles && Array.isArray(item.articles)) {
-      for (const article of item.articles) {
-        // Log article details to help with debugging
-        if (parseInt(article.article_number) <= 5) {
-          console.log(`[queryLawDatabase] Raw article ${article.article_number} data:`, JSON.stringify(article, null, 2));
-        }
-        
-        if ('chapter_number' in item) {
-          // This is a LawChapter
-          allArticles.push({
-            article: article,
-            chapter: item as LawChapter
-          });
-        } else {
-          // This is a LawSection
-          allArticles.push({
-            article: article,
-            section: item as LawSection
-          });
-        }
-      }
-    }
-    
-    // Check sections if this is a chapter
-    if ('chapter_number' in item && item.sections && Array.isArray(item.sections)) {
-      for (const section of item.sections) {
-        if (section.articles && Array.isArray(section.articles)) {
-          for (const article of section.articles) {
-            allArticles.push({
-              article: article,
-              chapter: item as LawChapter,
-              section: section
-            });
-          }
-        }
-      }
-    }
-  };
-  
-  // Process all chapters
-  for (const chapter of lawDatabase.chapters) {
-    processChapterArticles(chapter);
-  }
-  
-  console.log(`[queryLawDatabase] Processing all ${allArticles.length} articles from the database`);
-  
-  // Add detailed logging for the first few articles to debug the "cut off" issue
-  for (let i = 0; i < Math.min(5, allArticles.length); i++) {
-    const article = allArticles[i].article;
-    console.log(`[queryLawDatabase] Article ${article.article_number} details:`);
-    console.log(`  - Title: ${article.article_title || 'Untitled'}`);
-    
-    // Log the content length and preview
-    if (typeof article.content === 'string') {
-      console.log(`  - Content type: string`);
-      console.log(`  - Content length: ${article.content.length} characters`);
-      console.log(`  - Content preview: "${article.content.substring(0, 100)}${article.content.length > 100 ? '...' : ''}"`);
-      console.log(`  - Full content: "${article.content}"`);
-    } else if (Array.isArray(article.content)) {
-      console.log(`  - Content type: array with ${article.content.length} paragraphs`);
-      for (let j = 0; j < article.content.length; j++) {
-        const paragraph = article.content[j];
-        console.log(`    - Paragraph ${j+1} length: ${paragraph.length} characters`);
-        console.log(`    - Paragraph ${j+1} preview: "${paragraph.substring(0, 100)}${paragraph.length > 100 ? '...' : ''}"`);
-        console.log(`    - Paragraph ${j+1} full: "${paragraph}"`);
-      }
-    } else {
-      console.log(`  - Content type: ${typeof article.content}`);
-      console.log(`  - Content value: ${JSON.stringify(article.content)}`);
-    }
-  }
-  
-  // Format all articles to provide to the AI
-  let formattedArticles = "";
-  
-  // Special handling for exact article number reference
-  const articleNumberMatch = query.match(/article\s*(\d+)/i) || 
-                             (conversationHistory && conversationHistory.length > 0 ? 
-                               conversationHistory[conversationHistory.length - 1].parts[0]?.text.match(/article\s*(\d+)/i) : null);
-                               
-  // Log the raw database structure for debugging
-  console.log(`[queryLawDatabase] Database structure overview:`);
-  console.log(`  - Chapters count: ${lawDatabase.chapters?.length || 0}`);
-  if (lawDatabase.chapters && lawDatabase.chapters.length > 0) {
-    console.log(`  - First chapter title: ${lawDatabase.chapters[0].chapter_title || 'Untitled'}`);
-    console.log(`  - First chapter articles count: ${lawDatabase.chapters[0].articles?.length || 0}`);
-  }
-  
-  if (articleNumberMatch) {
-    const articleNumber = articleNumberMatch[1];
-    console.log(`[queryLawDatabase] Detected specific request for Article ${articleNumber}`);
-    
-    // Filter to only include the specific article
-    const specificArticles = allArticles.filter(item => 
-      item.article.article_number === articleNumber ||
-      item.article.article_number === `${articleNumber}` // Handle string/number format differences
-    );
-    
-    if (specificArticles.length > 0) {
-      console.log(`[queryLawDatabase] Found ${specificArticles.length} matches for Article ${articleNumber}`);
-      
-      formattedArticles = "\n\nHere are the specific articles you requested:\n\n";
-      
-      for (const item of specificArticles) {
-        const article = item.article;
-        
-        formattedArticles += `## Article ${article.article_number}: ${article.article_title || 'Untitled'}\n`;
-        
-        if (item.section) {
-          // If we have both section and chapter
-          if (item.chapter) {
-            formattedArticles += `*From Chapter ${item.chapter.chapter_number}: ${item.chapter.chapter_title || 'Untitled'}, Section ${item.section.section_number}: ${item.section.section_title || 'Untitled'}*\n\n`;
-          } else {
-            // Just section
-            formattedArticles += `*From Section ${item.section.section_number}: ${item.section.section_title || 'Untitled'}*\n\n`;
-          }
-        } else if (item.chapter) {
-          // Just chapter
-          formattedArticles += `*From Chapter ${item.chapter.chapter_number}: ${item.chapter.chapter_title || 'Untitled'}*\n\n`;
-        } else {
-          // Neither chapter nor section (shouldn't happen, but just in case)
-          formattedArticles += `\n`;
-        }
-        
-        if (typeof article.content === 'string') {
-          formattedArticles += article.content + "\n\n";
-        } else if (Array.isArray(article.content)) {
-          for (const paragraph of article.content) {
-            formattedArticles += paragraph + "\n\n";
-          }
-        }
-        
-        formattedArticles += "---\n\n";
-      }
-    } else {
-      // If no specific article found, include all articles
-      console.log(`[queryLawDatabase] No matches found for Article ${articleNumber}, including all articles`);
-      
-      // Take first 10 articles (to avoid overwhelming the AI)
-      const topArticles = allArticles.slice(0, 10);
-      
-      formattedArticles = "\n\nI couldn't find the specific article you requested, but here are some articles that might be relevant:\n\n";
-      
-      for (const item of topArticles) {
-        const article = item.article;
-        
-        formattedArticles += `## Article ${article.article_number}: ${article.article_title || 'Untitled'}\n`;
-        
-        if (item.section) {
-          // If we have both section and chapter
-          if (item.chapter) {
-            formattedArticles += `*From Chapter ${item.chapter.chapter_number}: ${item.chapter.chapter_title || 'Untitled'}, Section ${item.section.section_number}: ${item.section.section_title || 'Untitled'}*\n\n`;
-          } else {
-            // Just section
-            formattedArticles += `*From Section ${item.section.section_number}: ${item.section.section_title || 'Untitled'}*\n\n`;
-          }
-        } else if (item.chapter) {
-          // Just chapter
-          formattedArticles += `*From Chapter ${item.chapter.chapter_number}: ${item.chapter.chapter_title || 'Untitled'}*\n\n`;
-        } else {
-          // Neither chapter nor section (shouldn't happen, but just in case)
-          formattedArticles += `\n`;
-        }
-        
-        if (typeof article.content === 'string') {
-          formattedArticles += article.content + "\n\n";
-        } else if (Array.isArray(article.content)) {
-          for (const paragraph of article.content) {
-            formattedArticles += paragraph + "\n\n";
-          }
-        }
-        
-        formattedArticles += "---\n\n";
-      }
-    }
-  } else {
-    // No specific article requested, include a reasonable number of articles
-    console.log(`[queryLawDatabase] No specific article requested, including top 10 articles`);
-    
-    // Take first 10 articles (to avoid overwhelming the AI)
-    const topArticles = allArticles.slice(0, 10);
-    
-    formattedArticles = "\n\nHere are some articles from the database that might be relevant to your query:\n\n";
-    
-    for (const item of topArticles) {
-      const article = item.article;
-      
-      formattedArticles += `## Article ${article.article_number}: ${article.article_title || 'Untitled'}\n`;
-      
-      if (item.section) {
-        // If we have both section and chapter
-        if (item.chapter) {
-          formattedArticles += `*From Chapter ${item.chapter.chapter_number}: ${item.chapter.chapter_title || 'Untitled'}, Section ${item.section.section_number}: ${item.section.section_title || 'Untitled'}*\n\n`;
-        } else {
-          // Just section
-          formattedArticles += `*From Section ${item.section.section_number}: ${item.section.section_title || 'Untitled'}*\n\n`;
-        }
-      } else if (item.chapter) {
-        // Just chapter
-        formattedArticles += `*From Chapter ${item.chapter.chapter_number}: ${item.chapter.chapter_title || 'Untitled'}*\n\n`;
-      } else {
-        // Neither chapter nor section (shouldn't happen, but just in case)
-        formattedArticles += `\n`;
-      }
-      
-      if (typeof article.content === 'string') {
-        formattedArticles += article.content + "\n\n";
-      } else if (Array.isArray(article.content)) {
-        for (const paragraph of article.content) {
-          formattedArticles += paragraph + "\n\n";
-        }
-      }
-      
-      formattedArticles += "---\n\n";
-    }
-  }
-  
-  // Build the complete response for the AI
-  const resultText = `Based on your query: "${query}"${conversationContext}${formattedArticles}`;
-  
-  console.log(`[queryLawDatabase] Generated formatted response. Length: ${resultText.length} chars`);
-  
-  return resultText;
+  // Return the entire database for the AI to process
+  return JSON.stringify(lawDatabase, null, 2);
 };
 
 // Return type for rankInformationSources that includes optional direct response
@@ -741,11 +489,144 @@ export const executeToolsByGroup = async (
             toolResult = "I'll answer based on my general knowledge.";
             break;
             
-          case "search_web":
-            // Web search logic
-            console.log(`[executeToolsByGroup] Executing web search for: ${query}`);
-            // Implement web search logic similar to executeToolsSequentially
-            break;
+            case "search_web":
+              try {
+                console.log(`[executeToolsByGroup] Using web search for query: ${query}`);
+                
+                // Get remaining tools for context
+                const remainingTools = toolGroups.slice(groupIndex + 1).flat();
+                console.log(`[executeToolsByGroup] Remaining tools: ${JSON.stringify(remainingTools)}`);
+                
+                // Define the Google Search tool
+                const googleSearchTool: GenAITool = {
+                  googleSearch: {}
+                };
+                
+                // Configure the model with Google Search tool
+                const searchModel = genAI.getGenerativeModel({
+                  model: selectedModel || "gemini-2.5-flash-preview-04-17",
+                  tools: [googleSearchTool]
+                });
+                
+                // Create a chat session with the search tool enabled
+                const chat = searchModel.startChat({
+                  tools: [googleSearchTool]
+                });
+                
+                console.log(`[executeToolsByGroup] Preparing search with structured response format`);
+                
+                // If we have conversation history, use it for context-aware search
+                if (conversationHistory && conversationHistory.length > 0) {
+                  console.log(`[executeToolsByGroup] Using conversation history (${conversationHistory.length} messages) for context-aware search`);
+                  
+                  // Initialize the chat with conversation history
+                  for (let i = 0; i < conversationHistory.length - 1; i++) {
+                    const msg = conversationHistory[i];
+                    if (msg.role === "user") {
+                      await chat.sendMessage(msg.parts[0].text);
+                    }
+                  }
+                } else {
+                  console.log(`[executeToolsByGroup] No conversation history available, using only current query`);
+                }
+                
+                // Create a specialized search prompt that includes instructions for structured response
+                // Add system prompts if available
+                const systemPromptsText = combineSystemPrompts(systemPrompts);
+                
+                const searchPrompt = `
+            ${systemPromptsText}I need information about: "${query}"
+            
+            IMPORTANT: When interpreting this query, consider the ENTIRE conversation context to determine what to search for. 
+            
+            If the query is short or ambiguous (like "how about X" or "what about Y"), use the conversation context to determine the FULL search intent. 
+            For example:
+            - If we were previously discussing stock prices and the user asks "how about nvidia", search for "current nvidia stock price"
+            - If we were discussing weather and user asks "what about LA", search for "current weather in Los Angeles"
+            
+            Do not just search for the literal query text if context provides more information about the user's intent.
+            
+            Please search the web and analyze if you can find relevant information.
+            
+            TOOLS INFORMATION:
+            - Current tool: search_web (Web Search)
+            - Remaining tools to try if needed: ${remainingTools.join(", ")}
+            
+            RESPONSE FORMAT:
+            [RESPONSE_TYPE: FINAL_ANSWER or TRY_NEXT_TOOL]
+            [CONTENT]
+            Your answer here...
+            [/CONTENT]
+            [REASONING]
+            Brief explanation of why you chose this response type
+            [/REASONING]
+            
+            RESPONSE GUIDELINES:
+            - Use FINAL_ANSWER if you found sufficient information to answer the query
+            - Use TRY_NEXT_TOOL if you couldn't find relevant information or if the information is insufficient
+            
+            If using FINAL_ANSWER, provide a complete, helpful response that directly addresses the query.
+            If using TRY_NEXT_TOOL, briefly explain why the search results weren't sufficient.
+            `;
+                
+                // Add conversation context to the search prompt
+                let promptWithHistory = searchPrompt;
+                if (conversationHistory && conversationHistory.length > 0) {
+                  promptWithHistory += `
+            
+            CONVERSATION HISTORY:
+            `;
+                  
+                  // Include ALL conversation history, not just a subset
+                  for (const msg of conversationHistory) {
+                    if (msg.role === "user") {
+                      promptWithHistory += `User: ${msg.parts[0]?.text}
+            
+            `;
+                    } else if (msg.role === "model") {
+                      promptWithHistory += `Assistant: ${msg.parts[0]?.text}
+            
+            `;
+                    }
+                  }
+                }
+                
+                // Execute the search with the structured prompt in a single API call
+                console.log(`[executeToolsByGroup] Sending search with structured prompt`);
+                const searchResponse = await chat.sendMessage(promptWithHistory);
+                const responseText = searchResponse.response.text();
+                
+                // Parse the response to determine if it's a final answer or we should try the next tool
+                const parsedResponse = parseToolResponse(responseText);
+                console.log(`[executeToolsByGroup] Parsed response type: ${parsedResponse.responseType}`);
+                
+                // Check if there's grounding metadata (search results)
+                const responseAny = searchResponse as any;
+                const hasGroundingMetadata = responseAny.candidates?.[0]?.groundingMetadata;
+                
+                // Add search suggestions if available and it's a final answer
+                if (parsedResponse.responseType === "FINAL_ANSWER") {
+                  let result = parsedResponse.content;
+                  
+                  if (hasGroundingMetadata && responseAny.candidates?.[0]?.groundingMetadata?.searchEntryPoint) {
+                    const searchSuggestionsHtml = responseAny.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
+                    console.log(`[executeToolsByGroup] Search returned suggestions HTML of length: ${searchSuggestionsHtml.length}`);
+                    result += `
+            
+            <!-- SEARCH_SUGGESTIONS_HTML:${searchSuggestionsHtml} -->`;
+                  }
+                  
+                  console.log(`[executeToolsByGroup] Using search_web final answer (length: ${result.length})`);
+                  return createToolResult("search_web", result, "FINAL_ANSWER");
+                } else {
+                  console.log(`[executeToolsByGroup] search_web suggested trying next tool: ${parsedResponse.reasoning}`);
+                  // Continue to next tool
+                  toolResult = ""; // Clear tool result to ensure we don't use it
+                }
+              } catch (error) {
+                console.error(`[executeToolsByGroup] Error using search_web: ${error}`);
+              }
+              break;
             
           case "query_law_on_insurance":
           case "query_law_on_consumer_protection":
@@ -754,7 +635,7 @@ export const executeToolsByGroup = async (
             const dbQueryStartTime = Date.now();
             const databaseName = tool === "query_law_on_insurance" ? "Law_on_Insurance" :
                               tool === "query_law_on_consumer_protection" ? "Law_on_Consumer_Protection" :
-                              "Insurance_QnA";
+                              "Insurance_and_reinsurance_in_Cambodia_QnA_format";
             const readableName = databaseName.replace(/_/g, " ");
             
             console.log(`[executeToolsByGroup] Querying ${readableName} database`);
@@ -800,22 +681,34 @@ export const executeToolsByGroup = async (
                   break;
                 }
                 
-                // Get the raw database and validate structure
+                // Get the raw database
                 const rawDatabase = databaseContent[databaseName];
                 const dbSize = JSON.stringify(rawDatabase).length;
                 
-                // Log database metadata instead of full content
-                const chaptersCount = rawDatabase.chapters?.length || 0;
-                const articlesCount = rawDatabase.chapters?.reduce((count: number, chapter: LawChapter) => 
-                  count + (chapter.articles?.length || 0), 0) || 0;
-                
-                console.log(`[executeToolsByGroup] ${readableName} database loaded: ${dbSize} chars, ${chaptersCount} chapters, ~${articlesCount} articles (${dbFetchTime}ms)`);
-                
-                // Check if database is empty or has no useful content
-                if (chaptersCount === 0 || articlesCount === 0) {
-                  console.warn(`[executeToolsByGroup] ${readableName} database appears to be empty (${chaptersCount} chapters, ${articlesCount} articles)`);
-                  toolResult = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
-                  break;
+                // Skip structure validation for QnA format database
+                if (databaseName === "Insurance_and_reinsurance_in_Cambodia_QnA_format") {
+                  console.log(`[executeToolsByGroup] ${readableName} database loaded: ${dbSize} chars (QnA format) (${dbFetchTime}ms)`);
+                  
+                  // Check if database is empty based on size
+                  if (dbSize < 50) {
+                    console.warn(`[executeToolsByGroup] ${readableName} database appears to be empty (${dbSize} chars)`);
+                    toolResult = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
+                    break;
+                  }
+                } else {
+                  // For regular law databases with chapters and articles structure
+                  const chaptersCount = rawDatabase.chapters?.length || 0;
+                  const articlesCount = rawDatabase.chapters?.reduce((count: number, chapter: LawChapter) => 
+                    count + (chapter.articles?.length || 0), 0) || 0;
+                  
+                  console.log(`[executeToolsByGroup] ${readableName} database loaded: ${dbSize} chars, ${chaptersCount} chapters, ~${articlesCount} articles (${dbFetchTime}ms)`);
+                  
+                  // Check if database is empty or has no useful content
+                  if (chaptersCount === 0 || articlesCount === 0) {
+                    console.warn(`[executeToolsByGroup] ${readableName} database appears to be empty (${chaptersCount} chapters, ${articlesCount} articles)`);
+                    toolResult = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
+                    break;
+                  }
                 }
                 
                 // Create a prompt for the AI with the labeled database
@@ -939,7 +832,7 @@ I have access to the following database:\n\n`;
                 // Extract the database name from the tool name
                 databaseName = tool === "query_law_on_insurance" ? "Law_on_Insurance" :
                                tool === "query_law_on_consumer_protection" ? "Law_on_Consumer_Protection" :
-                               "Insurance_QnA";
+                               "Insurance_and_reinsurance_in_Cambodia_QnA_format";
                 const readableName = databaseName.replace(/_/g, " ");
                 
                 console.log(`[executeToolsByGroup] Parallel query: ${readableName}`);
@@ -988,18 +881,13 @@ I have access to the following database:\n\n`;
                   rawDatabase = databaseContent[databaseName];
                   const dbSize = JSON.stringify(rawDatabase).length;
                   
-                  // Log database metadata instead of full content
-                  const chaptersCount = rawDatabase.chapters?.length || 0;
-                  const articlesCount = rawDatabase.chapters?.reduce((count: number, chapter: LawChapter) => 
-                    count + (chapter.articles?.length || 0), 0) || 0;
+                  // Log basic database info without any structure validation
+                  databaseMetadata = { dbSize, dbFetchTime };
+                  console.log(`[executeToolsByGroup] ${readableName} loaded: ${dbSize} chars (${dbFetchTime}ms)`);
                   
-                  databaseMetadata = { chaptersCount, articlesCount, dbSize, dbFetchTime };
-                  
-                  console.log(`[executeToolsByGroup] ${readableName} loaded: ${dbSize} chars, ${chaptersCount} chapters, ~${articlesCount} articles (${dbFetchTime}ms)`);
-                  
-                  // Check if database is empty
-                  if (chaptersCount === 0 || articlesCount === 0) {
-                    console.warn(`[executeToolsByGroup] ${readableName} appears empty (${chaptersCount} chapters, ${articlesCount} articles)`);
+                  // Only check if it's completely empty based on raw size
+                  if (dbSize < 50) {
+                    console.warn(`[executeToolsByGroup] ${readableName} appears empty (${dbSize} chars)`);
                     result = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
                   }
                 } catch (parseError) {
@@ -1008,17 +896,59 @@ I have access to the following database:\n\n`;
                 }
                 break;
                 
-              case "search_web":
-                // Web search logic
-                console.log(`[executeToolsByGroup] Web search started`);
-                // Implement web search logic
-                result = `Sample web search result`; // Placeholder
-                break;
-                
-              default:
-                console.log(`[executeToolsByGroup] Unknown tool in parallel execution: ${tool}`);
-                result = `I don't know how to use the tool: ${tool}`;
-                break;
+                case "search_web":
+                  try {
+                    console.log(`[executeToolsByGroup] Parallel web search started for: ${query}`);
+                    
+                    // Define the Google Search tool
+                    const googleSearchTool: GenAITool = {
+                      googleSearch: {}
+                    };
+                    
+                    // Configure the model with Google Search tool
+                    const searchModel = genAI.getGenerativeModel({
+                      model: selectedModel || "gemini-2.5-flash-preview-04-17",
+                      tools: [googleSearchTool]
+                    });
+                    
+                    // Create a chat session with the search tool enabled
+                    const chat = searchModel.startChat({
+                      tools: [googleSearchTool]
+                    });
+                    
+                    // If we have conversation history, use it for context-aware search
+                    if (conversationHistory && conversationHistory.length > 0) {
+                      console.log(`[executeToolsByGroup] Using conversation history for parallel search`);
+                      
+                      // Initialize the chat with conversation history
+                      for (let i = 0; i < conversationHistory.length - 1; i++) {
+                        const msg = conversationHistory[i];
+                        if (msg.role === "user") {
+                          await chat.sendMessage(msg.parts[0].text);
+                        }
+                      }
+                    }
+                    
+                    // Execute the search
+                    const searchResponse = await chat.sendMessage(query);
+                    result = searchResponse.response.text();
+                    
+                    // Check for search suggestions metadata
+                    const responseAny = searchResponse as any;
+                    if (responseAny.candidates?.[0]?.groundingMetadata?.searchEntryPoint) {
+                      const searchSuggestionsHtml = responseAny.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
+                      console.log(`[executeToolsByGroup] Parallel search returned suggestions HTML: ${searchSuggestionsHtml.length} chars`);
+                      
+                      // Append search suggestions as a special comment for later extraction
+                      result += `\n\n<!-- SEARCH_SUGGESTIONS_HTML:${searchSuggestionsHtml} -->`;
+                    }
+                    
+                    console.log(`[executeToolsByGroup] Parallel web search completed, result length: ${result.length}`);
+                  } catch (error) {
+                    console.error(`[executeToolsByGroup] Error in parallel web search: ${error instanceof Error ? error.message : String(error)}`);
+                    result = `I encountered an error while searching the web: ${error instanceof Error ? error.message : String(error)}`;
+                  }
+                  break;
             }
             
             const toolTime = Date.now() - toolStartTime;
@@ -1064,11 +994,15 @@ I have access to the following databases:\n\n`;
         
         // Add each database with a clear label
         let databaseCount = 0;
-        validResults.forEach(({ tool, databaseName, rawDatabase, databaseMetadata }) => {
+        let hasWebSearchResults = false;
+        validResults.forEach(({ tool, databaseName, rawDatabase, result, databaseMetadata }) => {
           if (rawDatabase) {
             databaseCount++;
             const readableName = databaseName.replace(/_/g, " ");
             prompt += `### ${readableName} Database:\n\n\`\`\`json\n${JSON.stringify(rawDatabase, null, 2)}\n\`\`\`\n\n`;
+          } else if (tool === "search_web" && result && result.trim() !== "") {
+            hasWebSearchResults = true;
+            prompt += `### Web Search Results:\n\n${result}\n\n`;
           }
         });
         
@@ -1083,7 +1017,7 @@ I have access to the following databases:\n\n`;
           });
         }
         
-        prompt += `\nPlease analyze ${databaseCount > 1 ? 'these databases' : 'this database'} and provide a comprehensive answer to my query. Format your response using proper markdown.`;
+        prompt += `\nPlease analyze ${hasWebSearchResults ? (databaseCount > 0 ? 'these databases and web search results' : 'these web search results') : (databaseCount > 1 ? 'these databases' : 'this database')} and provide a comprehensive answer to my query. Format your response using proper markdown.`;
         
         // Estimate token count for logging
         const estimatedTokens = estimateTokenCount(prompt);
@@ -1091,7 +1025,7 @@ I have access to the following databases:\n\n`;
         
         // Use the model to generate a response based on the labeled databases
         try {
-          console.log(`[executeToolsByGroup] Sending parallel prompt with ${databaseCount} databases to AI`);
+          console.log(`[executeToolsByGroup] Sending parallel prompt with ${databaseCount} databases${hasWebSearchResults ? ' and web search results' : ''} to AI`);
           const aiStartTime = Date.now();
           const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
           const response = await model.generateContent(prompt);
@@ -1601,20 +1535,20 @@ CONVERSATION HISTORY:
           const qnaDb = await ctx.runQuery(api.lawDatabases.getLawDatabaseContentByName, { 
             name: "Insurance_and_reinsurance_in_Cambodia_QnA_format" 
           });
-          console.log(`[executeToolsSequentially] Insurance_QnA query result success: ${qnaDb.success}, has database: ${!!qnaDb.database}`);
+          console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format query result success: ${qnaDb.success}, has database: ${!!qnaDb.database}`);
           
           let toolData = "";
           
           if (qnaDb.success && qnaDb.database && qnaDb.database.content) {
-            console.log(`[executeToolsSequentially] Insurance_QnA database found with content`);
+            console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format database found with content`);
             
             // Get the database query results
             toolData = await queryLawDatabase(query, qnaDb.database.content, conversationHistory);
-            console.log(`[executeToolsSequentially] Insurance_QnA query result length: ${toolData.length}`);
-            console.log(`[executeToolsSequentially] Insurance_QnA query result preview: ${toolData.substring(0, 100)}...`);
+            console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format query result length: ${toolData.length}`);
+            console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format query result preview: ${toolData.substring(0, 100)}...`);
           } else {
             toolData = "The Insurance Q&A database is not available or could not be accessed.";
-            console.log(`[executeToolsSequentially] Insurance_QnA database not found or query unsuccessful`);
+            console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format database not found or query unsuccessful`);
           }
           
           // Create a specialized prompt that includes tool context and response format
