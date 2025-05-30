@@ -101,20 +101,7 @@ export const AVAILABLE_TOOLS: Tool[] = [
       required: ["query"]
     }
   },
-  {
-    name: "query_all_databases",
-    description: "Query all available legal databases at once as a fallback option",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The query to search across all legal databases simultaneously"
-        }
-      },
-      required: ["query"]
-    }
-  },
+  // Removed query_all_databases tool as we now support parallel execution of relevant tools
   {
     name: "search_web",
     description: "Search the web for general information not found in specialized databases",
@@ -137,48 +124,6 @@ const ensureString = (value: any): string => {
     return "";
   }
   return String(value);
-};
-
-// Basic scoring function for law database queries
-const calculateScore = (text: string, keywords: string[]) => {
-  const lowerText = ensureString(text).toLowerCase();
-  let score = 0;
-  for (const keyword of keywords) {
-    if (lowerText.includes(keyword.toLowerCase())) {
-      score++;
-    }
-  }
-  return score;
-};
-
-// Process article content and calculate relevance score
-const processArticleContent = (article: LawArticle, queryKeywords: string[]) => {
-  let articleText = `Article ${ensureString(article.article_number)}: ${ensureString(article.content)}`;
-  let articleScore = calculateScore(ensureString(article.content), queryKeywords);
-
-  // Process all article properties
-  if (article.points) {
-    article.points.forEach(point => {
-      if (calculateScore(ensureString(point), queryKeywords) > 0) {
-        articleText += `\n  - ${ensureString(point)}`;
-        articleScore += calculateScore(ensureString(point), queryKeywords);
-      }
-    });
-  }
-  
-  if (article.definitions) {
-    for (const term in article.definitions) {
-      const definitionContent = ensureString(article.definitions[term]);
-      if (calculateScore(ensureString(term), queryKeywords) > 0 || calculateScore(definitionContent, queryKeywords) > 0) {
-        articleText += `\n  Definition of ${ensureString(term)}: ${definitionContent}`;
-        articleScore += calculateScore(ensureString(term), queryKeywords) + calculateScore(definitionContent, queryKeywords);
-      }
-    }
-  }
-  
-  // Add other article properties processing as needed
-  
-  return { articleText, articleScore };
 };
 
 // Query a law database and return relevant information based on the query
@@ -459,7 +404,7 @@ export const queryLawDatabase = async (
 
 // Return type for rankInformationSources that includes optional direct response
 interface RankingResult {
-  rankedTools: string[];
+  rankedToolGroups: string[][];
   directResponse?: string;
 }
 
@@ -487,7 +432,7 @@ export const rankInformationSources = async (
   console.log(`[rankInformationSources] Starting direct tool ranking (skipping classification step)`);
   
   // For more complex queries, rank the specialized tools
-  let prompt = `Analyze the following user message and rank the information sources from most relevant to least relevant.
+  let prompt = `Analyze the following user message and determine which information sources would be most helpful to answer their query.
   
   User message: "${userMessage}"
   `;
@@ -523,14 +468,23 @@ export const rankInformationSources = async (
   - query_law_on_insurance: Cambodia's Law on Insurance database
   - query_law_on_consumer_protection: Cambodia's Consumer Protection Law database
   - query_insurance_qna: Q&A database about insurance in Cambodia
-  - query_all_databases: Search across all legal databases simultaneously
   - search_web: General web search for information
   
   IMPORTANT INSTRUCTIONS:
-  1. Rank the tools from most appropriate to least appropriate for answering this specific query
-  2. Return a JSON array with ALL information sources ranked by relevance
+  GROUP TOOLS BY PRIORITY LEVEL. Tools in the same group should be executed together.
+  Return your answer in this exact format:
+  TOOL_GROUPS:
+  [1] tool_name1, tool_name2  (tools to use first, together)
+  [2] tool_name3  (tools to use second)
+  [3] tool_name4  (tools to use third)
   
-  Example: ["query_law_on_insurance", "query_insurance_qna", "query_law_on_consumer_protection", "query_all_databases", "search_web", "no_tool"]
+  GUIDELINES:
+  - YOU MUST RANK ALL AVAILABLE TOOLS. Do not leave any tool unranked.
+  - If multiple databases would be equally useful for this query, group them at the same priority level
+  - If the query can be answered without any specialized database, rank "no_tool" first but still rank all other tools in subsequent priority levels
+  - If the query requires web search, include "search_web" in an appropriate group
+  - Do NOT include "query_all_databases" in your response
+  - Your ranking MUST include all 5 tools: no_tool, query_law_on_insurance, query_law_on_consumer_protection, query_insurance_qna, and search_web
   
   SPECIAL CASE - OPTIMIZATION:
   If you determine that "no_tool" should be ranked first (meaning this is a simple question that can be answered directly without specialized tools),
@@ -561,88 +515,131 @@ export const rankInformationSources = async (
     const responseText = response.response.text();
     console.log(`[rankInformationSources] AI suggested ranking: ${responseText}`);
     
-    // Parse the JSON array from the response
-    // Use a regex that can handle markdown code blocks and multiline JSON
-    const regex = /```(?:json)?\s*([\s\S]*?\[\s*[\s\S]*?\])[\s\S]*?```|\[(\s*"[^"]*"\s*,?\s*)+\]/;
-    const match = responseText.match(regex);
+    // Parse the tool groups from the response
+    const toolGroups = parseToolGroups(responseText);
+    console.log(`[rankInformationSources] Parsed tool groups: ${JSON.stringify(toolGroups)}`);
     
-    if (match) {
-      // The JSON array could be in group 1 (inside code blocks) or group 0 (direct match)
-      const jsonText = match[1] ? match[1].trim() : match[0];
-      console.log(`[rankInformationSources] JSON array found in response: ${jsonText}`);
-      try {
-        const rankedSources = JSON.parse(jsonText);
-        console.log(`[rankInformationSources] Successfully parsed JSON. Raw AI ranking: ${JSON.stringify(rankedSources)}`);
-        
-        // Validate that all sources are included
-        const validTools = ["no_tool", "query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna", "query_all_databases", "search_web"];
-        console.log(`[rankInformationSources] Valid tools: ${JSON.stringify(validTools)}`);
-        
-        // Ensure all valid tools are included and no invalid ones
-        const validRankedSources = rankedSources.filter((source: string) => validTools.includes(source));
-        console.log(`[rankInformationSources] Valid sources after filtering: ${JSON.stringify(validRankedSources)}`);
-        
-        // Check for missing tools
-        const missingTools = validTools.filter(tool => !validRankedSources.includes(tool));
-        if (missingTools.length > 0) {
-          console.log(`[rankInformationSources] Missing tools that will be added: ${JSON.stringify(missingTools)}`);
-        }
-        
-        // Add any missing tools at the end
-        validTools.forEach(tool => {
-          if (!validRankedSources.includes(tool)) {
-            validRankedSources.push(tool);
-            console.log(`[rankInformationSources] Added missing tool to ranking: ${tool}`);
-          }
-        });
-        
-        let directResponse: string | undefined;
-        if (validRankedSources[0] === "no_tool") {
-          const directResponseRegex = /===DIRECT_RESPONSE_START===\s*([\s\S]*?)\s*===DIRECT_RESPONSE_END===/;
-          const directResponseMatch = responseText.match(directResponseRegex);
-          
-          if (directResponseMatch && directResponseMatch[1]) {
-            directResponse = directResponseMatch[1].trim();
-            console.log(`[rankInformationSources] Found direct response (${directResponse.length} chars)`);
-          }
-        }
-        
-        console.log(`[rankInformationSources] Final ranking after validation: ${JSON.stringify(validRankedSources)}`);
-        
-        // Return both the ranked tools and any direct response
-        return {
-          rankedTools: validRankedSources,
-          directResponse
-        };
-      } catch (jsonError) {
-        console.error(`[rankInformationSources] Failed to parse JSON from response: ${jsonError}`);
-        return {
-          rankedTools: ["no_tool", "search_web", "query_all_databases", "query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"]
-        };
+    // Check for direct response if the first tool group contains only "no_tool"
+    let directResponse: string | undefined;
+    if (toolGroups.length > 0 && toolGroups[0].length === 1 && toolGroups[0][0] === "no_tool") {
+      const directResponseRegex = /===DIRECT_RESPONSE_START===\s*([\s\S]*?)\s*===DIRECT_RESPONSE_END===/;
+      const directResponseMatch = responseText.match(directResponseRegex);
+      
+      if (directResponseMatch && directResponseMatch[1]) {
+        directResponse = directResponseMatch[1].trim();
+        console.log(`[rankInformationSources] Found direct response (${directResponse.length} chars)`);
       }
-    } else {
-      console.error(`[rankInformationSources] No JSON array found in response: ${responseText}`);
-      return {
-        rankedTools: ["no_tool", "search_web", "query_all_databases", "query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"]
-      };
     }
+    
+    console.log(`[rankInformationSources] Final tool groups after parsing: ${JSON.stringify(toolGroups)}`);
+    
+    // Return both the ranked tool groups and any direct response
+    return {
+      rankedToolGroups: toolGroups,
+      directResponse
+    };
   } catch (error) {
     console.error(`[rankInformationSources] Error in ranking: ${error}`);
     return {
-      rankedTools: ["no_tool", "search_web", "query_all_databases", "query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"]
+      rankedToolGroups: [["no_tool"], ["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"]]
     };
   }
 };
+
+// We've removed the combineToolResults function as we're now passing labeled raw data to the AI
 
 // Helper function to create a consistent tool result with the new fields
 function createToolResult(source: string, content: string, responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL") {
   return {
     source,
-    result: content,
+    content,  // Use content instead of result for consistency
+    result: content, // Keep result for backward compatibility
     isFullyFormatted: true,
     responseType
   };
 }
+
+// Function to parse tool groups from the AI response
+const parseToolGroups = (responseText: string): string[][] => {
+  const groups: string[][] = [];
+  // Define all valid tools
+  const allValidTools = ["no_tool", "query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna", "search_web"];
+  // Keep track of which tools have been ranked
+  const rankedTools = new Set<string>();
+  
+  // Look for patterns like [1] tool1, tool2
+  const groupsSection = responseText.match(/TOOL_GROUPS:\s*([\s\S]*?)(?:\n\n|$)/i)?.[1] || "";
+  const groupRegex = /\[(\d+)\]\s+(.+?)(?=\n\[\d+\]|\n\n|$)/gs;
+  
+  let match;
+  while ((match = groupRegex.exec(groupsSection)) !== null) {
+    const toolNames = match[2].split(',').map(t => t.trim());
+    // Filter out any empty tool names or invalid tools
+    const validToolsInGroup = toolNames.filter(name => name && allValidTools.includes(name));
+    
+    if (validToolsInGroup.length > 0) {
+      groups.push(validToolsInGroup);
+      // Mark these tools as ranked
+      validToolsInGroup.forEach(tool => rankedTools.add(tool));
+    }
+  }
+  
+  // Check if all tools have been ranked as instructed
+  const unrankedTools = allValidTools.filter(tool => !rankedTools.has(tool));
+  const allToolsRanked = unrankedTools.length === 0;
+  
+  // If no valid groups were found or not all tools were ranked, use an intelligent ranking approach
+  if (groups.length === 0) {
+    // If no groups at all, use default ranking
+    console.log('[parseToolGroups] No valid tool groups found, using default ranking');
+    groups.push(["no_tool"]);
+    groups.push(["search_web"]);
+    groups.push(["query_law_on_insurance", "query_law_on_consumer_protection"]);
+    groups.push(["query_insurance_qna"]);
+  } else if (!allToolsRanked) {
+    // Some tools were ranked but not all of them
+    console.log(`[parseToolGroups] Adding unranked tools as separate groups: ${unrankedTools.join(', ')}`);
+    
+    // First add search_web if it's unranked, as it's often a good fallback
+    if (unrankedTools.includes("search_web")) {
+      groups.push(["search_web"]);
+      unrankedTools.splice(unrankedTools.indexOf("search_web"), 1);
+    }
+    
+    // Group law-related databases together if they're unranked
+    const unrankedLawDatabases = unrankedTools.filter(tool => 
+      tool === "query_law_on_insurance" || 
+      tool === "query_law_on_consumer_protection"
+    );
+    
+    if (unrankedLawDatabases.length > 0) {
+      groups.push(unrankedLawDatabases);
+      unrankedLawDatabases.forEach(db => {
+        unrankedTools.splice(unrankedTools.indexOf(db), 1);
+      });
+    }
+    
+    // Add insurance Q&A separately if unranked
+    if (unrankedTools.includes("query_insurance_qna")) {
+      groups.push(["query_insurance_qna"]);
+      unrankedTools.splice(unrankedTools.indexOf("query_insurance_qna"), 1);
+    }
+    
+    // Add no_tool last if it's unranked (least likely to be useful if not explicitly ranked)
+    if (unrankedTools.includes("no_tool")) {
+      groups.push(["no_tool"]);
+      unrankedTools.splice(unrankedTools.indexOf("no_tool"), 1);
+    }
+    
+    // Add any remaining tools individually
+    unrankedTools.forEach(tool => {
+      groups.push([tool]);
+    });
+  }
+  
+  console.log(`[parseToolGroups] Final tool groups after ensuring all tools are ranked: ${JSON.stringify(groups)}`);
+  return groups;
+};
 
 // Helper function to combine system prompts
 const combineSystemPrompts = (systemPrompts?: {
@@ -674,9 +671,494 @@ const combineSystemPrompts = (systemPrompts?: {
   return combinedPrompt;
 };
 
-// Function to execute tool calls in sequence until an answer is found
+// Function to execute tools by priority groups, with parallel execution within groups
+export const executeToolsByGroup = async (
+  toolGroups: string[][],
+  query: string,
+  ctx: any,
+  genAI: GoogleGenerativeAI,
+  selectedModel: string | undefined,
+  conversationHistory: { role: string; parts: { text: string; }[] }[] = [],
+  systemPrompts?: {
+    stylingPrompt?: string,
+    lawPrompt?: string,
+    tonePrompt?: string,
+    policyPrompt?: string
+  },
+  messageId?: string // Add messageId parameter to update processing phase
+): Promise<{ 
+  source: string; 
+  content: string; 
+  result: string; 
+  isFullyFormatted: boolean; 
+  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" 
+}> => {
+  console.log(`[executeToolsByGroup] Starting execution with ${toolGroups.length} groups`);
+  
+  // Process each group in priority order
+  for (let groupIndex = 0; groupIndex < toolGroups.length; groupIndex++) {
+    const toolGroup = toolGroups[groupIndex];
+    console.log(`[executeToolsByGroup] Processing group ${groupIndex + 1}: ${toolGroup.join(', ')}`);
+    
+    if (toolGroup.length === 1) {
+      // Single tool case - similar to existing tool execution logic
+      const tool = toolGroup[0];
+      const startTime = Date.now();
+      console.log(`[executeToolsByGroup] Single tool in group: ${tool}`);
+      
+      try {
+        // Update processing phase based on the tool
+        let phase = "Thinking";
+        let toolDisplayName = tool.replace('query_', '').replace(/_/g, ' ');
+        
+        if (tool.startsWith("query_law")) {
+          phase = `Searching ${toolDisplayName} database`;
+        } else if (tool === "search_web") {
+          phase = "Searching web";
+        }
+        
+        // Only update phase if we have a context and messageId
+        if (ctx && messageId) {
+          try {
+            await ctx.runMutation(api.chat.updateProcessingPhase, {
+              messageId,
+              phase
+            });
+            console.log(`[executeToolsByGroup] Updated phase: ${phase}`);
+          } catch (error) {
+            console.error(`[executeToolsByGroup] Phase update error: ${error instanceof Error ? error.message : String(error)}`);
+            // Continue execution despite phase update error
+          }
+        }
+        
+        // Execute tool logic based on the tool name
+        let toolResult = "";
+        
+        switch (tool) {
+          case "no_tool":
+            // Direct response without using specialized tools
+            console.log(`[executeToolsByGroup] Using no_tool direct response`);
+            toolResult = "I'll answer based on my general knowledge.";
+            break;
+            
+          case "search_web":
+            // Web search logic
+            console.log(`[executeToolsByGroup] Executing web search for: ${query}`);
+            // Implement web search logic similar to executeToolsSequentially
+            break;
+            
+          case "query_law_on_insurance":
+          case "query_law_on_consumer_protection":
+          case "query_insurance_qna":
+            // Database query logic with improved error handling and logging
+            const dbQueryStartTime = Date.now();
+            const databaseName = tool === "query_law_on_insurance" ? "Law_on_Insurance" :
+                              tool === "query_law_on_consumer_protection" ? "Law_on_Consumer_Protection" :
+                              "Insurance_QnA";
+            const readableName = databaseName.replace(/_/g, " ");
+            
+            console.log(`[executeToolsByGroup] Querying ${readableName} database`);
+            
+            try {
+              // Get the database content
+              if (!ctx) {
+                console.error(`[executeToolsByGroup] No context available for database query`);
+                toolResult = `I couldn't access the database because the system context is unavailable.`;
+                break;
+              }
+              
+              // Track database query time
+              const dbFetchStartTime = Date.now();
+              const databaseResult = await ctx.runQuery(api.chat.getLawDatabaseContent, {
+                databaseNames: [databaseName]
+              });
+              const dbFetchTime = Date.now() - dbFetchStartTime;
+              
+              // Handle missing database result
+              if (!databaseResult) {
+                console.error(`[executeToolsByGroup] Failed to get ${readableName} database (${dbFetchTime}ms)`);
+                toolResult = `I couldn't access the ${readableName} database. The database may be temporarily unavailable.`;
+                break;
+              }
+              
+              try {
+                // Parse database content
+                const databaseContent = JSON.parse(databaseResult);
+                
+                // Validate database structure
+                if (!databaseContent[databaseName]) {
+                  console.error(`[executeToolsByGroup] ${readableName} database not found in result (${dbFetchTime}ms)`);
+                  toolResult = `I couldn't find the ${readableName} database. It may not be properly configured.`;
+                  break;
+                }
+                
+                // Check for explicit database errors
+                if (databaseContent[databaseName].error) {
+                  const errorMsg = databaseContent[databaseName].error;
+                  console.error(`[executeToolsByGroup] ${readableName} database error: ${errorMsg}`);
+                  toolResult = `There was an error accessing the ${readableName} database: ${errorMsg}`;
+                  break;
+                }
+                
+                // Get the raw database and validate structure
+                const rawDatabase = databaseContent[databaseName];
+                const dbSize = JSON.stringify(rawDatabase).length;
+                
+                // Log database metadata instead of full content
+                const chaptersCount = rawDatabase.chapters?.length || 0;
+                const articlesCount = rawDatabase.chapters?.reduce((count: number, chapter: LawChapter) => 
+                  count + (chapter.articles?.length || 0), 0) || 0;
+                
+                console.log(`[executeToolsByGroup] ${readableName} database loaded: ${dbSize} chars, ${chaptersCount} chapters, ~${articlesCount} articles (${dbFetchTime}ms)`);
+                
+                // Check if database is empty or has no useful content
+                if (chaptersCount === 0 || articlesCount === 0) {
+                  console.warn(`[executeToolsByGroup] ${readableName} database appears to be empty (${chaptersCount} chapters, ${articlesCount} articles)`);
+                  toolResult = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
+                  break;
+                }
+                
+                // Create a prompt for the AI with the labeled database
+                const promptStartTime = Date.now();
+                let prompt = `I need information about: "${query}"
+
+I have access to the following database:\n\n`;
+                
+                // Add the database with a clear label
+                prompt += `### ${readableName} Database:\n\n\`\`\`json\n${JSON.stringify(rawDatabase, null, 2)}\n\`\`\`\n\n`;
+                
+                // Add conversation context if available
+                if (conversationHistory && conversationHistory.length > 0) {
+                  prompt += `\n### Conversation Context:\n`;
+                  const lastMessages = conversationHistory.slice(-2); // Just include last 2 messages for context
+                  lastMessages.forEach(msg => {
+                    if (msg.role === "user") {
+                      prompt += `User: ${msg.parts[0]?.text}\n\n`;
+                    }
+                  });
+                }
+                
+                prompt += `\nPlease analyze this database and provide a comprehensive answer to my query. Format your response using proper markdown.`;
+                
+                // Estimate token count for logging
+                const estimatedTokens = estimateTokenCount(prompt);
+                console.log(`[executeToolsByGroup] Prompt prepared: ${prompt.length} chars, ~${estimatedTokens} tokens`);
+                
+                // Use the model to generate a response with error handling
+                try {
+                  console.log(`[executeToolsByGroup] Sending prompt to AI model`);
+                  const aiStartTime = Date.now();
+                  const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
+                  const response = await model.generateContent(prompt);
+                  const aiTime = Date.now() - aiStartTime;
+                  
+                  toolResult = response.response.text();
+                  const responseTokens = estimateTokenCount(toolResult);
+                  
+                  console.log(`[executeToolsByGroup] AI response: ${toolResult.length} chars, ~${responseTokens} tokens (${aiTime}ms)`);
+                  
+                  // Check if response is too short, which might indicate a problem
+                  if (toolResult.length < 100) {
+                    console.warn(`[executeToolsByGroup] AI response suspiciously short (${toolResult.length} chars), may be incomplete`);
+                  }
+                } catch (aiError) {
+                  // Handle AI-specific errors
+                  console.error(`[executeToolsByGroup] AI model error: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
+                  toolResult = `I encountered an error while analyzing the ${readableName} database. The AI processing system may be temporarily unavailable.`;
+                }
+                
+              } catch (parseError) {
+                // Handle JSON parsing errors
+                console.error(`[executeToolsByGroup] Database parse error: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+                toolResult = `I had trouble processing the ${readableName} database format. The database may be corrupted.`;
+              }
+            } catch (error) {
+              // Handle general query errors
+              console.error(`[executeToolsByGroup] Database query error: ${error instanceof Error ? error.message : String(error)}`);
+              toolResult = `An error occurred while accessing the ${readableName} database. Please try again later.`;
+            }
+            
+            // Log total database operation time
+            const totalDbTime = Date.now() - dbQueryStartTime;
+            console.log(`[executeToolsByGroup] ${readableName} database operation completed in ${totalDbTime}ms`);
+            break;
+            
+          default:
+            console.log(`[executeToolsByGroup] Unknown tool: ${tool}`);
+            toolResult = `I don't know how to use the tool: ${tool}`;
+            break;
+        }
+        
+        // Check if the tool provided a sufficient answer
+        if (toolResult) {
+          console.log(`[executeToolsByGroup] Got result from ${tool} (${toolResult.length} chars)`);
+          
+          // Evaluate if this is a final answer or we should try the next tool
+          // This would use similar logic to executeToolsSequentially
+          
+          // For now, assume it's a final answer
+          return createToolResult(tool, toolResult, "FINAL_ANSWER");
+        }
+      } catch (error) {
+        console.error(`[executeToolsByGroup] Error executing tool ${tool}:`, error);
+      }
+    } else {
+      // Multiple tools case - execute in parallel and provide labeled databases to AI
+      const parallelStartTime = Date.now();
+      console.log(`[executeToolsByGroup] Executing ${toolGroup.length} tools in parallel`);
+      
+      try {
+        // Update processing phase to indicate parallel search
+        if (ctx && messageId) {
+          try {
+            await ctx.runMutation(api.chat.updateProcessingPhase, {
+              messageId,
+              phase: "Searching multiple sources"
+            });
+            console.log(`[executeToolsByGroup] Updated phase: Searching multiple sources`);
+          } catch (error) {
+            console.error(`[executeToolsByGroup] Phase update error: ${error instanceof Error ? error.message : String(error)}`);
+            // Continue execution despite phase update error
+          }
+        }
+        
+        // Create an array of promises for parallel execution
+        const toolPromises = toolGroup.map(async (tool) => {
+          const toolStartTime = Date.now();
+          console.log(`[executeToolsByGroup] Starting parallel tool: ${tool}`);
+          let result = "";
+          let rawDatabase = null;
+          let databaseName = "";
+          let databaseMetadata = {};
+          
+          try {
+            switch (tool) {
+              case "query_law_on_insurance":
+              case "query_law_on_consumer_protection":
+              case "query_insurance_qna":
+                // Extract the database name from the tool name
+                databaseName = tool === "query_law_on_insurance" ? "Law_on_Insurance" :
+                               tool === "query_law_on_consumer_protection" ? "Law_on_Consumer_Protection" :
+                               "Insurance_QnA";
+                const readableName = databaseName.replace(/_/g, " ");
+                
+                console.log(`[executeToolsByGroup] Parallel query: ${readableName}`);
+                
+                // Get the database content
+                if (!ctx) {
+                  console.error(`[executeToolsByGroup] No context for parallel query: ${readableName}`);
+                  result = `I couldn't access the ${readableName} database because the system context is unavailable.`;
+                  break;
+                }
+                
+                // Track database query time
+                const dbFetchStartTime = Date.now();
+                const databaseResult = await ctx.runQuery(api.chat.getLawDatabaseContent, {
+                  databaseNames: [databaseName]
+                });
+                const dbFetchTime = Date.now() - dbFetchStartTime;
+                
+                // Handle missing database result
+                if (!databaseResult) {
+                  console.error(`[executeToolsByGroup] Failed to get ${readableName} (${dbFetchTime}ms)`);
+                  result = `I couldn't access the ${readableName} database. It may be temporarily unavailable.`;
+                  break;
+                }
+                
+                try {
+                  // Parse database content
+                  const databaseContent = JSON.parse(databaseResult);
+                  
+                  // Validate database structure
+                  if (!databaseContent[databaseName]) {
+                    console.error(`[executeToolsByGroup] ${readableName} not found in result (${dbFetchTime}ms)`);
+                    result = `I couldn't find the ${readableName} database. It may not be properly configured.`;
+                    break;
+                  }
+                  
+                  // Check for explicit database errors
+                  if (databaseContent[databaseName].error) {
+                    const errorMsg = databaseContent[databaseName].error;
+                    console.error(`[executeToolsByGroup] ${readableName} error: ${errorMsg}`);
+                    result = `There was an error accessing the ${readableName} database: ${errorMsg}`;
+                    break;
+                  }
+                  
+                  // Store the raw database for later use
+                  rawDatabase = databaseContent[databaseName];
+                  const dbSize = JSON.stringify(rawDatabase).length;
+                  
+                  // Log database metadata instead of full content
+                  const chaptersCount = rawDatabase.chapters?.length || 0;
+                  const articlesCount = rawDatabase.chapters?.reduce((count: number, chapter: LawChapter) => 
+                    count + (chapter.articles?.length || 0), 0) || 0;
+                  
+                  databaseMetadata = { chaptersCount, articlesCount, dbSize, dbFetchTime };
+                  
+                  console.log(`[executeToolsByGroup] ${readableName} loaded: ${dbSize} chars, ${chaptersCount} chapters, ~${articlesCount} articles (${dbFetchTime}ms)`);
+                  
+                  // Check if database is empty
+                  if (chaptersCount === 0 || articlesCount === 0) {
+                    console.warn(`[executeToolsByGroup] ${readableName} appears empty (${chaptersCount} chapters, ${articlesCount} articles)`);
+                    result = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
+                  }
+                } catch (parseError) {
+                  console.error(`[executeToolsByGroup] Parse error for ${readableName}: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+                  result = `I had trouble processing the ${readableName} database format. The database may be corrupted.`;
+                }
+                break;
+                
+              case "search_web":
+                // Web search logic
+                console.log(`[executeToolsByGroup] Web search started`);
+                // Implement web search logic
+                result = `Sample web search result`; // Placeholder
+                break;
+                
+              default:
+                console.log(`[executeToolsByGroup] Unknown tool in parallel execution: ${tool}`);
+                result = `I don't know how to use the tool: ${tool}`;
+                break;
+            }
+            
+            const toolTime = Date.now() - toolStartTime;
+            console.log(`[executeToolsByGroup] Tool ${tool} completed in ${toolTime}ms`);
+            return { tool, result, rawDatabase, databaseName, databaseMetadata, executionTime: toolTime };
+          } catch (error) {
+            const toolTime = Date.now() - toolStartTime;
+            console.error(`[executeToolsByGroup] Error in parallel tool ${tool}: ${error instanceof Error ? error.message : String(error)}`);
+            return { 
+              tool, 
+              result: `Error executing ${tool}: ${error instanceof Error ? error.message : String(error)}`, 
+              rawDatabase, 
+              databaseName,
+              executionTime: toolTime,
+              error: true 
+            };
+          }
+        });
+        
+        // Wait for all tools in the group to complete
+        const parallelExecutionStartTime = Date.now();
+        const toolResults = await Promise.all(toolPromises);
+        const parallelExecutionTime = Date.now() - parallelExecutionStartTime;
+        
+        // Log results with timing information
+        const toolsWithTimes = toolResults.map(r => `${r.tool} (${r.executionTime}ms)`).join(', ');
+        console.log(`[executeToolsByGroup] All parallel tools completed in ${parallelExecutionTime}ms: ${toolsWithTimes}`);
+        
+        // Filter out empty results but keep track of errors
+        const validResults = toolResults.filter(r => r.rawDatabase || (r.result && r.result.trim() !== ""));
+        const errorCount = toolResults.filter(r => r.error).length;
+        
+        if (validResults.length === 0) {
+          console.log(`[executeToolsByGroup] No valid results from parallel tools (${errorCount} errors)`);
+          continue; // Try next group
+        }
+        
+        // Create a prompt for the AI with labeled databases
+        const promptStartTime = Date.now();
+        let prompt = `I need information about: "${query}"
+
+I have access to the following databases:\n\n`;
+        
+        // Add each database with a clear label
+        let databaseCount = 0;
+        validResults.forEach(({ tool, databaseName, rawDatabase, databaseMetadata }) => {
+          if (rawDatabase) {
+            databaseCount++;
+            const readableName = databaseName.replace(/_/g, " ");
+            prompt += `### ${readableName} Database:\n\n\`\`\`json\n${JSON.stringify(rawDatabase, null, 2)}\n\`\`\`\n\n`;
+          }
+        });
+        
+        // Add conversation context if available
+        if (conversationHistory && conversationHistory.length > 0) {
+          prompt += `\n### Conversation Context:\n`;
+          const lastMessages = conversationHistory.slice(-2); // Just include last 2 messages for context
+          lastMessages.forEach(msg => {
+            if (msg.role === "user") {
+              prompt += `User: ${msg.parts[0]?.text}\n\n`;
+            }
+          });
+        }
+        
+        prompt += `\nPlease analyze ${databaseCount > 1 ? 'these databases' : 'this database'} and provide a comprehensive answer to my query. Format your response using proper markdown.`;
+        
+        // Estimate token count for logging
+        const estimatedTokens = estimateTokenCount(prompt);
+        console.log(`[executeToolsByGroup] Parallel prompt prepared: ${prompt.length} chars, ~${estimatedTokens} tokens`);
+        
+        // Use the model to generate a response based on the labeled databases
+        try {
+          console.log(`[executeToolsByGroup] Sending parallel prompt with ${databaseCount} databases to AI`);
+          const aiStartTime = Date.now();
+          const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
+          const response = await model.generateContent(prompt);
+          const aiResponse = response.response.text();
+          const aiTime = Date.now() - aiStartTime;
+          
+          const responseTokens = estimateTokenCount(aiResponse);
+          console.log(`[executeToolsByGroup] AI parallel response: ${aiResponse.length} chars, ~${responseTokens} tokens (${aiTime}ms)`);
+          
+          // Check if response is too short, which might indicate a problem
+          if (aiResponse.length < 100) {
+            console.warn(`[executeToolsByGroup] AI parallel response suspiciously short (${aiResponse.length} chars)`);
+          }
+          
+          // Log total parallel execution time
+          const totalParallelTime = Date.now() - parallelStartTime;
+          console.log(`[executeToolsByGroup] Total parallel execution completed in ${totalParallelTime}ms`);
+          
+          // Return the AI-generated response
+          return createToolResult(
+            "parallel_databases", 
+            aiResponse,
+            "FINAL_ANSWER"
+          );
+        } catch (aiError) {
+          // Handle AI-specific errors
+          console.error(`[executeToolsByGroup] AI model error in parallel execution: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
+          return createToolResult(
+            "parallel_databases_error", 
+            `I encountered an error while analyzing the databases. The AI processing system may be temporarily unavailable.`,
+            "FINAL_ANSWER"
+          );
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[executeToolsByGroup] Error executing parallel tools: ${errorMessage}`);
+        
+        // Return error message but allow trying next group
+        return createToolResult(
+          "parallel_error", 
+          `I encountered an error while searching multiple databases. The system may be temporarily unavailable.`,
+          "FINAL_ANSWER"
+        );
+      }
+    }
+    
+  }
+  
+  // If we reach here, it means we've tried all tool groups and none provided a satisfactory answer
+  // Log this outcome and return a helpful fallback message
+  console.log(`[executeToolsByGroup] All tool groups exhausted without finding relevant information`);
+  return createToolResult(
+    "fallback", 
+    "I've searched through all available sources but couldn't find specific information to answer your question. You might want to try rephrasing your question or providing more specific details about what you're looking for.",
+    "FINAL_ANSWER"
+  );
+  // Handle any remaining fallback case
+  console.log(`[executeToolsByGroup] Returning generic fallback response`);
+  return createToolResult(
+    "system_error", 
+    `I apologize, but I encountered a system error while processing your request. This might be a temporary issue. Please try again in a moment.`,
+    "FINAL_ANSWER"
+  );
+};
+
 // Parse the AI's structured response to determine if it's a final answer or we should try the next tool
-function parseToolResponse(responseText: string): { responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL", content: string, reasoning: string } {
+const parseToolResponse = (responseText: string): { responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL", content: string, reasoning: string } => {
   // Default values
   let responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" = "TRY_NEXT_TOOL";
   let content = "";

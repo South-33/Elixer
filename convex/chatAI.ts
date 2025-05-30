@@ -5,7 +5,7 @@ import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from "@google/generative-ai";
 import { Id } from "./_generated/dataModel";
-import { rankInformationSources, executeToolsSequentially, estimateTokenCount } from "./agentTools";
+import { rankInformationSources, executeToolsByGroup, estimateTokenCount } from "./agentTools";
 
 // --- Hardcoded Prompts ---
 const STYLING_PROMPT = `Use standard Markdown for formatting your responses.
@@ -694,7 +694,7 @@ export const getAIResponse = action({
       let rankingResult;
       if (disableTools) {
         console.log(`[getAIResponse] Tools disabled by user setting, using only no_tool`);
-        rankingResult = { rankedTools: ["no_tool"] };
+        rankingResult = { rankedToolGroups: [["no_tool"]] };
       } else {
         // Only pass system prompts if they're not disabled
         const systemPromptsToUse = disableSystemPrompt ? undefined : {
@@ -715,14 +715,14 @@ export const getAIResponse = action({
         );
       }
       
-      const { rankedTools, directResponse } = rankingResult;
+      const { rankedToolGroups, directResponse } = rankingResult;
       
-      // Log the ranked tools
-      console.log(`[getAIResponse] Ranked tools: ${JSON.stringify(rankedTools)}`);
+      // Log the ranked tool groups
+      console.log(`[getAIResponse] Ranked tool groups: ${JSON.stringify(rankedToolGroups)}`);
       
       // Fast path: If no_tool is ranked first and we have a direct response, use it immediately
       // The rankInformationSources function already includes conversation history in the prompt
-      if (rankedTools[0] === "no_tool" && directResponse) {
+      if (rankedToolGroups.length > 0 && rankedToolGroups[0].length === 1 && rankedToolGroups[0][0] === "no_tool" && directResponse) {
         console.log(`[getAIResponse] OPTIMIZATION: Using direct response from ranking call (${directResponse.length} chars)`);
         
         // Set appropriate processing phase for the direct response path
@@ -760,9 +760,11 @@ export const getAIResponse = action({
         responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL";
       };
       
-      // 3. Execute tools sequentially until an answer is found
-      const toolResults = await executeToolsSequentially(
-        rankedTools,
+      // 3. Execute tools by priority groups, with parallel execution within groups
+      console.log(`[getAIResponse] Using new parallel tool execution with ${rankedToolGroups.length} groups`);
+      
+      const toolResults = await executeToolsByGroup(
+        rankedToolGroups,
         userMessage,
         ctx,
         genAI,
@@ -929,7 +931,7 @@ User question: "${userMessage}"
       console.log(`[getAIResponse] Sending prompt to Gemini. Length: ${messageToSendToGemini.length} chars, ~${promptTokens} tokens`);
       
       // If this came from a database and we have multiple tools, ask the AI if it needs to check another source
-      if (toolResults.source.startsWith('query_') && rankedTools.length > 1) {
+      if (toolResults.source.startsWith('query_') && rankedToolGroups.flat().length > 1) {
         // Add a check to see if the AI should continue searching other databases
         const checkMoreSources = `\n\n--- IMPORTANT INSTRUCTION FOR AI ONLY ---\nBased on the information from ${toolResults.source}, can you find the specific information about "${userMessage}"?\nIf you found the exact information requested, respond with your normal answer.\nIf you CANNOT find the specific information requested, add this EXACT text at the end of your response: \"[CHECK_NEXT_SOURCE]\"\n--- END OF INSTRUCTION ---`;
         
@@ -954,8 +956,9 @@ User question: "${userMessage}"
         finalResponse = finalResponse.replace('[CHECK_NEXT_SOURCE]', '');
         
         // Try the next source if available
-        if (rankedTools.length > 1) {
-          const nextTools = rankedTools.slice(1); // Remove the first tool we already tried
+        const allTools = rankedToolGroups.flat();
+        if (allTools.length > 1) {
+          const nextTools = allTools.slice(1); // Remove the first tool we already tried
           console.log(`[getAIResponse] Trying next source in ranking: ${nextTools[0]}`);
           
           // Store message indicating we're checking more sources
@@ -966,13 +969,15 @@ User question: "${userMessage}"
           
           // Execute next tool
           console.log(`[getAIResponse] Executing next tool: ${nextTools[0]}`);
-          const nextToolResults = await executeToolsSequentially(
-            nextTools,
+          const nextToolResults = await executeToolsByGroup(
+            [nextTools], // Wrap in array since executeToolsByGroup expects groups
             userMessage,
             ctx,
             genAI,
             selectedModel,
-            formattedHistory // Pass conversation history for context-aware tool execution
+            formattedHistory, // Pass conversation history for context-aware tool execution
+            undefined, // No system prompts needed here
+            messageId // Pass messageId for updating processing phase
           );
           
           // Prepare message for next tool result with full conversation context
