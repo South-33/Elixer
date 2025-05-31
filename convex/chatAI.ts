@@ -5,7 +5,7 @@ import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from "@google/generative-ai";
 import { Id } from "./_generated/dataModel";
-import { rankInformationSources, executeToolsByGroup, estimateTokenCount } from "./agentTools";
+import { rankInformationSources, executeToolsByGroup, estimateTokenCount, combineSystemPrompts } from "./agentTools";
 
 // --- Hardcoded Prompts ---
 const STYLING_PROMPT = `Use standard Markdown for formatting your responses.
@@ -84,535 +84,46 @@ const ensureString = (value: any): string => {
   return String(value);
 };
 
-// Function to query the law database
-const calculateScore = (text: string, keywords: string[]) => {
-  const lowerText = ensureString(text).toLowerCase();
-  let score = 0;
-  for (const keyword of keywords) {
-    if (lowerText.includes(keyword)) {
-      score++;
-    }
+// Dedicated handler for no-tool mode that properly respects system prompts
+async function handleNoToolResponse(
+  userMessage: string,
+  conversationHistory: { role: string; parts: { text: string; }[] }[],
+  genAI: GoogleGenerativeAI,
+  selectedModel: string | undefined,
+  systemPrompts?: {
+    stylingPrompt?: string,
+    lawPrompt?: string,
+    tonePrompt?: string,
+    policyPrompt?: string
   }
-  return score;
-};
-
-const processArticleContent = (article: LawArticle, queryKeywords: string[], calculateScore: (text: string, keywords: string[]) => number) => {
-  let articleText = `Article ${ensureString(article.article_number)}: ${ensureString(article.content)}`;
-  let articleScore = calculateScore(ensureString(article.content), queryKeywords);
-
-    if (article.points) {
-      article.points.forEach(point => {
-        if (calculateScore(ensureString(point), queryKeywords) > 0) {
-          articleText += `\n  - ${ensureString(point)}`;
-          articleScore += calculateScore(ensureString(point), queryKeywords);
-        }
-      });
-    }
-    if (article.definitions) {
-      for (const term in article.definitions) {
-        const definitionContent = ensureString(article.definitions[term]);
-        if (calculateScore(ensureString(term), queryKeywords) > 0 || calculateScore(definitionContent, queryKeywords) > 0) {
-          articleText += `\n  Definition of ${ensureString(term)}: ${definitionContent}`;
-          articleScore += calculateScore(ensureString(term), queryKeywords) + calculateScore(definitionContent, queryKeywords);
-        }
-      }
-    }
-    if (article.sub_types) {
-      article.sub_types.forEach(sub => {
-        const subType = ensureString(sub.type);
-        const subDescription = ensureString(sub.description);
-        if (calculateScore(subType, queryKeywords) > 0 || calculateScore(subDescription, queryKeywords) > 0) {
-          articleText += `\n  Sub-type ${subType}: ${subDescription}`;
-          articleScore += calculateScore(subType, queryKeywords) + calculateScore(subDescription, queryKeywords);
-        }
-      });
-    }
-    if (article.prohibitions) {
-      article.prohibitions.forEach(prohibition => {
-        if (calculateScore(ensureString(prohibition), queryKeywords) > 0) {
-          articleText += `\n  Prohibition: ${ensureString(prohibition)}`;
-          articleScore += calculateScore(ensureString(prohibition), queryKeywords);
-        }
-      });
-    }
-    if (article.business_types) {
-      article.business_types.forEach(type => {
-        if (calculateScore(ensureString(type), queryKeywords) > 0) {
-          articleText += `\n  Business Type: ${ensureString(type)}`;
-          articleScore += calculateScore(ensureString(type), queryKeywords);
-        }
-      });
-    }
-    if (article.priority_order) {
-      article.priority_order.forEach(item => {
-        if (calculateScore(ensureString(item), queryKeywords) > 0) {
-          articleText += `\n  Priority: ${ensureString(item)}`;
-          articleScore += calculateScore(ensureString(item), queryKeywords);
-        }
-      });
-    }
-    if (article.conditions) {
-      article.conditions.forEach(condition => {
-        if (calculateScore(ensureString(condition), queryKeywords) > 0) {
-          articleText += `\n  Condition: ${ensureString(condition)}`;
-          articleScore += calculateScore(ensureString(condition), queryKeywords);
-        }
-      });
-    }
-    if (article.punishments) {
-      article.punishments.forEach(punishment => {
-        if (calculateScore(ensureString(punishment), queryKeywords) > 0) {
-          articleText += `\n  Punishment: ${ensureString(punishment)}`;
-          articleScore += calculateScore(ensureString(punishment), queryKeywords);
-        }
-      });
-    }
-    if (article.punishment_natural_person) { // Removed direct check for calculateScore > 0 here, as ensureString handles null/undefined
-      const punishmentNaturalPerson = ensureString(article.punishment_natural_person);
-      if (calculateScore(punishmentNaturalPerson, queryKeywords) > 0) {
-        articleText += `\n  Punishment (Natural Person): ${punishmentNaturalPerson}`;
-        articleScore += calculateScore(punishmentNaturalPerson, queryKeywords);
-      }
-    }
-    if (article.punishment_legal_person) { // Removed direct check for calculateScore > 0 here, as ensureString handles null/undefined
-      const punishmentLegalPerson = ensureString(article.punishment_legal_person);
-      if (calculateScore(punishmentLegalPerson, queryKeywords) > 0) {
-        articleText += `\n  Punishment (Legal Person): ${punishmentLegalPerson}`;
-        articleScore += calculateScore(punishmentLegalPerson, queryKeywords);
-      }
-    }
-    return { articleText, articleScore };
-  };
-
-  const scoreChaptersAndSections = (lawDatabase: LawDatabase, queryKeywords: string[], scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[], calculateScore: (text: string, keywords: string[]) => number) => {
-    if (lawDatabase.chapters && Array.isArray(lawDatabase.chapters)) {
-      lawDatabase.chapters.forEach(chapter => {
-        const chapterTitle = `Chapter ${ensureString(chapter.chapter_number)}: ${ensureString(chapter.chapter_title)}`;
-        const chapterScore = calculateScore(ensureString(chapter.chapter_title), queryKeywords);
-
-        if (chapterScore > 0) {
-          scoredResults.push({
-            content: `\n--- ${chapterTitle} ---`,
-            score: chapterScore * 10, // Boost score for chapter title matches
-            chapterTitle: chapterTitle
-          });
-        }
-
-        if (chapter.sections) {
-          chapter.sections.forEach(section => {
-            const sectionTitle = `Section ${ensureString(section.section_number)}: ${ensureString(section.section_title)}`;
-            const sectionScore = calculateScore(ensureString(section.section_title), queryKeywords);
-            if (sectionScore > 0) {
-              scoredResults.push({
-                content: `\n--- ${chapterTitle} - ${sectionTitle} ---`,
-                score: sectionScore * 5, // Boost score for section title matches
-                chapterTitle: chapterTitle,
-                sectionTitle: sectionTitle
-              });
-            }
-          });
-        }
-      });
-    }
-  };
-
-  const scoreAndProcessArticles = (lawDatabase: LawDatabase, queryKeywords: string[], scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[], processArticleContent: (article: LawArticle, queryKeywords: string[], calculateScore: (text: string, keywords: string[]) => number) => { articleText: string; articleScore: number; }, calculateScore: (text: string, keywords: string[]) => number) => {
-    if (lawDatabase.chapters && Array.isArray(lawDatabase.chapters)) {
-      lawDatabase.chapters.forEach(chapter => {
-        const chapterTitle = `Chapter ${ensureString(chapter.chapter_number)}: ${ensureString(chapter.chapter_title)}`;
-
-        const processArticle = (article: LawArticle, currentSectionTitle?: string) => {
-          const { articleText, articleScore } = processArticleContent(article, queryKeywords, calculateScore);
-
-          if (articleScore > 0) {
-            scoredResults.push({
-              content: articleText,
-              score: articleScore,
-              chapterTitle: chapterTitle,
-              sectionTitle: currentSectionTitle
-            });
-          }
-        };
-
-        if (chapter.articles) {
-          chapter.articles.forEach(article => processArticle(article));
-        }
-        if (chapter.sections) {
-          chapter.sections.forEach(section => {
-            const sectionTitle = `Section ${ensureString(section.section_number)}: ${ensureString(section.section_title)}`;
-            section.articles.forEach(article => processArticle(article, sectionTitle));
-          });
-        }
-      });
-    }
-  };
-
-  const aggregateAndSortResults = (scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[]) => {
-    const MAX_SNIPPETS = 30;
-    const MAX_SNIPPET_LENGTH = 3000; // characters
-    scoredResults.sort((a, b) => b.score - a.score);
-
-    const finalRelevantContent: string[] = [];
-    const addedHeaders = new Set<string>();
-    const addedArticles = new Set<string>();
-
-    for (const result of scoredResults) {
-      if (finalRelevantContent.length >= MAX_SNIPPETS) break;
-      let header = "";
-      if (result.chapterTitle) {
-        header += result.chapterTitle;
-      }
-      if (result.sectionTitle) {
-        header += ` - ${result.sectionTitle}`;
-      }
-
-      if (header && !addedHeaders.has(header)) {
-        finalRelevantContent.push(`\n--- ${header} ---`);
-        addedHeaders.add(header);
-      }
-
-      // Truncate long snippets if needed
-      let content = result.content;
-      if (content.length > MAX_SNIPPET_LENGTH) {
-        content = content.slice(0, MAX_SNIPPET_LENGTH) + " ...[truncated]";
-      }
-      if (!addedArticles.has(content)) {
-        finalRelevantContent.push(content);
-        addedArticles.add(content);
-      }
-    }
-    return finalRelevantContent;
-  };
-
-// Function to query the law database
-export async function queryLawDatabase(query: string, lawDatabase: LawDatabase): Promise<string> {
-  const queryKeywords = query.toLowerCase().split(/\s+/);
-  const scoredResults: { content: string; score: number; chapterTitle?: string; sectionTitle?: string }[] = [];
-
-  console.log(`[queryLawDatabase] Searching law database for query: "${query}"`);
-  
-  // Helper function to convert between Roman and Arabic numerals
-  const romanToArabic = (roman: string): number => {
-    const romanMap: {[key: string]: number} = {
-      'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000
-    };
-    let result = 0;
-    for (let i = 0; i < roman.length; i++) {
-      const current = romanMap[roman[i]];
-      const next = i + 1 < roman.length ? romanMap[roman[i + 1]] : 0;
-      if (current < next) {
-        result -= current;
-      } else {
-        result += current;
-      }
-    }
-    return result;
-  };
-
-  const arabicToRoman = (num: number): string => {
-    const romanNumerals = [
-      { value: 1000, numeral: 'M' },
-      { value: 900, numeral: 'CM' },
-      { value: 500, numeral: 'D' },
-      { value: 400, numeral: 'CD' },
-      { value: 100, numeral: 'C' },
-      { value: 90, numeral: 'XC' },
-      { value: 50, numeral: 'L' },
-      { value: 40, numeral: 'XL' },
-      { value: 10, numeral: 'X' },
-      { value: 9, numeral: 'IX' },
-      { value: 5, numeral: 'V' },
-      { value: 4, numeral: 'IV' },
-      { value: 1, numeral: 'I' }
-    ];
-    let result = '';
-    for (const { value, numeral } of romanNumerals) {
-      while (num >= value) {
-        result += numeral;
-        num -= value;
-      }
-    }
-    return result;
-  };
-
-  // Function to check if chapter numbers match, handling both Roman and Arabic numerals
-  const chapterNumbersMatch = (a: string, b: string): boolean => {
-    // Direct string match
-    if (a === b) return true;
-    
-    // Try to convert and compare if they're in different formats
-    if (/^[IVXLCDM]+$/i.test(a) && /^\d+$/.test(b)) {
-      return romanToArabic(a.toUpperCase()) === parseInt(b, 10);
-    }
-    if (/^\d+$/.test(a) && /^[IVXLCDM]+$/i.test(b)) {
-      return parseInt(a, 10) === romanToArabic(b.toUpperCase());
-    }
-    
-    return false;
-  };
-
-  // Check for direct chapter and article references
-  const chapterMatch = query.match(/chapter\s*([IVX\d]+)/i);
-  const articleMatch = query.match(/article\s*(\d+)/i);
-  
-  // If we have specific chapter and article references, prioritize them
-  if (chapterMatch && articleMatch && lawDatabase && lawDatabase.chapters) {
-    const targetChapter = chapterMatch[1].toUpperCase();
-    const targetArticle = articleMatch[1];
-    console.log(`[queryLawDatabase] Direct reference detected: Chapter ${targetChapter}, Article ${targetArticle}`);
-    
-    // Find the specific chapter, handling both Roman and Arabic numerals
-    for (const chapter of lawDatabase.chapters) {
-      if (!chapter || !chapter.chapter_number) continue;
-      
-      if (chapterNumbersMatch(chapter.chapter_number, targetChapter)) {
-        console.log(`[queryLawDatabase] Found matching chapter: ${chapter.chapter_number}`);
-        
-        // Check if the chapter has articles directly
-        if (chapter.articles && Array.isArray(chapter.articles)) {
-          for (const article of chapter.articles) {
-            if (!article || !article.article_number) continue;
-            
-            if (article.article_number === targetArticle || article.article_number === targetArticle.replace(/^0+/, '')) {
-              console.log(`[queryLawDatabase] Found direct article match: Article ${article.article_number}`);
-              
-              // Construct a comprehensive article text with all properties
-              let articleContent = `Article ${article.article_number}: ${article.content}`;
-              
-              if (article.points && Array.isArray(article.points)) {
-                articleContent += '\n\nPoints:';
-                article.points.forEach(point => {
-                  articleContent += `\n- ${point}`;
-                });
-              }
-              
-              if (article.definitions) {
-                articleContent += '\n\nDefinitions:';
-                for (const [term, definition] of Object.entries(article.definitions)) {
-                  articleContent += `\n- ${term}: ${definition}`;
-                }
-              }
-              
-              // Add other properties if they exist
-              ['sub_types', 'prohibitions', 'business_types', 'priority_order', 'conditions', 'punishments'].forEach(propName => {
-                if (article[propName as keyof LawArticle] && Array.isArray(article[propName as keyof LawArticle])) {
-                  articleContent += `\n\n${propName.replace('_', ' ').charAt(0).toUpperCase() + propName.replace('_', ' ').slice(1)}:`;
-                  (article[propName as keyof LawArticle] as string[]).forEach(item => {
-                    articleContent += `\n- ${item}`;
-                  });
-                }
-              });
-              
-              // Add punishment details if they exist
-              if (article.punishment_natural_person) {
-                articleContent += `\n\nPunishment (Natural Person): ${article.punishment_natural_person}`;
-              }
-              
-              if (article.punishment_legal_person) {
-                articleContent += `\n\nPunishment (Legal Person): ${article.punishment_legal_person}`;
-              }
-              
-              // Add with very high score to ensure it appears at the top
-              scoredResults.push({
-                content: `--- Chapter ${chapter.chapter_number}: ${chapter.chapter_title} ---\n\n${articleContent}`,
-                score: 10000, // Very high score for direct matches
-                chapterTitle: `Chapter ${chapter.chapter_number}: ${chapter.chapter_title}`
-              });
-              
-              // Return early since we found an exact match
-              return aggregateAndSortResults(scoredResults).join('\n\n');
-            }
-          }
-        }
-        
-        // Check if the chapter has sections with articles
-        if (chapter.sections && Array.isArray(chapter.sections)) {
-          for (const section of chapter.sections) {
-            if (!section || !section.articles || !Array.isArray(section.articles)) continue;
-            
-            for (const article of section.articles) {
-              if (!article || !article.article_number) continue;
-              
-              if (article.article_number === targetArticle || article.article_number === targetArticle.replace(/^0+/, '')) {
-                console.log(`[queryLawDatabase] Found article match in section: Article ${article.article_number}`);
-                
-                // Construct a comprehensive article text with all properties
-                let articleContent = `Article ${article.article_number}: ${article.content}`;
-                
-                if (article.points && Array.isArray(article.points)) {
-                  articleContent += '\n\nPoints:';
-                  article.points.forEach(point => {
-                    articleContent += `\n- ${point}`;
-                  });
-                }
-                
-                if (article.definitions) {
-                  articleContent += '\n\nDefinitions:';
-                  for (const [term, definition] of Object.entries(article.definitions)) {
-                    articleContent += `\n- ${term}: ${definition}`;
-                  }
-                }
-                
-                // Add other properties if they exist
-                ['sub_types', 'prohibitions', 'business_types', 'priority_order', 'conditions', 'punishments'].forEach(propName => {
-                  if (article[propName as keyof LawArticle] && Array.isArray(article[propName as keyof LawArticle])) {
-                    articleContent += `\n\n${propName.replace('_', ' ').charAt(0).toUpperCase() + propName.replace('_', ' ').slice(1)}:`;
-                    (article[propName as keyof LawArticle] as string[]).forEach(item => {
-                      articleContent += `\n- ${item}`;
-                    });
-                  }
-                });
-                
-                // Add punishment details if they exist
-                if (article.punishment_natural_person) {
-                  articleContent += `\n\nPunishment (Natural Person): ${article.punishment_natural_person}`;
-                }
-                
-                if (article.punishment_legal_person) {
-                  articleContent += `\n\nPunishment (Legal Person): ${article.punishment_legal_person}`;
-                }
-                
-                // Add with very high score to ensure it appears at the top
-                scoredResults.push({
-                  content: `--- Chapter ${chapter.chapter_number}: ${chapter.chapter_title} ---\n--- Section ${section.section_number}: ${section.section_title} ---\n\n${articleContent}`,
-                  score: 10000, // Very high score for direct matches
-                  chapterTitle: `Chapter ${chapter.chapter_number}: ${chapter.chapter_title}`,
-                  sectionTitle: `Section ${section.section_number}: ${section.section_title}`
-                });
-                
-                // Return early since we found an exact match
-                return aggregateAndSortResults(scoredResults).join('\n\n');
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  
-  // Continue with regular scoring if we don't have direct matches or as a fallback
-  if (scoredResults.length === 0) {
-    scoreChaptersAndSections(lawDatabase, queryKeywords, scoredResults, calculateScore);
-    scoreAndProcessArticles(lawDatabase, queryKeywords, scoredResults, processArticleContent, calculateScore);
-  }
-  
-  const finalRelevantContent = aggregateAndSortResults(scoredResults);
-
-  if (finalRelevantContent.length > 0) {
-    console.log(`[queryLawDatabase] Found ${finalRelevantContent.length} relevant sections.`);
-    return finalRelevantContent.join('\n\n');
-  } else {
-    console.log("[queryLawDatabase] No relevant content found.");
-    return "LAW_DATABASE_NO_RESULTS";
-  }
-}
-
-// Define the available information sources as a type
-export type InformationSource = "WEB_SEARCH" | "LAW_ON_INSURANCE" | "LAW_ON_CONSUMER_PROTECTION" | "INSURANCE_QNA" | "ALL_DATABASES";
-
-// Define agent tool names
-export type AgentTool = "query_law_on_insurance" | "query_law_on_consumer_protection" | "query_insurance_qna" | "search_web";
-
-// Function to decide which specific information sources to use
-export const decideInformationSource = async (
-  userMessage: string, 
-  history: { role: string; parts: { text: string; }[]; }[], 
-  selectedModel: string | undefined, 
-  genAI: GoogleGenerativeAI
-): Promise<InformationSource[]> => {
-  console.log(`[decideInformationSource] Using AI to decide information sources for: '${userMessage}'`);
-  
+): Promise<string> {
   try {
     const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-    const prompt = `Analyze the following user message and decide which information sources would be most appropriate to answer it. 
-    User message: "${userMessage}"
+    const systemPromptsText = systemPrompts ? combineSystemPrompts(systemPrompts) : "";
     
-    Available information sources and their descriptions:
-    - WEB_SEARCH: Search the web for general information, current events, news, or any information not in the specialized legal databases.
-    
-    - LAW_ON_INSURANCE: Comprehensive legal database containing Cambodia's Law on Insurance. Includes detailed articles on:
-      * Insurance contracts, policies, and premiums
-      * Rights and obligations of insurers and insured parties
-      * Insurance claim procedures and requirements
-      * Insurance company regulations and licensing
-      * Types of insurance (life, non-life, micro-insurance)
-      * Insurance intermediaries and brokers
-      * Penalties for insurance-related violations
-    
-    - LAW_ON_CONSUMER_PROTECTION: Complete legal database on Cambodia's Consumer Protection Law. Covers:
-      * Consumer rights and remedies
-      * Unfair practices and prohibited conduct
-      * Product safety and liability
-      * Consumer contracts and warranties
-      * Advertising and labeling requirements
-      * Dispute resolution mechanisms
-      * Penalties for violations of consumer rights
-    
-    - INSURANCE_QNA: Question and answer database about insurance and reinsurance in Cambodia. Contains:
-      * Practical explanations of insurance concepts
-      * Common questions about insurance policies
-      * Explanations of insurance terms and conditions
-      * Guidance on insurance claims and disputes
-      * Answers about insurance company operations
-      * Information on reinsurance practices
-    
-    - ALL_DATABASES: Access all three law databases at once (recommended for complex questions that might require information from multiple sources)
-    
-    Return ONLY a JSON array with the most relevant information sources, e.g., ["WEB_SEARCH"] or ["LAW_ON_INSURANCE"] or ["ALL_DATABASES"].
-    If the query mentions a specific article number or section from a law, select the appropriate law database.
-    If the query might need information from multiple law databases, use ["ALL_DATABASES"] instead of listing individual databases.
-    For general questions not related to Cambodia's legal system, use ["WEB_SEARCH"].
-    `;
-    
-    const response = await model.generateContent(prompt);
-    const responseText = response.response.text();
-    console.log(`[decideInformationSource] AI suggested response: ${responseText}`);
-    
-    // Try to parse the response as JSON
-    try {
-      // Look for JSON array in the response
-      const match = responseText.match(/\[.*\]/);
-      if (match) {
-        const suggestedSources = JSON.parse(match[0]);
-        // Filter to valid information sources
-        const validSources = suggestedSources.filter((source: string) => 
-          ["WEB_SEARCH", "LAW_ON_INSURANCE", "LAW_ON_CONSUMER_PROTECTION", "INSURANCE_QNA", "ALL_DATABASES"].includes(source)
-        );
-        
-        if (validSources.length > 0) {
-          console.log(`[decideInformationSource] AI suggested sources: ${JSON.stringify(validSources)}`);
-          return validSources as InformationSource[];
-        }
-      }
-    } catch (parseError) {
-      console.error(`[decideInformationSource] Error parsing AI suggestion: ${parseError}`);
+    // Create conversation context from history
+    let conversationContext = '';
+    if (conversationHistory && conversationHistory.length > 0) {
+      conversationContext = 'Conversation History:\n' + 
+        conversationHistory
+          .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
+          .join('\n') + '\n\n';
     }
-    
-    // Fallback if parsing fails: check for keywords in the response
-    if (responseText.toLowerCase().includes("insurance") && !responseText.toLowerCase().includes("consumer") && !responseText.toLowerCase().includes("q&a") && !responseText.toLowerCase().includes("qna")) {
-      console.log(`[decideInformationSource] Fallback to LAW_ON_INSURANCE based on AI response keywords`);
-      return ["LAW_ON_INSURANCE"];
-    } else if (responseText.toLowerCase().includes("consumer")) {
-      console.log(`[decideInformationSource] Fallback to LAW_ON_CONSUMER_PROTECTION based on AI response keywords`);
-      return ["LAW_ON_CONSUMER_PROTECTION"];
-    } else if (responseText.toLowerCase().includes("question") || responseText.toLowerCase().includes("answer") || responseText.toLowerCase().includes("qna") || responseText.toLowerCase().includes("q&a")) {
-      console.log(`[decideInformationSource] Fallback to INSURANCE_QNA based on AI response keywords`);
-      return ["INSURANCE_QNA"];
-    } else if (responseText.toLowerCase().includes("all") || responseText.toLowerCase().includes("multiple") || responseText.toLowerCase().includes("databases")) {
-      console.log(`[decideInformationSource] Fallback to ALL_DATABASES based on AI response keywords`);
-      return ["ALL_DATABASES"];
-    } else if (responseText.toLowerCase().includes("web") || responseText.toLowerCase().includes("search") || responseText.toLowerCase().includes("general")) {
-      console.log(`[decideInformationSource] Fallback to WEB_SEARCH based on AI response keywords`);
-      return ["WEB_SEARCH"];
-    }
-  } catch (error) {
-    console.error(`[decideInformationSource] Error getting AI suggestion: ${error}`);
-  }
 
-  // Final fallback: use ALL_DATABASES as default to ensure the user gets comprehensive information
-  console.log(`[decideInformationSource] Using default source: ALL_DATABASES`);
-  return ["ALL_DATABASES"];
-};
+    console.log(`[handleNoToolResponse] Generating response with${systemPrompts ? '' : 'out'} system prompts`);
+    
+    const directPrompt = `${systemPromptsText}\n\n${conversationContext}User asks: "${userMessage}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
+    
+    const response = await model.generateContent(directPrompt);
+    const responseText = response.response.text();
+    console.log(`[handleNoToolResponse] Generated response (${responseText.length} chars)`);
+    return responseText;
+  } catch (error) {
+    console.error(`[handleNoToolResponse] Error generating no_tool response: ${error}`);
+    // Fallback response
+    return "I'm Elixer, your friendly AI assistant. I'm having trouble processing your request right now. How else can I help you?";
+  }
+}
 
 export const getAIResponse = action({
   args: {
@@ -679,13 +190,11 @@ export const getAIResponse = action({
       });
       console.log(`[getAIResponse] Created placeholder message ${messageId} for streaming response.`);
       
-      // 2. Rank information sources to determine tool calling order
-      // If disableTools is true, we should skip tool calls and just use the model directly
-      let rankingResult;
+      // 2. Process the request based on tool settings
+      // If disableTools is true, use the dedicated no-tool handler
       if (disableTools) {
-        console.log(`[getAIResponse] Tools disabled by user setting, using only no_tool`);
-        rankingResult = { rankedToolGroups: [["no_tool"]] };
-      } else {
+        console.log(`[getAIResponse] Tools disabled by user setting, using handleNoToolResponse`);
+        
         // Only pass system prompts if they're not disabled
         const systemPromptsToUse = disableSystemPrompt ? undefined : {
           stylingPrompt: STYLING_PROMPT,
@@ -696,14 +205,56 @@ export const getAIResponse = action({
         
         console.log(`[getAIResponse] System prompts ${disableSystemPrompt ? 'disabled' : 'enabled'} by user setting`);
         
-        rankingResult = await rankInformationSources(
+        // Get response from the dedicated handler
+        const noToolResponse = await handleNoToolResponse(
           userMessage,
           formattedHistory,
-          selectedModel,
           genAI,
+          selectedModel,
           systemPromptsToUse
         );
+        
+        // Set appropriate processing phase
+        await ctx.runMutation(api.chat.updateProcessingPhase, {
+          messageId,
+          phase: "Thinking"
+        });
+        
+        // Update the message with the no-tool response
+        await ctx.runMutation(api.chat.appendMessageContent, {
+          messageId,
+          content: noToolResponse,
+        });
+        
+        // Mark the message as no longer streaming
+        await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+          messageId,
+          isStreaming: false,
+        });
+        
+        console.log(`[getAIResponse] Completed no-tool response (${noToolResponse.length} chars)`);
+        return messageId;
       }
+      
+      // If tools are enabled, continue with the normal agent-based approach
+      // Only pass system prompts if they're not disabled
+      const systemPromptsToUse = disableSystemPrompt ? undefined : {
+        stylingPrompt: STYLING_PROMPT,
+        lawPrompt: lawPrompt,
+        tonePrompt: tonePrompt,
+        policyPrompt: policyPrompt
+      };
+      
+      console.log(`[getAIResponse] System prompts ${disableSystemPrompt ? 'disabled' : 'enabled'} by user setting`);
+      
+      // Rank information sources to determine tool calling order
+      const rankingResult = await rankInformationSources(
+        userMessage,
+        formattedHistory,
+        selectedModel,
+        genAI,
+        systemPromptsToUse
+      );
       
       const { rankedToolGroups, directResponse } = rankingResult;
       
