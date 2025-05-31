@@ -10,9 +10,13 @@ import {
     executeToolsByGroup, 
     estimateTokenCount, 
     combineSystemPrompts,
-    SystemPrompts // Assuming this interface is exported from agentTools
+    SystemPrompts, // Assuming this interface is exported from agentTools
     // ToolExecutionResult // Assuming this interface is exported from agentTools or defined locally if needed
+    IToolExecutor
 } from "./agentTools"; // Adjust path if necessary
+
+// Import the toolExecutors registry - needs to be exported from agentTools.ts
+import { toolExecutors } from "./agentTools";
 
 // --- CONSTANTS ---
 const DEFAULT_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; // Or import from agentTools
@@ -168,29 +172,56 @@ async function handleNoToolResponseFlow(
     ctx: any,
     messageId: Id<"messages">
 ): Promise<string> {
-    console.log(`[handleNoToolResponseFlow] Generating direct response.`);
-    await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase: "Thinking (No Tools)" });
+    console.log(`[handleNoToolResponseFlow] Using AgentModeOffExecutor for direct response.`);
+    await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase: "Thinking (Agent Mode Off)" });
 
-    const model = genAI.getGenerativeModel({ model: selectedModel || DEFAULT_MODEL_NAME });
-    const systemPromptsText = systemPrompts ? combineSystemPrompts(systemPrompts) : "";
-    
-    let conversationContext = '';
-    if (conversationHistory.length > 0) {
-      conversationContext = 'Conversation History:\n' + 
-        conversationHistory
-          .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
-          .join('\n') + '\n\n';
+    // Get the agent_mode_off executor from agentTools
+    const executor = toolExecutors["agent_mode_off"];
+    if (!executor) {
+        console.error(`[handleNoToolResponseFlow] AgentModeOffExecutor not found. Falling back to direct response.`);
+        
+        const model = genAI.getGenerativeModel({ model: selectedModel || DEFAULT_MODEL_NAME });
+        const systemPromptsText = systemPrompts ? combineSystemPrompts(systemPrompts) : "";
+        
+        let conversationContext = '';
+        if (conversationHistory.length > 0) {
+          conversationContext = 'Conversation History:\n' + 
+            conversationHistory
+              .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
+              .join('\n') + '\n\n';
+        }
+
+        const directPrompt = `${systemPromptsText}\n\n${conversationContext}User asks: "${userMessage}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
+        
+        try {
+            const response = await model.generateContent(directPrompt);
+            const responseText = response.response.text();
+            console.log(`[handleNoToolResponseFlow] Generated response (${responseText.length} chars).`);
+            return responseText;
+        } catch (error) {
+            console.error(`[handleNoToolResponseFlow] Error: ${error}`);
+            return "I'm Elixer, your friendly AI assistant. I'm having trouble processing your request right now. How else can I help you?";
+        }
     }
-
-    const directPrompt = `${systemPromptsText}\n\n${conversationContext}User asks: "${userMessage}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
     
+    // Use the executor with proper params
     try {
-        const response = await model.generateContent(directPrompt);
-        const responseText = response.response.text();
-        console.log(`[handleNoToolResponseFlow] Generated response (${responseText.length} chars).`);
-        return responseText;
+        const result = await executor.execute({
+            query: userMessage,
+            conversationHistory: conversationHistory,
+            genAI: genAI,
+            selectedModel: selectedModel,
+            systemPrompts: systemPrompts,
+            ctx: ctx,
+            remainingTools: [],
+            messageId: messageId,
+            accumulatedContext: undefined
+        });
+        
+        console.log(`[handleNoToolResponseFlow] AgentModeOffExecutor result: ${result.content.length} chars.`);
+        return result.content;
     } catch (error) {
-        console.error(`[handleNoToolResponseFlow] Error: ${error}`);
+        console.error(`[handleNoToolResponseFlow] AgentModeOffExecutor error: ${error}`);
         return "I'm Elixer, your friendly AI assistant. I'm having trouble processing your request right now. How else can I help you?";
     }
 }

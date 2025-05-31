@@ -89,7 +89,7 @@ interface ToolExecutionResult {
   synthesisData?: string;                      // Data explicitly for synthesis during parallel tool execution
 }
 
-interface IToolExecutor {
+export interface IToolExecutor {
   name: string;
   execute(params: ToolExecutionParams): Promise<ToolExecutionResult>;
 }
@@ -932,9 +932,68 @@ class DatabaseQueryExecutor implements IToolExecutor {
   }
 }
 
+// --- AGENT MODE OFF EXECUTOR ---
+class AgentModeOffExecutor implements IToolExecutor {
+  public name = "agent_mode_off";
+
+  async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
+    console.log(`[AgentModeOffExecutor] Executing direct response with agent mode off.`);
+    const systemPromptsText = combineSystemPrompts(params.systemPrompts);
+    
+    // Create a simplified prompt that doesn't mention tools since agent mode is off
+    const directPrompt = `${systemPromptsText}\n\n`;
+    
+    // Add conversation history if available
+    const conversationContext = params.conversationHistory.length > 0 ?
+      'Conversation History:\n' + 
+      params.conversationHistory
+        .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
+        .join('\n') + '\n\n' :
+      '';
+    
+    const fullPrompt = `${directPrompt}${conversationContext}User asks: "${params.query}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
+
+    try {
+      const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME });
+      const response = await model.generateContent(fullPrompt);
+      const responseText = response.response.text();
+      
+      console.log(`[AgentModeOffExecutor] Generated response (${responseText.length} chars).`);
+      
+      // Create a simplified result - always treat it as a final answer
+      const result = createToolResult(
+        this.name,
+        responseText,
+        "FINAL_ANSWER",
+        undefined,
+        undefined,
+        undefined,
+        undefined // No search sources in agent mode off
+      );
+      
+      // For synthesis in parallel execution
+      result.synthesisData = responseText;
+      
+      return result;
+    } catch (error: any) {
+      console.error(`[AgentModeOffExecutor] LLM Error: ${error.message || String(error)}`);
+      return createToolResult(
+        this.name,
+        "I'm sorry, I encountered an error in processing your request.",
+        "FINAL_ANSWER", // Fallback to final answer on error
+        undefined,
+        error.message || String(error),
+        undefined,
+        undefined // No search sources in agent mode off
+      );
+    }
+  }
+}
+
 // --- TOOL EXECUTOR REGISTRY ---
-const toolExecutors: Record<string, IToolExecutor> = {
+export const toolExecutors: Record<string, IToolExecutor> = {
   "no_tool": new NoToolExecutor(),
+  "agent_mode_off": new AgentModeOffExecutor(),
   "search_web": new WebSearchExecutor(),
   "query_law_on_insurance": new DatabaseQueryExecutor("query_law_on_insurance", "Law_on_Insurance", "Law on Insurance"),
   "query_law_on_consumer_protection": new DatabaseQueryExecutor("query_law_on_consumer_protection", "Law_on_Consumer_Protection", "Law on Consumer Protection"),
