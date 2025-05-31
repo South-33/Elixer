@@ -14,7 +14,6 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as agentTools from "../agentTools.js";
-import type * as agentToolsOLD from "../agentToolsOLD.js";
 import type * as auth from "../auth.js";
 import type * as chat from "../chat.js";
 import type * as chatAI from "../chatAI.js";
@@ -34,7 +33,6 @@ import type * as search from "../search.js";
  */
 declare const fullApi: ApiFromModules<{
   agentTools: typeof agentTools;
-  agentToolsOLD: typeof agentToolsOLD;
   auth: typeof auth;
   chat: typeof chat;
   chatAI: typeof chatAI;

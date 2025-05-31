@@ -839,7 +839,7 @@ class DatabaseQueryExecutor implements IToolExecutor {
     if (dbFetchResult.content) {
         const jsonData = JSON.stringify(dbFetchResult.content, null, 2); // Limit size for prompt if necessary
         // Consider truncating jsonData if it's extremely large, or using a more sophisticated chunking/RAG approach
-        const MAX_DATA_SIZE_FOR_PROMPT = 5000000; // Example limit
+        const MAX_DATA_SIZE_FOR_PROMPT = 50000000000; // Example limit
         const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
 
         console.log(`[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`);
@@ -858,11 +858,10 @@ class DatabaseQueryExecutor implements IToolExecutor {
 
     if (dbFetchResult.content) {
       const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
-      // Truncate if too large for the prompt, LLM should be guided to use this data
-      const MAX_DATA_SIZE_FOR_PROMPT = 50000; // Example limit
-      const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
-      toolDataForPrompt = `Contents of ${this.readableName} (JSON format, potentially truncated) related to the query:\n\`\`\`json\n${truncatedJsonData}\n\`\`\``;
-      console.log(`[${this.name}] Database content loaded for LLM analysis (${toolDataForPrompt.length} chars, original ${jsonData.length}).`);
+      // No longer truncating the database content to ensure all chapters are accessible
+      // The LLM context window should be large enough to handle the full database
+      toolDataForPrompt = `Contents of ${this.readableName} (JSON format) related to the query:\n\`\`\`json\n${jsonData}\n\`\`\``;
+      console.log(`[${this.name}] Database content loaded for LLM analysis (${toolDataForPrompt.length} chars, full content).`);
     } else {
       toolDataForPrompt = `Error accessing or processing data from ${this.readableName}: ${dbFetchResult.error}. Inform the user if this prevents answering the query or try another tool.`;
       console.warn(`[${this.name}] ${toolDataForPrompt}`);
