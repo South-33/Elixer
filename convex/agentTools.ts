@@ -399,7 +399,7 @@ const parseToolGroups = (responseText: string): string[][] => {
 };
 
 // Helper function to combine system prompts
-const combineSystemPrompts = (systemPrompts?: {
+export const combineSystemPrompts = (systemPrompts?: {
   stylingPrompt?: string,
   lawPrompt?: string,
   tonePrompt?: string,

@@ -5,7 +5,7 @@ import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from "@google/generative-ai";
 import { Id } from "./_generated/dataModel";
-import { rankInformationSources, executeToolsByGroup, estimateTokenCount } from "./agentTools";
+import { rankInformationSources, executeToolsByGroup, estimateTokenCount, combineSystemPrompts } from "./agentTools";
 
 // --- Hardcoded Prompts ---
 const STYLING_PROMPT = `Use standard Markdown for formatting your responses.
@@ -84,6 +84,47 @@ const ensureString = (value: any): string => {
   return String(value);
 };
 
+// Dedicated handler for no-tool mode that properly respects system prompts
+async function handleNoToolResponse(
+  userMessage: string,
+  conversationHistory: { role: string; parts: { text: string; }[] }[],
+  genAI: GoogleGenerativeAI,
+  selectedModel: string | undefined,
+  systemPrompts?: {
+    stylingPrompt?: string,
+    lawPrompt?: string,
+    tonePrompt?: string,
+    policyPrompt?: string
+  }
+): Promise<string> {
+  try {
+    const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
+    const systemPromptsText = systemPrompts ? combineSystemPrompts(systemPrompts) : "";
+    
+    // Create conversation context from history
+    let conversationContext = '';
+    if (conversationHistory && conversationHistory.length > 0) {
+      conversationContext = 'Conversation History:\n' + 
+        conversationHistory
+          .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
+          .join('\n') + '\n\n';
+    }
+
+    console.log(`[handleNoToolResponse] Generating response with${systemPrompts ? '' : 'out'} system prompts`);
+    
+    const directPrompt = `${systemPromptsText}\n\n${conversationContext}User asks: "${userMessage}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
+    
+    const response = await model.generateContent(directPrompt);
+    const responseText = response.response.text();
+    console.log(`[handleNoToolResponse] Generated response (${responseText.length} chars)`);
+    return responseText;
+  } catch (error) {
+    console.error(`[handleNoToolResponse] Error generating no_tool response: ${error}`);
+    // Fallback response
+    return "I'm Elixer, your friendly AI assistant. I'm having trouble processing your request right now. How else can I help you?";
+  }
+}
+
 export const getAIResponse = action({
   args: {
     userMessage: v.string(),
@@ -149,13 +190,11 @@ export const getAIResponse = action({
       });
       console.log(`[getAIResponse] Created placeholder message ${messageId} for streaming response.`);
       
-      // 2. Rank information sources to determine tool calling order
-      // If disableTools is true, we should skip tool calls and just use the model directly
-      let rankingResult;
+      // 2. Process the request based on tool settings
+      // If disableTools is true, use the dedicated no-tool handler
       if (disableTools) {
-        console.log(`[getAIResponse] Tools disabled by user setting, using only no_tool`);
-        rankingResult = { rankedToolGroups: [["no_tool"]] };
-      } else {
+        console.log(`[getAIResponse] Tools disabled by user setting, using handleNoToolResponse`);
+        
         // Only pass system prompts if they're not disabled
         const systemPromptsToUse = disableSystemPrompt ? undefined : {
           stylingPrompt: STYLING_PROMPT,
@@ -166,14 +205,56 @@ export const getAIResponse = action({
         
         console.log(`[getAIResponse] System prompts ${disableSystemPrompt ? 'disabled' : 'enabled'} by user setting`);
         
-        rankingResult = await rankInformationSources(
+        // Get response from the dedicated handler
+        const noToolResponse = await handleNoToolResponse(
           userMessage,
           formattedHistory,
-          selectedModel,
           genAI,
+          selectedModel,
           systemPromptsToUse
         );
+        
+        // Set appropriate processing phase
+        await ctx.runMutation(api.chat.updateProcessingPhase, {
+          messageId,
+          phase: "Thinking"
+        });
+        
+        // Update the message with the no-tool response
+        await ctx.runMutation(api.chat.appendMessageContent, {
+          messageId,
+          content: noToolResponse,
+        });
+        
+        // Mark the message as no longer streaming
+        await ctx.runMutation(api.chat.updateMessageStreamingStatus, {
+          messageId,
+          isStreaming: false,
+        });
+        
+        console.log(`[getAIResponse] Completed no-tool response (${noToolResponse.length} chars)`);
+        return messageId;
       }
+      
+      // If tools are enabled, continue with the normal agent-based approach
+      // Only pass system prompts if they're not disabled
+      const systemPromptsToUse = disableSystemPrompt ? undefined : {
+        stylingPrompt: STYLING_PROMPT,
+        lawPrompt: lawPrompt,
+        tonePrompt: tonePrompt,
+        policyPrompt: policyPrompt
+      };
+      
+      console.log(`[getAIResponse] System prompts ${disableSystemPrompt ? 'disabled' : 'enabled'} by user setting`);
+      
+      // Rank information sources to determine tool calling order
+      const rankingResult = await rankInformationSources(
+        userMessage,
+        formattedHistory,
+        selectedModel,
+        genAI,
+        systemPromptsToUse
+      );
       
       const { rankedToolGroups, directResponse } = rankingResult;
       
