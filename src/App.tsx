@@ -350,7 +350,7 @@ export default function App() {
         style={{ marginLeft: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
       >
 
-        <div className="flex-1 flex flex-row pb-[90px] sm:pb-[50px] overflow-hidden"> {/* Adjusted padding-bottom to account for fixed input */}
+        <div className="flex-1 flex flex-row pb-[90px] sm:pb-[50px] overflow-hidden divide-x divide-slate-200"> {/* Added divide-x for proper pane separation */}
           {chatPanes.map(pane => (
             <ChatPane
               key={pane.id}
