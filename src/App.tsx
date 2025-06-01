@@ -280,7 +280,6 @@ export default function App() {
             resetHandler();
           }
         }
-        toast.success("Chat history cleared.");
       } catch (error) {
         console.error("Failed to clear chat:", error);
         toast.error("Failed to clear chat history.");
@@ -311,7 +310,6 @@ export default function App() {
         if (resetHandler) {
           resetHandler();
         }
-        toast.success("Chat history cleared for this panel.");
       } catch (error) {
         console.error("Failed to clear chat for pane:", paneId, error);
         toast.error("Failed to clear chat history for this panel.");

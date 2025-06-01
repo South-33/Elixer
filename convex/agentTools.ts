@@ -136,17 +136,17 @@ export const AVAILABLE_TOOLS: Tool[] = [
   },
   {
     name: "query_law_on_insurance",
-    description: "Query the Law on Insurance database for legal information. Provides structured legal text.",
+    description: "Query Cambodia's Law on Insurance database for legal information. Provides structured legal text.",
     parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the insurance law database"}}, required: ["query"]},
   },
   {
     name: "query_law_on_consumer_protection",
-    description: "Query the Law on Consumer Protection database for legal information. Provides structured legal text.",
+    description: "Query Cambodia's Law on Consumer Protection database for legal information. Provides structured legal text.",
     parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the consumer protection law database"}}, required: ["query"]},
   },
   {
     name: "query_insurance_qna",
-    description: "Query the Insurance Q&A database for common questions and answers. Good for specific insurance-related questions.",
+    description: "Query Cambodia's Insurance Q&A database for common questions and answers. Good for specific insurance-related questions.",
     parameters: { type: "object", properties: { query: { type: "string", description: "The specific question to search for in the Q&A database"}}, required: ["query"]},
   },
   {
@@ -455,21 +455,26 @@ User message: "${userMessage}"
     });
 
     prompt += `
+
+IMPORTANT GUIDELINES FOR RANKING:
+- THINK BEFORE RANKING.
+- Consider the descriptions carefully. If a specialized database matches the query, prioritize it over general web search for that specific information.
+- YOU MUST RANK ALL AVAILABLE TOOLS EVEN IF YOU DON'T USE IT.
+- Always rank the appropriate Databases FIRST if the User asks ANYTHING related to legal or insurance topics. For legal topics, this includes when user mentions "Articles", "Chapters", "Which Law", "Which Article", "legislation", "Insolvency", "regulation", etc. For insurance topics, this includes mentions of "coverage", "policy", "claims", "premiums", "benefits", etc. Database tools MUST be prioritized over web search for these domains.
+- Rank tools from most to least relevant for this specific query.
+- Group tools that should be tried simultaneously (or at the same priority level) together.
+- "no_tool" should generally be ranked last, or only if no other tool seems even remotely relevant. If "no_tool" is used after other tools, it can synthesize their accumulated context.
+- For legal and insurance topics, ALWAYS try the appropriate database tools BEFORE using web search. Only use web search for these domains as a last resort or to supplement database information.
+- For other topics, if using search, try putting it after other tools, as search will work best with more context.
+
 IMPORTANT INSTRUCTIONS:
 GROUP TOOLS BY PRIORITY LEVEL. Tools in the same group should be executed together (in parallel if applicable, or sequentially if one depends on another within the group - though current system runs them in parallel if grouped).
+Make sure to list all tools from: ${tools.map(t => t.name).join(', ')}
+Make sure to ONLY list tools that EXIST.
 Return your answer in this exact format, Example:
-TOOL_GROUPS:
 [1] tool_name1, tool_name2
 [2] tool_name3
 [3] tool_name4
-
-GUIDELINES FOR RANKING:
-- YOU MUST RANK ALL AVAILABLE TOOLS.
-- Rank tools from most to least relevant for this specific query.
-- Group tools that should be tried simultaneously (or at the same priority level) together.
-- If the query requires web search, include "search_web" appropriately, often early if the topic is unknown.
-- "no_tool" should generally be ranked last, or only if no other tool seems even remotely relevant. If "no_tool" is used after other tools, it can synthesize their accumulated context.
-- Consider the descriptions carefully. If a specialized database matches the query, prioritize it over general web search for that specific information.
 
 SPECIAL CASE - OPTIMIZATION:
 Only rank "no_tool" first (in group [1] by itself), IF you are ABSOLUTELY CERTAIN no specialized tools or web search are needed and you can answer directly, if yes, provide a direct response:
@@ -478,54 +483,6 @@ Your helpful response to the user (without reference to tools/ranking).
 ===DIRECT_RESPONSE_END===
 
 IMPORTANT IDENTITY AND TONE GUIDELINES: Follow the system instructions provided above.
-`;
-    return prompt;
-  }
-
-  static generateRankingPrompt(
-    userMessage: string,
-    history: { role: string; parts: { text: string }[] }[],
-    tools: Tool[],
-    systemPromptsText: string // Combined system prompts
-  ): string {
-    let prompt = `${systemPromptsText}Analyze the user message and conversation history to determine the optimal sequence and grouping of tools.
-
-User message: "${userMessage}"
-`;
-    if (history && history.length > 1) {
-      prompt += `\nImportant context from conversation history (last 5 messages before current query):\n`;
-      const relevantHistory = history.slice(0, -1).slice(-5); // Exclude the current user message already provided
-      for (const msg of relevantHistory) {
-        prompt += `  - ${msg.role === "user" ? "User" : "Assistant"} said: "${ensureString(msg.parts[0]?.text)}"\n`;
-      }
-    }
-
-    prompt += `\nAvailable tools and descriptions:\n`;
-    tools.forEach(tool => {
-      prompt += `- ${tool.name}: ${tool.description}\n`;
-    });
-
-    prompt += `
-INSTRUCTIONS:
-1. Rank ALL available tools from most to least relevant for the query.
-2. Group tools that should be tried at the same priority level. Tools in the same group might be executed in parallel.
-3. Respond in JSON format ONLY, matching this schema:
-   \`\`\`json
-   {
-     "toolGroups": [
-       { "rank": 1, "toolNames": ["tool_name1", "tool_name2"] },
-       { "rank": 2, "toolNames": ["tool_name3"] },
-       { "rank": 3, "toolNames": ["tool_name4"] }
-     ],
-     "directResponse": "string (OPTIONAL: If 'no_tool' is ranked first [rank 1] AND you are CERTAIN no other tools are needed, provide the direct answer here. Otherwise, omit or leave null.)",
-     "reasoning": "string (OPTIONAL: Briefly explain your ranking strategy.)"
-   }
-   \`\`\`
-GUIDELINES FOR RANKING:
-- "no_tool" should generally be last, or only if no other tool is relevant. If "no_tool" is used after other tools, it synthesizes their accumulated context.
-- If "no_tool" is ranked first and a "directResponse" is provided, the system may skip other tools.
-- Consider tool descriptions carefully. Prioritize specialized databases over general web search if a strong match exists.
-Ensure your entire response is a single, valid JSON object.
 `;
     return prompt;
   }
