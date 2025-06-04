@@ -1,8 +1,8 @@
-// src/Sidebar.tsx
-import React, { useState, useEffect, useRef } from 'react';
+  // src/Sidebar.tsx
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDownIcon, ChevronUpIcon, TrashIcon, XMarkIcon, ArrowsPointingOutIcon } from '@heroicons/react/20/solid';
 
-const DEFAULT_TONE_PROMPT = `Your Identity: You are the ELIXIR AI, a friendly, insightful, and motivating presence within the ELIXIR app, designed to assist users in Cambodia. While your core expertise relates to navigating insurance through the ELIXIR platform, you are also here to be a generally helpful, engaging, and supportive AI friend.
+export const DEFAULT_TONE_PROMPT = `Your Identity: You are the ELIXIR AI, a friendly, insightful, and motivating presence within the ELIXIR app, designed to assist users in Cambodia. While your core expertise relates to navigating insurance through the ELIXIR platform, you are also here to be a generally helpful, engaging, and supportive AI friend.
 
 Your Voice & Personality:
 *   Language: Match the user's language (If they speak in English respond in English, If user speak's in Khmer make sure to respond in khmer. 
@@ -40,9 +40,9 @@ Interaction Style:
 *   Less Robotic, More Human-like (and Concise): Strive for thoughtful but brief responses.
 *   Assume that the user is a local resident in Cambodia but if unsure, please ask kindly for confirmation.`;
 
-const DEFAULT_POLICY_PROMPT = ``;
+export const DEFAULT_POLICY_PROMPT = ``;
 
-const DEFAULT_LAW_PROMPT = ``;
+export const DEFAULT_LAW_PROMPT = ``;
 
 export interface SidebarProps {
   isOpen: boolean;
@@ -56,6 +56,7 @@ export interface SidebarProps {
   onClearChat: () => void; // Added prop for clearing chat
   hasActivePrompts: boolean;
   onWidthChange: (width: number) => void; // New prop for width change
+  setLoadDefaultsHandler?: (handler: () => void) => void; // Callback to pass the load defaults handler to parent
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -70,6 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   hasActivePrompts,
   onWidthChange, // Destructure new prop
   onClearChat, // Destructure new prop
+  setLoadDefaultsHandler, // Destructure new prop
 }) => {
   const [arePromptsExpanded, setArePromptsExpanded] = useState(true);
   const [showToneFullscreen, setShowToneFullscreen] = useState(false);
@@ -127,11 +129,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [isResizing]);
 
-  const handleLoadDefaultPrompts = () => {
+  const handleLoadDefaultPrompts = useCallback(() => {
     onTonePromptChange(DEFAULT_TONE_PROMPT);
     onPolicyPromptChange(DEFAULT_POLICY_PROMPT);
     onLawPromptChange(DEFAULT_LAW_PROMPT);
-  };
+  }, [onTonePromptChange, onPolicyPromptChange, onLawPromptChange]);
+
+  // Pass the handleLoadDefaultPrompts function to the parent if the handler prop is provided
+  useEffect(() => {
+    if (setLoadDefaultsHandler) {
+      setLoadDefaultsHandler(handleLoadDefaultPrompts);
+    }
+  }, [setLoadDefaultsHandler, handleLoadDefaultPrompts]);
+
+
 
   return (
     <aside

@@ -13,13 +13,14 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as DatabaseActions from "../DatabaseActions.js";
+import type * as Databases from "../Databases.js";
 import type * as agentTools from "../agentTools.js";
 import type * as auth from "../auth.js";
 import type * as chat from "../chat.js";
 import type * as chatAI from "../chatAI.js";
 import type * as http from "../http.js";
-import type * as lawDatabaseActions from "../lawDatabaseActions.js";
-import type * as lawDatabases from "../lawDatabases.js";
+import type * as migrations from "../migrations.js";
 import type * as router from "../router.js";
 import type * as search from "../search.js";
 
@@ -32,13 +33,14 @@ import type * as search from "../search.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  DatabaseActions: typeof DatabaseActions;
+  Databases: typeof Databases;
   agentTools: typeof agentTools;
   auth: typeof auth;
   chat: typeof chat;
   chatAI: typeof chatAI;
   http: typeof http;
-  lawDatabaseActions: typeof lawDatabaseActions;
-  lawDatabases: typeof lawDatabases;
+  migrations: typeof migrations;
   router: typeof router;
   search: typeof search;
 }>;

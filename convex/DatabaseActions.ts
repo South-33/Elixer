@@ -35,7 +35,7 @@ export const uploadLawDatabaseFromFile = action({
       displayName = displayName.replace(/_/g, ' '); // Replace underscores with spaces
       
       // Upload the database using the mutation API
-      const result = await ctx.runMutation(api.lawDatabases.uploadLawDatabase, {
+      const result = await ctx.runMutation(api.Databases.uploadLawDatabase, {
         name: fileName,
         displayName,
         file: database,  // Changed from 'content' to 'file' to match schema
