@@ -162,6 +162,7 @@ export const createMessage = mutation({
     content: v.string(),
     isStreaming: v.boolean(),
     paneId: v.string(), // Add paneId here
+    processingPhase: v.optional(v.string()) // Add processingPhase
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("messages", {
@@ -170,6 +171,7 @@ export const createMessage = mutation({
       content: args.content,
       isStreaming: args.isStreaming,
       paneId: args.paneId, // Store paneId
+      processingPhase: args.processingPhase // Store processingPhase
     });
   },
 });
@@ -218,18 +220,16 @@ export const clearPaneMessages = mutation({
 });
 
 
-export const appendMessageContent = mutation({
+export const updateMessageContentStream = mutation({
   args: {
     messageId: v.id("messages"),
-    content: v.string(),
+    content: v.string(), // This will be the new, full content
   },
   handler: async (ctx, args) => {
-    const message = await ctx.db.get(args.messageId);
-    if (!message) {
-      throw new Error("Message not found");
-    }
+    // No need to get the message first, just patch directly.
+    // This replaces the content field entirely.
     await ctx.db.patch(args.messageId, {
-      content: message.content + args.content,
+      content: args.content,
     });
   },
 });

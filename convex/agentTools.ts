@@ -101,7 +101,7 @@ interface LLMToolExecutionDecision {
   responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
   content: string;       // Full answer for FINAL_ANSWER, or a note for others.
   reasoning: string;     // Explanation for the decision.
-  contextToPreserve?: string; // Content for TRY_NEXT_TOOL_AND_ADD_CONTEXT.
+  contextToPreserve?: string | null; // Content for TRY_NEXT_TOOL_AND_ADD_CONTEXT, can be null.
 }
 
 /**
@@ -209,7 +209,7 @@ function createToolResult(
   source: string,
   content: string,
   responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
-  contextToAdd?: string,
+  contextToAdd?: string | null,
   error?: string,
   searchSuggestionsHtml?: string,
   finalSuggestionsHtmlToPreserve?: string // Used if this is a FINAL_ANSWER and we need to pull from accumulated
@@ -229,8 +229,9 @@ function createToolResult(
     responseType,
   };
 
-  if (contextToAdd && responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT") {
-    res.contextToAdd = contextToAdd;
+  const finalContextToAdd = (contextToAdd === null) ? undefined : contextToAdd;
+  if (finalContextToAdd && responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT") {
+    res.contextToAdd = finalContextToAdd;
   }
   if (error) {
     res.error = error;
@@ -256,6 +257,9 @@ const parseToolExecutionDecision = (responseText: string): LLMToolExecutionDecis
     if (result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && !result.contextToPreserve) {
       console.warn(`[parseToolExecutionDecision] responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT, but contextToPreserve is missing.`);
     }
+  } else {
+    // Log the raw responseText if parsing failed, to help debug LLM output
+    console.error(`[parseToolExecutionDecision] Error during ToolExecutionDecision parsing. Raw LLM responseText (up to 1000 chars): "${responseText.substring(0, 1000)}..."`);
   }
   
   return result;
@@ -335,7 +339,7 @@ function isLLMToolExecutionDecision(obj: any): obj is LLMToolExecutionDecision {
         validResponseTypes.includes(obj.responseType) &&
         typeof obj.content === 'string' &&
         typeof obj.reasoning === 'string' &&
-        (obj.contextToPreserve === undefined || typeof obj.contextToPreserve === 'string')
+        (obj.contextToPreserve === undefined || obj.contextToPreserve === null || typeof obj.contextToPreserve === 'string')
     );
 }
 
@@ -405,20 +409,22 @@ ${nextToolGroup && nextToolGroup.length > 0 ? `- NEXT TOOL(S) IF YOU SELECT TRY_
 TASK:
 1. Analyze the user query, conversation history, any data/context from the current tool, and any accumulated context.
 2. Decide on the best course of action.
-3. Respond in JSON format ONLY, matching this schema:
+3. Respond in JSON format ONLY, matching this schema. ***ALL FIELDS (\`responseType\`, \`content\`, \`reasoning\`) ARE MANDATORY.*** \`contextToPreserve\` is optional and ONLY used if \`responseType\` is \`TRY_NEXT_TOOL_AND_ADD_CONTEXT\`.
    \`\`\`json
    {
      "responseType": "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
-     "content": "Your full answer to the user (for FINAL_ANSWER). For TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT, this can be a brief note or empty. The user will not see this intermediate content directly.",
-     "reasoning": "Your detailed reasoning for choosing the responseType. If FINAL_ANSWER, explain sufficiency. If TRY_NEXT_TOOL, explain insufficiency and need for next. If TRY_NEXT_TOOL_AND_ADD_CONTEXT, explain what useful info was found and why it's being passed.",
-     "contextToPreserve": "string (ONLY if responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT). Summarize key findings, quotes, data from CURRENT TOOL to pass to next tools. This will be added to ACCUMULATED CONTEXT."
+     "content": "If responseType is FINAL_ANSWER, provide a CONCISE summary or the core answer here (max 1-2 sentences), suitable for a JSON string. The full, detailed, user-facing formatted response will be generated later. For TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT, this can be a brief note or empty. Ensure this string is properly escaped for JSON (e.g., \\n for newlines, \\\" for quotes).",
+     "reasoning": "***MANDATORY***: Your detailed reasoning for choosing the responseType. If FINAL_ANSWER, explain sufficiency. If TRY_NEXT_TOOL, explain insufficiency and need for next. If TRY_NEXT_TOOL_AND_ADD_CONTEXT, explain what useful info was found and why it's being passed. This field must always be present and contain a non-empty string.",
+     "contextToPreserve": "string (ONLY if responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT, otherwise omit this field or set to null). Summarize key findings, quotes, or data from CURRENT TOOL to pass to the next tools. This summary will be added to ACCUMULATED CONTEXT. Ensure this string is properly escaped for JSON (e.g., \\n for newlines, \\\" for quotes)."
    }
    \`\`\`
 
 DECISION GUIDELINES:
-- FINAL_ANSWER: If you have sufficient information from the current tool AND accumulated context for a complete answer.
-- TRY_NEXT_TOOL_AND_ADD_CONTEXT: PREFERRED for most cases. If the current tool provided ANY useful, relevant information (even partial) that should be preserved.
-- TRY_NEXT_TOOL: ONLY if the current tool yielded ABSOLUTELY NOTHING relevant or its output is unusable/error.
+- FINAL_ANSWER: Choose this ONLY IF:
+    1. The current tool AND any accumulated context provide a DEFINITIVE and COMPLETE answer to ALL parts of the user's query: "${query}".
+    2. AND there are NO PENDING tools in 'NEXT TOOL(S)' (i.e., '${nextToolGroup && nextToolGroup.length > 0 ? nextToolGroup.join(', ') : 'None'}') that are specifically designed for a distinct part of the user's query which the current tool might only partially or generally address. For example, if the query is about 'stock price and insurance law article X', and 'search_web' is current, but 'query_law_on_insurance' is next, 'search_web' should NOT aim to answer the law article part if 'query_law_on_insurance' can do it better.
+- TRY_NEXT_TOOL_AND_ADD_CONTEXT: PREFERRED if the current tool provided useful, relevant information for ITS PART of the query, OR if it provided some general context but a more specialized tool is pending in 'NEXT TOOL(S)' for another part of the query. Use this to pass on what the current tool found.
+- TRY_NEXT_TOOL: Choose this if the current tool yielded ABSOLUTELY NOTHING relevant for the part of the query it was intended for, OR if its output is unusable/error, AND it provides no useful context for upcoming tools.
 
 CONVERSATION HISTORY (for context):
 `;
@@ -663,10 +669,31 @@ class WebSearchExecutor implements IToolExecutor {
     const chat = searchModel.startChat({ tools: [googleSearchTool] as GenAITool[], history: params.conversationHistory.slice(0, -1) });
     
     // This first prompt is to GET search results
-    const searchInvocationPrompt = `Based on the query "${params.query}" and conversation history, perform a web search. Prioritize concise and directly relevant information.
-    ${params.accumulatedContext?.content ? `\nConsider this accumulated context: ${params.accumulatedContext.content.substring(0,500)}...\n` : ''}
-    ${systemPromptsText}
-    Please provide the search results.`;
+    let focusedQuery = params.query; // Start with the original query
+  const nextTools = params.nextToolGroup || [];
+  
+  // Check if a specialized law/insurance tool is coming up
+  const hasPendingLawInsuranceTool = nextTools.includes("query_law_on_insurance") || 
+                                   nextTools.includes("query_insurance_qna") || 
+                                   nextTools.includes("query_law_on_consumer_protection");
+
+  let searchDirectives = "Prioritize concise and directly relevant information for all parts of the query.";
+
+  if (hasPendingLawInsuranceTool && (params.query.toLowerCase().includes("law") || params.query.toLowerCase().includes("insurance") || params.query.toLowerCase().includes("article"))) {
+    searchDirectives = `
+The user's query has multiple parts. Some parts relate to legal or insurance matters that will likely be handled by a specialized database tool later (e.g., tools like 'query_law_on_insurance', 'query_insurance_qna'). 
+For THIS web search, please FOCUS PRIMARILY on the non-legal/non-insurance aspects of the query. 
+For example, if the query is "current Tesla stock and what does Article 3 of the Law on Insurance say?", you should focus your web search on "current Tesla stock".
+If the query ONLY contains legal/insurance questions and a specialized tool is pending, you can state that a web search is not the best primary source for that specific legal/insurance detail.
+Perform a web search based on these refined instructions.
+    `.trim();
+  }
+
+  const searchInvocationPrompt = `Based on the user query "${params.query}" and conversation history, perform a web search.
+${searchDirectives}
+  ${params.accumulatedContext?.content ? `\nConsider this accumulated context: ${params.accumulatedContext.content.substring(0,500)}...\n` : ''}
+  ${systemPromptsText}
+  Please provide the search results.`;
 
     let searchResultsText: string;
     let searchSuggestionsHtml: string | undefined;
@@ -679,9 +706,32 @@ class WebSearchExecutor implements IToolExecutor {
 
         // Extract search suggestions if available (this part remains similar)
         const responseAny = searchResponse as any; // To access groundingMetadata
-        if (responseAny.response.candidates?.[0]?.groundingMetadata?.searchEntryPoint?.renderedContent) {
-            searchSuggestionsHtml = responseAny.response.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
-            console.log(`[WebSearchExecutor] Extracted search suggestions HTML (len: ${searchSuggestionsHtml?.length}).`);
+        const groundingMeta = responseAny.response.candidates?.[0]?.groundingMetadata;
+
+        if (groundingMeta) {
+            const groundingChunks = groundingMeta.groundingChunks;
+
+            if (groundingChunks && Array.isArray(groundingChunks) && groundingChunks.length > 0) {
+                let html = "<strong>Sources:</strong><ul>";
+                for (const chunk of groundingChunks) {
+                    if (chunk.web && chunk.web.uri) {
+                        const url = chunk.web.uri;
+                        const title = chunk.web.title || url; // Use title if available, otherwise URL
+                        html += `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a></li>`;
+                    }
+                }
+                html += "</ul>";
+                searchSuggestionsHtml = html;
+                console.log(`[WebSearchExecutor] Extracted search suggestions HTML from groundingChunks (len: ${searchSuggestionsHtml?.length}).`);
+            } else if (groundingMeta.searchEntryPoint?.renderedContent) {
+                // Fallback to the general rendered content if no specific groundingChunks are found
+                searchSuggestionsHtml = groundingMeta.searchEntryPoint.renderedContent;
+                console.log(`[WebSearchExecutor] Extracted search suggestions HTML from renderedContent (fallback) (len: ${searchSuggestionsHtml?.length}).`);
+            } else {
+                console.log('[WebSearchExecutor] No groundingChunks or renderedContent found in groundingMetadata for suggestions.');
+            }
+        } else {
+            console.log('[WebSearchExecutor] No groundingMetadata found in search response.');
         }
     } catch (error: any) {
         console.error(`[WebSearchExecutor] Error during web search LLM call: ${error.message || String(error)}`);
@@ -1017,6 +1067,7 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
         
         // Also look for direct answers
         const directResponsePatterns = [
+            /===DIRECT_RESPONSE_START===\s*([\s\S]*?)\s*===DIRECT_RESPONSE_END===/i, // New pattern for specific markers
             /(?:Direct\s*Response|Direct\s*Answer)\s*[:\-]\s*([^\n]+(?:\n(?!Group|Tools|\d+[.\)])[^\n]+)*)/i,
             /(?:Answer without tools|No tools needed)\s*[:\-]\s*([^\n]+(?:\n(?!Group|Tools|\d+[.\)])[^\n]+)*)/i,
         ];

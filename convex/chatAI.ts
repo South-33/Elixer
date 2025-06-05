@@ -47,11 +47,6 @@ For legal citations and quotes:
   - Use > at the beginning of a line to format direct quotes or legal citations (a greater-than symbol followed by a space)
   - Use \`inline code\` formatting (with backticks) for specific article numbers or section references
 
-For tables (when comparing multiple items):
-  | Column 1 | Column 2 | Column 3 |
-  | -------- | -------- | -------- |
-  | Data     | Data     | Data     |
-
 Always ensure key names, important terms, and critical concepts are in **bold text** to make your response easily scannable.
 `;
 const CHECK_NEXT_SOURCE_MARKER = "[CHECK_NEXT_SOURCE]";
@@ -137,6 +132,7 @@ async function initializeAIResponse(
         content: "",
         isStreaming: true,
         paneId,
+        processingPhase: "Thinking"
     });
     console.log(`[initializeAIResponse] Created placeholder message ${messageId}.`);
     return { genAI, formattedHistory, messageId };
@@ -169,8 +165,8 @@ async function handleNoToolResponseFlow(
     genAI: GoogleGenerativeAI,
     selectedModel: string | undefined,
     systemPrompts: SystemPrompts | undefined, // Use the determined prompts
-    ctx: any,
-    messageId: Id<"messages">
+    ctx: any, // ctx is already a parameter
+    messageId: Id<"messages"> // messageId is already a parameter
 ): Promise<string> {
     console.log(`[handleNoToolResponseFlow] Using AgentModeOffExecutor for direct response.`);
     await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase: "Thinking (Agent Mode Off)" });
@@ -194,10 +190,24 @@ async function handleNoToolResponseFlow(
         const directPrompt = `${systemPromptsText}\n\n${conversationContext}User asks: "${userMessage}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
         
         try {
-            const response = await model.generateContent(directPrompt);
-            const responseText = response.response.text();
-            console.log(`[handleNoToolResponseFlow] Generated response (${responseText.length} chars).`);
-            return responseText;
+            // Stream the response
+            const streamResult = await model.generateContentStream(directPrompt);
+            let accumulatedResponseText = "";
+            // Optional: Initial small update to show something is happening
+            // await ctx.runMutation(api.chat.updateMessageContentStream, { messageId, content: "..." });
+
+            for await (const chunk of streamResult.stream) {
+                const chunkText = chunk.text();
+                if (chunkText) {
+                    accumulatedResponseText += chunkText;
+                    await ctx.runMutation(api.chat.updateMessageContentStream, {
+                        messageId,
+                        content: accumulatedResponseText,
+                    });
+                }
+            }
+            console.log(`[handleNoToolResponseFlow] Streamed response complete (${accumulatedResponseText.length} chars).`);
+            return accumulatedResponseText;
         } catch (error) {
             console.error(`[handleNoToolResponseFlow] Error: ${error}`);
             return "I'm Elixer, your friendly AI assistant. I'm having trouble processing your request right now. How else can I help you?";
@@ -233,7 +243,9 @@ async function callFinalLLMSynthesis(
     conversationHistory: { role: string; parts: { text: string }[] }[],
     genAI: GoogleGenerativeAI,
     selectedModel: string | undefined,
-    systemPrompts: SystemPrompts | undefined // The full SystemPrompts object or undefined
+    systemPrompts: SystemPrompts | undefined, // The full SystemPrompts object or undefined
+    ctx: any, // Added ctx for mutations
+    messageId: Id<"messages"> // Added messageId for mutations
 ): Promise<string> {
     console.log(`[callFinalLLMSynthesis] Synthesizing final response from source: ${toolSource}`);
     const model = genAI.getGenerativeModel({ model: selectedModel || DEFAULT_MODEL_NAME });
@@ -266,10 +278,38 @@ async function callFinalLLMSynthesis(
     messageToSendToGemini += `\nInformation found from ${toolSource}:\n${cleanedToolContent}\n\nProvide a comprehensive and helpful response.`;
 
     const promptTokens = estimateTokenCount(messageToSendToGemini);
-    console.log(`[callFinalLLMSynthesis] Sending prompt to Gemini. Length: ${messageToSendToGemini.length} chars, ~${promptTokens} tokens`);
-    
-    const result = await model.generateContent(messageToSendToGemini);
-    let responseText = result.response.text();
+    console.log(`[callFinalLLMSynthesis] Sending prompt to Gemini for streaming. Length: ${messageToSendToGemini.length} chars, ~${promptTokens} tokens`);
+
+    const streamResult = await model.generateContentStream(messageToSendToGemini);
+    let accumulatedResponseText = "";
+    let chunkBuffer = ""; // Buffer for accumulating small chunks
+    const MIN_CHUNK_UPDATE_LENGTH = 1; // Send update when buffer reaches this length (tune as needed)
+
+    for await (const chunk of streamResult.stream) {
+        const chunkText = chunk.text();
+        console.log(`[callFinalLLMSynthesis] Received LLM chunk. Length: ${chunkText?.length || 0}`); // DIAGNOSTIC LOG
+        if (chunkText) {
+            chunkBuffer += chunkText;
+            if (chunkBuffer.length >= MIN_CHUNK_UPDATE_LENGTH) {
+                accumulatedResponseText += chunkBuffer;
+                await ctx.runMutation(api.chat.updateMessageContentStream, {
+                    messageId,
+                    content: accumulatedResponseText,
+                });
+                chunkBuffer = ""; // Clear the buffer
+            }
+        }
+    }
+
+    // Send any remaining text in the buffer
+    if (chunkBuffer.length > 0) {
+        accumulatedResponseText += chunkBuffer;
+        await ctx.runMutation(api.chat.updateMessageContentStream, {
+            messageId,
+            content: accumulatedResponseText,
+        });
+    }
+    let responseText = accumulatedResponseText;
 
     // Add search suggestions back to the response if they were present
     if (searchSuggestionsHtml && !responseText.includes("<!-- SEARCH_SUGGESTIONS_HTML:")) {
@@ -326,7 +366,7 @@ async function processQueryWithTools(
         rankingResult.rankedToolGroups[0][0] === "no_tool" &&
         rankingResult.directResponse) {
         console.log(`[processQueryWithTools] OPTIMIZATION: Using direct response from ranking (${rankingResult.directResponse.length} chars).`);
-        await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase: "Thinking (Direct)" });
+        await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase: "Thinking" });
         return { finalContent: rankingResult.directResponse };
     }
 
@@ -387,7 +427,9 @@ async function processQueryWithTools(
         formattedHistory,
         genAI,
         args.selectedModel || undefined,
-        systemPromptsToUse
+        systemPromptsToUse,
+        ctx, // Pass ctx
+        messageId // Pass messageId
     );
 
     // 7. Handle "CHECK_NEXT_SOURCE" loop
@@ -397,7 +439,15 @@ async function processQueryWithTools(
         console.log(`[processQueryWithTools] AI indicated CHECK_NEXT_SOURCE.`);
         currentResponseContent = currentResponseContent.replace(CHECK_NEXT_SOURCE_MARKER, "").trim();
         
-        await ctx.runMutation(api.chat.appendMessageContent, {
+        // The previous call to callFinalLLMSynthesis would have already streamed its content.
+        // If CHECK_NEXT_SOURCE implies adding more content, this needs careful handling.
+        // For now, we assume currentResponseContent is the final result of the *first* synthesis.
+        // If the intent is to append to what was just streamed, this logic might need adjustment.
+        // However, updateMessageContentStream will *replace*.
+        // This specific append might be better handled by re-invoking synthesis with more context if needed,
+        // or ensuring the CHECK_NEXT_SOURCE marker is handled before the synthesis finishes its stream.
+        // For simplicity, let's assume the content is replaced if this path is hit after first synthesis.
+        await ctx.runMutation(api.chat.updateMessageContentStream, {
             messageId,
             content: currentResponseContent + "\n\n*Checking additional sources...*", // Append initial part
         });
@@ -435,23 +485,21 @@ async function processQueryWithTools(
                 formattedHistory,
                 genAI,
                 args.selectedModel || undefined,
-                systemPromptsToUse // System prompts for final synthesis
+                systemPromptsToUse, // System prompts for final synthesis
+                ctx, // Pass ctx
+                messageId // Pass messageId
             );
-            // Override the existing message content with the fully synthesized one
-            await ctx.runMutation(api.chat.appendMessageContent, { // Assumes updateMessageContent exists
-                 messageId,
-                 content: currentResponseContent,
-            });
-
-
+            // callFinalLLMSynthesis (called just before this block) has already streamed the content.
+            // The 'currentResponseContent' variable holds the full string result of that stream.
         } else {
             console.log("[processQueryWithTools] CHECK_NEXT_SOURCE indicated, but no more tool groups to try.");
-            // The currentResponseContent (without marker) will be used.
-            // Update message to remove "Checking additional sources..." if it was the last thing
-             await ctx.runMutation(api.chat.appendMessageContent, {
-                 messageId,
-                 content: currentResponseContent,
-             });
+            // The currentResponseContent (without marker, but possibly with 'Checking additional sources...') will be used.
+            // If 'Checking additional sources...' was added and no new synthesis happened, it might remain.
+            // For a cleaner final output if no further synthesis occurs, we could explicitly update here,
+            // or rely on the final update in getAIResponse. For now, let currentResponseContent be as is.
+            // The callFinalLLMSynthesis should ideally be called one last time if content changed significantly
+            // without re-synthesis, to ensure proper streaming finalization.
+            // However, if no new tools were run, currentResponseContent is simply the initially synthesized text minus the marker.
         }
     }
     
@@ -511,10 +559,13 @@ export const getAIResponse = action({
             }
 
             // 4. Finalize message in database
-            await ctx.runMutation(api.chat.appendMessageContent, { // Using updateMessageContent instead of append
-                messageId,
-                content: responseData.finalContent,
-            });
+        // The streaming functions (handleNoToolResponseFlow/callFinalLLMSynthesis) already updated the content iteratively.
+        // This final update might be redundant if responseData.finalContent is the same as the last streamed content.
+        // However, it ensures the content is set to the definitive final version from responseData.
+        await ctx.runMutation(api.chat.updateMessageContentStream, {
+            messageId,
+            content: responseData.finalContent,
+        });
 
             if (responseData.searchSuggestionsHtml) {
                 await ctx.runMutation(api.chat.updateMessageMetadata, {
@@ -537,7 +588,7 @@ export const getAIResponse = action({
 
             if (messageId) {
                 try {
-                    await ctx.runMutation(api.chat.appendMessageContent, { messageId, content: errorMessage });
+                    await ctx.runMutation(api.chat.updateMessageContentStream, { messageId, content: errorMessage });
                     await ctx.runMutation(api.chat.updateMessageStreamingStatus, { messageId, isStreaming: false });
                 } catch (updateError) {
                     console.error("[getAIResponse] Error updating message with error state:", updateError);
