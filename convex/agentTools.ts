@@ -461,23 +461,24 @@ User message: "${userMessage}"
 
     prompt += `
 
+YOUR TASK:
+1. First, briefly analyze the user's query and conversation history. Identify the key entities, intent, and any specific information requested.
+2. Consider the available tools and their descriptions. Briefly note which tool categories or specific tools seem potentially relevant to the identified aspects of the query. This is your 'thinking step'.
+3. After your analysis and consideration, on a NEW LINE, provide the tool ranking strictly following the "IMPORTANT INSTRUCTIONS" for format below.
+
 IMPORTANT GUIDELINES FOR RANKING:
-- THINK STEP BY STEP BEFORE RANKING.
-- YOU MUST RANK ALL AVAILABLE TOOLS EVEN IF YOU DON'T USE IT.
-- Consider the descriptions carefully. If a specialized database matches the query, prioritize it over general web search for that specific information.
-- Don't be scared to rank them in the same PRIORITY LEVEL, it's better to rank similar relevance tools inthe same PRIORITY LEVEL than different PRIORITY LEVEL.
-- Always rank the appropriate Databases FIRST if the User asks ANYTHING related to legal or insurance topics. For legal topics, this includes when user mentions "Articles", "Chapters", "Which Law", "Which Article", "legislation", "Insolvency", "regulation", etc. For insurance topics, this includes mentions of "coverage", "policy", "claims", "premiums", "benefits", etc. Database tools MUST be prioritized over web search for these domains.
-- Rank tools from most to least relevant for this specific query.
-- Group tools that should be tried simultaneously (or at the same priority level) together.
-- "no_tool" should generally be ranked last, or only if no other tool seems even remotely relevant. If "no_tool" is used after other tools, it can synthesize their accumulated context.
-- For legal and insurance topics, ALWAYS try the appropriate database tools BEFORE using web search. Only use web search for these domains as a last resort or to supplement database information.
-- For other topics, if using search, try putting it after other tools, as search will work best with more context.
+- YOU MUST RANK ALL AVAILABLE TOOLS.
+- Consider tool descriptions carefully. Prioritize specialized databases over general web search if a direct match for the query's information needs.
+- Group similarly relevant tools in the same priority level.
+- For legal/insurance queries (e.g., 'Articles', 'policy terms', 'legislation'): ALWAYS prioritize relevant database tools FIRST, before general web search. Use web search for these topics only as a supplement or last resort.
+- Rank tools from most to least relevant for the current query.
+- "no_tool" should generally be ranked last, unless no other tool is remotely relevant. If used after other tools, "no_tool" can synthesize their accumulated context.
+- For non-legal/insurance topics, consider placing general web search after other tools to leverage accumulated context.
 
 IMPORTANT INSTRUCTIONS:
-GROUP TOOLS BY PRIORITY LEVEL. Tools in the same group should be executed together (in parallel if applicable, or sequentially if one depends on another within the group - though current system runs them in parallel if grouped).
-Make sure to list all tools from: ${tools.map(t => t.name).join(', ')}
-Make sure to ONLY list tools that EXIST.
-Return your answer in this exact format, Example:
+- GROUP TOOLS BY PRIORITY LEVEL (e.g., [1], [2]). Tools in the same group are tried together.
+- List all tools provided: ${tools.map(t => t.name).join(', ')}
+- Output format example:
 [1] tool_name1, tool_name2
 [2] tool_name3
 [3] tool_name4, tool_name5
@@ -537,7 +538,7 @@ TASK:
 3. If some sources provided errors or irrelevant data, acknowledge if necessary but focus on the useful information.
 4. If no source provided useful information, and accumulated context is also unhelpful, state that you couldn't find the answer.
 5. The output from this synthesis will be treated as a FINAL_ANSWER for this stage.
-6. Respond in JSON format ONLY, matching this schema:
+6. CRITICAL: Your entire response MUST be a single, valid JSON object. Do NOT output any text outside of this JSON object. It MUST conform to the following schema:
    \`\`\`json
    {
      "synthesizedAnswer": "Your single, comprehensive, and helpful answer for the user, formatted using proper markdown.",
@@ -546,6 +547,7 @@ TASK:
    \`\`\`
 Ensure your entire response is a single, valid JSON object.
 `;
+    prompt += "\nIMPORTANT: Remember, your entire output must be ONLY the JSON object described above. No other text, no pleasantries, just the JSON.";
     return prompt;
   }
 }
@@ -762,10 +764,10 @@ class WebSearchExecutor implements IToolExecutor {
   }
 }
 
-class DatabaseQueryExecutor implements IToolExecutor {
+abstract class AbstractDatabaseExecutor implements IToolExecutor {
   public name: string;
-  private databaseInternalName: string;
-  private readableName: string;
+  protected databaseInternalName: string;
+  protected readableName: string;
 
   constructor(toolName: string, databaseInternalName: string, readableName: string) {
     this.name = toolName;
@@ -773,19 +775,117 @@ class DatabaseQueryExecutor implements IToolExecutor {
     this.readableName = readableName;
   }
 
-  private async fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: LawDatabase | null; error?: string }> {
+  protected abstract fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: any | null; error?: string }>;
+
+  async fetchRawData(ctx: ConvexActionCtx): Promise<{ toolName: string; data: string; error?: string; dbSize?: number }> {
+    await updateProcessingPhase(ctx, undefined, `Fetching ${this.readableName} content`, this.name);
+    const dbFetchResult = await this.fetchDatabaseContent(ctx);
+    if (dbFetchResult.content) {
+        const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
+        const MAX_DATA_SIZE_FOR_PROMPT = 50000000000; 
+        const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
+        console.log(`[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`);
+        return { toolName: this.name, data: truncatedJsonData, dbSize: jsonData.length };
+    }
+    console.warn(`[${this.name}] Failed to fetch raw data. Error: ${dbFetchResult.error}`);
+    return { toolName: this.name, data: "", error: dbFetchResult.error || `No content found or error fetching from ${this.readableName}.`, dbSize: 0 };
+  }
+
+  async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
+    console.log(`[${this.name}] Executing for query: \"${params.query.substring(0, 50)}...\" Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
+    await updateProcessingPhase(params.ctx, params.messageId, `Querying ${this.readableName}`, this.name);
+
+    const dbFetchResult = await this.fetchDatabaseContent(params.ctx);
+    let toolDataForPrompt: string;
+
+    if (dbFetchResult.content) {
+      const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
+      toolDataForPrompt = `Contents of ${this.readableName} (JSON format) related to the query:\n\`\`\`json\n${jsonData}\n\`\`\``;
+      console.log(`[${this.name}] Database content loaded for LLM analysis (${toolDataForPrompt.length} chars, full content).`);
+    } else {
+      toolDataForPrompt = `Error accessing or processing data from ${this.readableName}: ${dbFetchResult.error}. Inform the user if this prevents answering the query or try another tool.`;
+      console.warn(`[${this.name}] ${toolDataForPrompt}`);
+    }
+    
+    const systemPromptsText = combineSystemPrompts(params.systemPrompts);
+    const llmPrompt = PromptFactory.generateToolExecutionPrompt(
+      params.query,
+      this.name,
+      toolDataForPrompt,
+      params.remainingTools,
+      params.conversationHistory,
+      systemPromptsText,
+      params.accumulatedContext,
+      params.nextToolGroup
+    );
+
+    try {
+      const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
+      const response = await model.generateContent(llmPrompt);
+      const responseText = response.response.text();
+      const parsedDecision = parseToolExecutionDecision(responseText);
+
+      if ('error' in parsedDecision) {
+        throw new Error(parsedDecision.error);
+      }
+      
+      console.log(`[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: \"${parsedDecision.reasoning.substring(0,100)}...\"`);
+
+      return createToolResult(
+        this.name,
+        parsedDecision.content,
+        parsedDecision.responseType,
+        parsedDecision.contextToPreserve,
+        undefined, 
+        undefined, 
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+      );
+    } catch (error: any) {
+      console.error(`[${this.name}] LLM processing error: ${error.message}. Prompt start:\n${llmPrompt.substring(0,300)}...`);
+      if (dbFetchResult.content) {
+          const fullContentString = JSON.stringify(dbFetchResult.content, null, 2);
+          return createToolResult(
+              this.name,
+              `LLM processing failed. Full content of ${this.readableName} provided as fallback. Consider if this is enough or if another tool should be tried. Original query: \"${params.query}\"`, 
+              "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
+              fullContentString,
+              error.message, 
+              undefined, 
+              params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+          );
+      }
+      return createToolResult(
+        this.name,
+        `LLM processing failed for ${this.readableName}. Error: ${error.message}`,
+        "TRY_NEXT_TOOL",
+        undefined,
+        error.message,
+        undefined,
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+      );
+    }
+  }
+}
+
+
+class DatabaseQueryExecutor extends AbstractDatabaseExecutor {
+  constructor(toolName: string, databaseInternalName: string, readableName: string) {
+    super(toolName, databaseInternalName, readableName);
+  }
+
+  protected async fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: LawDatabase | null; error?: string }> {
     try {
       const dbResult = await ctx.runQuery(api.Databases.getLawDatabaseContentByName, {
         name: this.databaseInternalName,
       });
 
       if (dbResult.success && dbResult.database?.content) {
-        // Basic validation, assuming LawDatabase is an object
         if (typeof dbResult.database.content !== 'object' || dbResult.database.content === null) {
              return { content: null, error: `The ${this.readableName} database content is not in the expected object format.` };
         }
         return { content: dbResult.database.content as LawDatabase };
       } else {
+        // Use dbResult.error if available, otherwise a generic message
         const errorMessage = dbResult.error || `Failed to retrieve or parse content from ${this.readableName} database.`;
         console.warn(`[${this.name}] Database fetch warning: ${errorMessage}`);
         return { content: null, error: errorMessage };
@@ -795,121 +895,24 @@ class DatabaseQueryExecutor implements IToolExecutor {
       return { content: null, error: error.message || `An error occurred while accessing the ${this.readableName} database.` };
     }
   }
-  
-  async fetchRawData(ctx: ConvexActionCtx): Promise<{ toolName: string; data: string; error?: string; dbSize?: number }> {
-    await updateProcessingPhase(ctx, undefined, `Fetching ${this.readableName} content`, this.name); // messageId is undefined here
-    const dbFetchResult = await this.fetchDatabaseContent(ctx);
-    if (dbFetchResult.content) {
-        const jsonData = JSON.stringify(dbFetchResult.content, null, 2); // Limit size for prompt if necessary
-        // Consider truncating jsonData if it's extremely large, or using a more sophisticated chunking/RAG approach
-        const MAX_DATA_SIZE_FOR_PROMPT = 50000000000; // Example limit
-        const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
-
-        console.log(`[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`);
-        return { toolName: this.name, data: truncatedJsonData, dbSize: jsonData.length };
-    }
-    console.warn(`[${this.name}] Failed to fetch raw data. Error: ${dbFetchResult.error}`);
-    return { toolName: this.name, data: "", error: dbFetchResult.error || "Unknown error fetching data." };
-  }
-
-  async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-  console.log(`[${this.name}] Executing for query: "${params.query.substring(0, 50)}..." Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
-  await updateProcessingPhase(params.ctx, params.messageId, `Querying ${this.readableName} database`, this.name);
-
-  const dbFetchResult = await this.fetchDatabaseContent(params.ctx);
-  let toolDataForPrompt: string;
-
-  if (dbFetchResult.content) {
-    const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
-    toolDataForPrompt = `Contents of ${this.readableName} (JSON format) related to the query:\n\`\`\`json\n${jsonData}\n\`\`\``;
-    console.log(`[${this.name}] Database content loaded for LLM analysis (${toolDataForPrompt.length} chars, full content).`);
-  } else {
-    toolDataForPrompt = `Error accessing or processing data from ${this.readableName}: ${dbFetchResult.error}. Inform the user if this prevents answering the query or try another tool.`;
-    console.warn(`[${this.name}] ${toolDataForPrompt}`);
-  }
-  
-  const systemPromptsText = combineSystemPrompts(params.systemPrompts);
-  const dbPrompt = PromptFactory.generateToolExecutionPrompt(
-    params.query,
-    this.name,
-    toolDataForPrompt,
-    params.remainingTools,
-    params.conversationHistory,
-    systemPromptsText,
-    params.accumulatedContext,
-    params.nextToolGroup
-  );
-
-  try {
-    const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
-    const response = await model.generateContent(dbPrompt);
-    const responseText = response.response.text();
-    const parsedDecision = parseToolExecutionDecision(responseText);
-
-    if ('error' in parsedDecision) {
-      throw new Error(parsedDecision.error);
-    }
-    
-    console.log(`[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0,100)}..."`);
-    
-    const result = createToolResult(
-      this.name,
-      parsedDecision.content,
-      parsedDecision.responseType,
-      parsedDecision.contextToPreserve,
-      dbFetchResult.error && parsedDecision.responseType !== "FINAL_ANSWER" ? `Underlying DB issue: ${dbFetchResult.error}` : undefined,
-      undefined, // Database queries don't generate search suggestions themselves
-      params.accumulatedContext?.searchSuggestionsHtmlToPreserve
-    );
-    
-    if (dbFetchResult.content) {
-      const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
-      const MAX_SIZE_FOR_SYNTHESIS = 100000;
-      const truncatedData = jsonData.length > MAX_SIZE_FOR_SYNTHESIS ? 
-        jsonData.substring(0, MAX_SIZE_FOR_SYNTHESIS) + "\n... (data truncated for synthesis)" : jsonData;
-      result.synthesisData = `${this.readableName} database content:\n\`\`\`json\n${truncatedData}\n\`\`\``;
-    } else if (dbFetchResult.error) {
-      result.synthesisData = `Error accessing ${this.readableName} database: ${dbFetchResult.error}`;
-    }
-    
-    return result;
-  } catch (error: any) {
-    console.error(`[${this.name}] LLM Error or Parsing Error: ${error.message || String(error)}`);
-    return createToolResult(
-      this.name,
-      `I encountered an issue while searching the ${this.readableName} database.`,
-      "TRY_NEXT_TOOL",
-      undefined,
-      `LLM/Parsing Error: ${error.message || String(error)}${dbFetchResult.error ? '; DB Error: ' + dbFetchResult.error : ''}`,
-      undefined,
-      params.accumulatedContext?.searchSuggestionsHtmlToPreserve
-    );
-  }
 }
 
-}
-
-class ElixerWhitepaperContentExecutor implements IToolExecutor {
-  public name: string;
-  private databaseInternalName: string;
-  private readableName: string;
-
+class ElixerWhitepaperContentExecutor extends AbstractDatabaseExecutor {
   constructor(toolName: string, databaseInternalName: string, readableName: string) {
-    this.name = toolName;
-    this.databaseInternalName = databaseInternalName;
-    this.readableName = readableName;
+    super(toolName, databaseInternalName, readableName);
   }
 
-  private async fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: any | null; error?: string }> {
+  protected async fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: any | null; error?: string }> {
     try {
       const dbResult = await ctx.runQuery(api.Databases.getLawDatabaseContentByName, {
         name: this.databaseInternalName,
       });
 
       if (dbResult.success && dbResult.database?.content) {
-        return { content: dbResult.database.content };
+        return { content: dbResult.database.content }; // Content is 'any' here
       } else {
-        const errorMessage = dbResult.message || `Failed to retrieve content from ${this.readableName} database.`;
+        // Use dbResult.message if available (as per original ElixerWhitepaperContentExecutor), otherwise a generic message
+        const errorMessage = (dbResult as any).message || `Failed to retrieve content from ${this.readableName} database.`;
         console.warn(`[${this.name}] Database fetch warning: ${errorMessage}`);
         return { content: null, error: errorMessage };
       }
@@ -918,95 +921,6 @@ class ElixerWhitepaperContentExecutor implements IToolExecutor {
       return { content: null, error: error.message || `An error occurred while accessing the ${this.readableName} database.` };
     }
   }
-
-  async fetchRawData(ctx: ConvexActionCtx): Promise<{ toolName: string; data: string; error?: string; dbSize?: number }> {
-    await updateProcessingPhase(ctx, undefined, `Fetching ${this.readableName} content`, this.name); 
-    const dbFetchResult = await this.fetchDatabaseContent(ctx);
-    if (dbFetchResult.content) {
-        const jsonData = JSON.stringify(dbFetchResult.content, null, 2); 
-        const MAX_DATA_SIZE_FOR_PROMPT = 50000000000; 
-        const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
-        return { toolName: this.name, data: truncatedJsonData, dbSize: jsonData.length };
-    }
-    return { toolName: this.name, data: "", error: dbFetchResult.error || `No content found for ${this.readableName}.`, dbSize: 0 };
-  }
-
-  async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-  console.log(`[${this.name}] Executing for query: "${params.query.substring(0, 50)}..." Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
-  await updateProcessingPhase(params.ctx, params.messageId, `Querying ${this.readableName}`, this.name);
-
-  const dbFetchResult = await this.fetchDatabaseContent(params.ctx);
-  let toolDataForPrompt: string;
-
-  if (dbFetchResult.content) {
-    const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
-    toolDataForPrompt = `Contents of ${this.readableName} (JSON format) related to the query:\n\`\`\`json\n${jsonData}\n\`\`\``;
-    console.log(`[${this.name}] Content loaded for LLM analysis (${toolDataForPrompt.length} chars, full content).`);
-  } else {
-    toolDataForPrompt = `Error accessing or processing data from ${this.readableName}: ${dbFetchResult.error}. Inform the user if this prevents answering the query or try another tool.`;
-    console.warn(`[${this.name}] ${toolDataForPrompt}`);
-  }
-  
-  const systemPromptsText = combineSystemPrompts(params.systemPrompts);
-  const llmPrompt = PromptFactory.generateToolExecutionPrompt(
-    params.query,
-    this.name,
-    toolDataForPrompt,
-    params.remainingTools,
-    params.conversationHistory,
-    systemPromptsText,
-    params.accumulatedContext,
-    params.nextToolGroup
-  );
-
-  try {
-    const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
-    const response = await model.generateContent(llmPrompt);
-    const responseText = response.response.text();
-    const parsedDecision = parseToolExecutionDecision(responseText);
-
-    if ('error' in parsedDecision) {
-      throw new Error(parsedDecision.error);
-    }
-    
-    console.log(`[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0,100)}..."`);
-
-    return createToolResult(
-      this.name,
-      parsedDecision.content,
-      parsedDecision.responseType,
-      parsedDecision.contextToPreserve,
-      undefined, // No specific error from this point, LLM handled it
-      undefined, // No search suggestions HTML from this tool directly
-      params.accumulatedContext?.searchSuggestionsHtmlToPreserve // Preserve if passed
-    );
-  } catch (error: any) {
-    console.error(`[${this.name}] LLM processing error: ${error.message}. Prompt start:\n${llmPrompt.substring(0,300)}...`);
-    // Fallback: if LLM fails, return the raw content or an error message
-    if (dbFetchResult.content) {
-        // Fallback to providing the raw content if LLM fails catastrophically
-        const fullContentString = JSON.stringify(dbFetchResult.content, null, 2);
-        return createToolResult(
-            this.name,
-            `LLM processing failed. Full content of ${this.readableName} provided as fallback.`, 
-            "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
-            fullContentString,
-            `LLM error: ${error.message}`,
-            undefined,
-            params.accumulatedContext?.searchSuggestionsHtmlToPreserve
-        );
-    }
-    return createToolResult(
-      this.name,
-      `Failed to process query with ${this.readableName} due to LLM error: ${error.message}`,
-      "TRY_NEXT_TOOL",
-      undefined,
-      error.message,
-      undefined,
-      params.accumulatedContext?.searchSuggestionsHtmlToPreserve
-    );
-  }
-}
 }
 
 // --- AGENT MODE OFF EXECUTOR ---
