@@ -6,7 +6,7 @@ import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other relate
 
 // --- CONSTANTS ---
 const DEFAULT_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; 
-const RANKING_MODEL_NAME = "gemini-2.0-flash"; // Use a fast model for ranking
+const RANKING_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; // Use a fast model for ranking
 
 // --- TYPE DEFINITIONS (Refactored and New) ---
 
@@ -475,10 +475,11 @@ IMPORTANT GUIDELINES FOR RANKING:
 - "no_tool" should generally be ranked last, unless no other tool is remotely relevant. If used after other tools, "no_tool" can synthesize their accumulated context.
 - For non-legal/insurance topics, consider placing general web search after other tools to leverage accumulated context.
 
-IMPORTANT INSTRUCTIONS:
+VERY IMPORTANT INSTRUCTIONS:
 - GROUP TOOLS BY PRIORITY LEVEL (e.g., [1], [2]). Tools in the same group are tried together.
 - List all tools provided: ${tools.map(t => t.name).join(', ')}
-- Output format example:
+- ALWAYS follow Output format, example:
+"thinking step" 
 [1] tool_name1, tool_name2
 [2] tool_name3
 [3] tool_name4, tool_name5
@@ -793,7 +794,7 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
     console.log(`[${this.name}] Executing for query: \"${params.query.substring(0, 50)}...\" Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
-    await updateProcessingPhase(params.ctx, params.messageId, `Querying ${this.readableName}`, this.name);
+    await updateProcessingPhase(params.ctx, params.messageId, `Searching ${this.readableName}`, this.name);
 
     const dbFetchResult = await this.fetchDatabaseContent(params.ctx);
     let toolDataForPrompt: string;
@@ -989,7 +990,7 @@ export const toolExecutors: Record<string, IToolExecutor> = {
   "query_law_on_insurance": new DatabaseQueryExecutor("query_law_on_insurance", "Law_on_Insurance", "Law on Insurance"),
   "query_law_on_consumer_protection": new DatabaseQueryExecutor("query_law_on_consumer_protection", "Law_on_Consumer_Protection", "Law on Consumer Protection"),
   "query_insurance_qna": new DatabaseQueryExecutor("query_insurance_qna", "Insurance_and_reinsurance_in_Cambodia_QnA_format", "Insurance Q&A"),
-  "get_elixer_whitepaper": new ElixerWhitepaperContentExecutor("get_elixer_whitepaper", "Elixer_WhitePaper", "Elixer WhitePaper"),
+  "get_elixer_whitepaper": new ElixerWhitepaperContentExecutor("get_elixer_whitepaper", "Elixer_WhitePaper", "Elixer White Paper"),
 };
 
 // --- CORE LOGIC FUNCTIONS ---
@@ -1152,7 +1153,7 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
         console.error(`[parseToolGroupsFromNaturalLanguage] Error parsing LLM ranking: ${e.message}. Response: "${responseText.substring(0, 300)}..."`);
         // Fallback to a default ranking on error
         return {
-            rankedToolGroups: [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
+            rankedToolGroups: [["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"],["search_web"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
         };
     }
 };
@@ -1222,7 +1223,7 @@ const parseToolGroupsFromLLMJson = (responseText: string, allToolNames: string[]
         };
 
     } catch (e: any) {
-        console.error(`[parseToolGroupsFromLLMJson] Error parsing LLM JSON ranking: ${e.message}. Response: "${responseText.substring(0, 500)}..."`);
+        console.error(`[parseToolGroupsFromLLMJson] Error parsing LLM JSON ranking: ${e.message}. Response: "${responseText.substring(0, 10000)}..."`);
         // Fallback to a default ranking on error
         return {
             rankedToolGroups: [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
@@ -1255,7 +1256,7 @@ export const rankInformationSources = async (
     const startTime = Date.now();
     const response = await model.generateContent(rankingPrompt);
     const responseText = response.response.text();
-    console.log(`[rankInformationSources] AI ranking response received in ${Date.now() - startTime}ms. Response text (first 500 chars): \n${responseText.substring(0,500)}`);
+    console.log(`[rankInformationSources] AI ranking response received in ${Date.now() - startTime}ms. Response text (first 5000 chars): \n${responseText.substring(0,5000)}`);
     
     // Use the natural language parser for faster processing
     const parsedRanking = parseToolGroupsFromNaturalLanguage(responseText, allToolNames);
