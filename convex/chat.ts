@@ -126,10 +126,14 @@ export const getSystemPrompts = query({
       .withIndex("by_user", q => q.eq("userId", userId))
       .first();
 
+    if (!settings) {
+      return null; // No settings found for the user
+    }
+    // Settings found, return them, defaulting to empty string if a specific prompt is missing
     return {
-      lawPrompt: settings?.lawPrompt || "",
-      tonePrompt: settings?.tonePrompt || "",
-      policyPrompt: settings?.policyPrompt || "",
+      lawPrompt: settings.lawPrompt || "",
+      tonePrompt: settings.tonePrompt || "",
+      policyPrompt: settings.policyPrompt || "",
     };
   },
 });
@@ -300,7 +304,7 @@ export const getLawDatabaseContent = query({
         try {
           // First, try to find the database by display name
           const dbByDisplayName = await ctx.db
-            .query("lawDatabases")
+            .query("Databases")
             .filter(q => q.eq(q.field("displayName"), dbName))
             .first();
           
@@ -372,7 +376,7 @@ export const getLawDatabaseContent = query({
           
           // Try to get the database by normalized name
           const dbDoc = await ctx.db
-            .query("lawDatabases")
+            .query("Databases")
             .withIndex("by_name", q => q.eq("name", normalizedDbName))
             .first();
           
@@ -390,7 +394,7 @@ export const getLawDatabaseContent = query({
             // No database found in Convex database
             result[dbName] = { 
               error: `Database not found in Convex database: ${dbName}`,
-              message: "Please upload the database using the uploadLawDatabases functions",
+              message: "Please upload the database using the uploadDatabases functions",
               // Include example data structure for development
               exampleStructure: {
                 metadata: { title: "Example Database Structure" },

@@ -38,7 +38,7 @@ async function linkFilesToDatabases() {
       console.log(`Linking file for database: ${file.displayName}`);
       
       // Call the mutation to link the file
-      const result = await client.mutation('lawDatabases:linkStorageFileToDatabase', {
+      const result = await client.mutation('Databases:linkStorageFileToDatabase', {
         name: file.name,
         displayName: file.displayName,
         fileId: file.fileId,

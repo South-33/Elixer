@@ -20,7 +20,7 @@ export const linkStorageFileToDatabase = mutation({
     try {
       // Check if a database with this name already exists
       const existingDb = await ctx.db
-        .query("lawDatabases")
+        .query("Databases")
         .withIndex("by_name", q => q.eq("name", args.name))
         .first();
 
@@ -39,7 +39,7 @@ export const linkStorageFileToDatabase = mutation({
         };
       } else {
         // Create a new database entry
-        const id = await ctx.db.insert("lawDatabases", {
+        const id = await ctx.db.insert("Databases", {
           name: args.name,
           displayName: args.displayName,
           fileId: args.fileId,
@@ -81,7 +81,7 @@ export const uploadLawDatabase = mutation({
       
       // Check if a database with this name already exists
       const existingDb = await ctx.db
-        .query("lawDatabases")
+        .query("Databases")
         .withIndex("by_name", q => q.eq("name", args.name))
         .first();
 
@@ -100,7 +100,7 @@ export const uploadLawDatabase = mutation({
         };
       } else {
         // Create a new database entry
-        const id = await ctx.db.insert("lawDatabases", {
+        const id = await ctx.db.insert("Databases", {
           name: args.name,
           displayName: args.displayName,
           fileId: fileId,
@@ -135,7 +135,7 @@ export const getLawDatabaseContentByName = query({
     try {
       // Find the database entry
       const db = await ctx.db
-        .query("lawDatabases")
+        .query("Databases")
         .withIndex("by_name", q => q.eq("name", args.name))
         .first();
       
@@ -186,7 +186,7 @@ export const getLawDatabaseContentByName = query({
  */
 export const fetchAndCacheDatabaseContent = action({
   args: {
-    databaseId: v.id("lawDatabases"),
+    databaseId: v.id("Databases"),
     name: v.string(),
     fileId: v.string(),
   },
@@ -214,7 +214,7 @@ export const fetchAndCacheDatabaseContent = action({
       const content = await response.json();
 
       // Update the cache
-      await ctx.runMutation(api.lawDatabases.updateDatabaseCache, {
+      await ctx.runMutation(api.Databases.updateDatabaseCache, {
         databaseId: args.databaseId,
         content,
       });
@@ -238,7 +238,7 @@ export const fetchAndCacheDatabaseContent = action({
  */
 export const updateDatabaseCache = mutation({
   args: {
-    databaseId: v.id("lawDatabases"),
+    databaseId: v.id("Databases"),
     content: v.any(),
   },
   handler: async (ctx, args): Promise<{ success: boolean }> => {
@@ -258,7 +258,7 @@ export const getLawDatabaseByName = query({
   },
   handler: async (ctx, args): Promise<Array<{ id: string; name: string; displayName: string; fileId: string; isEnhanced: boolean; lastUpdated: number }>> => {
     const databases = await ctx.db
-      .query("lawDatabases")
+      .query("Databases")
       .withIndex("by_name", q => q.eq("name", args.name))
       .collect();
       
@@ -276,10 +276,10 @@ export const getLawDatabaseByName = query({
 /**
  * Function to get all law databases
  */
-export const getAllLawDatabases = query({
+export const getAllDatabases = query({
   args: {},
   handler: async (ctx): Promise<Array<{ id: string; name: string; displayName: string; isEnhanced: boolean; lastUpdated: string }>> => {
-    const databases = await ctx.db.query("lawDatabases").collect();
+    const databases = await ctx.db.query("Databases").collect();
     
     return databases.map(db => ({
       id: db._id,
@@ -294,12 +294,12 @@ export const getAllLawDatabases = query({
 /**
  * Function to get a list of all available law databases
  */
-export const listLawDatabases = query({
+export const listDatabases = query({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; message?: string; databases: Array<{ id: string; name: string; displayName: string; isEnhanced: boolean; lastUpdated: string }> }> => {
     try {
-      // Get databases directly from the database instead of calling getAllLawDatabases.handler
-      const databases = await ctx.db.query("lawDatabases").collect();
+      // Get databases directly from the database instead of calling getAllDatabases.handler
+      const databases = await ctx.db.query("Databases").collect();
       
       // Format the results
       const formattedDatabases = databases.map(db => ({

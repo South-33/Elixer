@@ -5,7 +5,7 @@ import { Id } from "../convex/_generated/dataModel";
 import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
 import { Toaster, toast } from "sonner";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, DEFAULT_LAW_PROMPT, DEFAULT_TONE_PROMPT, DEFAULT_POLICY_PROMPT } from "./Sidebar";
 import { ChatPane } from "./ChatPane"; // Import ChatPane
 import ReactMarkdown from 'react-markdown';
 
@@ -154,12 +154,13 @@ export default function App() {
   }) {
     const user = useQuery(api.auth.loggedInUser);
     const [currentSidebarWidth, setCurrentSidebarWidth] = useState(0); // State to hold sidebar width
+  const loadDefaultsInSidebarRef = useRef<(() => void) | null>(null);
 
   const chatPaneResetStatesHandlers = useRef<Record<string, () => void>>({}); // New ref to store reset state handlers for each pane
 
   const clearPaneMessagesMutation = useMutation(api.chat.clearPaneMessages); // For per-pane clearing
 
-  const savedPrompts = useQuery(api.chat.getSystemPrompts) || { lawPrompt: "", tonePrompt: "", policyPrompt: "" };
+  const systemPromptsQuery = useQuery(api.chat.getSystemPrompts); /* DEFAULT_LAW_PROMPT, DEFAULT_TONE_PROMPT, DEFAULT_POLICY_PROMPT from './Sidebar' should be imported at file top */
 
   const sendMessageMutation = useMutation(api.chat.sendMessage)
     .withOptimisticUpdate(
@@ -188,31 +189,68 @@ export default function App() {
 
   const [currentInputMessage, setCurrentInputMessage] = useState(""); // New state for input field
   const chatPaneSendHandlers = useRef<Record<string, (content: string) => Promise<void>>>({}); // New ref to store send handlers for each pane
-  const [lawPrompt, setLawPrompt] = useState(savedPrompts.lawPrompt);
-  const [tonePrompt, setTonePrompt] = useState(savedPrompts.tonePrompt);
-  const [policyPrompt, setPolicyPrompt] = useState(savedPrompts.policyPrompt);
+  const [lawPrompt, setLawPrompt] = useState<string>("");
+  const [tonePrompt, setTonePrompt] = useState<string>("");
+  const [policyPrompt, setPolicyPrompt] = useState<string>("");
 
   const savePromptTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (savedPrompts) {
-        if (savedPrompts.lawPrompt !== undefined) { setLawPrompt(savedPrompts.lawPrompt); }
-        if (savedPrompts.tonePrompt !== undefined) { setTonePrompt(savedPrompts.tonePrompt); }
-        if (savedPrompts.policyPrompt !== undefined) { setPolicyPrompt(savedPrompts.policyPrompt); }
+    if (user && systemPromptsQuery !== undefined) { // Ensure query has resolved (is not 'undefined')
+      if (systemPromptsQuery === null) {
+        // Case 1: New user (no saved prompts in DB)
+        // Trigger Sidebar to load its defaults, which will then call setLawPrompt(DEFAULT_LAW_PROMPT), etc.
+        if (loadDefaultsInSidebarRef.current) {
+          console.log("AuthenticatedContent: New user (query is null), triggering default prompt load via Sidebar.");
+          loadDefaultsInSidebarRef.current();
+        } else {
+          // Fallback: if ref isn't ready for some reason (should be rare)
+          console.warn("AuthenticatedContent: New user (query is null), but loadDefaultsInSidebarRef not ready. Setting defaults directly as fallback.");
+          setLawPrompt(DEFAULT_LAW_PROMPT);
+          setTonePrompt(DEFAULT_TONE_PROMPT);
+          setPolicyPrompt(DEFAULT_POLICY_PROMPT);
+        }
+      } else {
+        // Case 2: Existing user (systemPromptsQuery has their data, e.g., { lawPrompt: "custom", ... } or { lawPrompt: "", ... })
+        console.log("AuthenticatedContent: Existing user, loading prompts from query:", systemPromptsQuery);
+        // Directly set prompts from the user's saved data.
+        // If user saved empty string, it will be set to empty string.
+        // If a prompt was never saved (is undefined in the object), it will also become an empty string due to the useState('') default and this logic.
+        // This assumes that if a prompt field exists on systemPromptsQuery, it's the value to use.
+        setLawPrompt(systemPromptsQuery.lawPrompt ?? DEFAULT_LAW_PROMPT); // Fallback to default if somehow undefined on the query object
+        setTonePrompt(systemPromptsQuery.tonePrompt ?? DEFAULT_TONE_PROMPT);
+        setPolicyPrompt(systemPromptsQuery.policyPrompt ?? DEFAULT_POLICY_PROMPT);
+      }
+    } else if (!user) {
+      // Case 3: User logged out. Clear local prompt states to prevent showing stale data and ensure clean state for next login.
+      console.log("AuthenticatedContent: User logged out, clearing local prompt states.");
+      setLawPrompt("");
+      setTonePrompt("");
+      setPolicyPrompt("");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedPrompts]);
+    // If 'user' is present but 'systemPromptsQuery' is still 'undefined', this effect does nothing,
+    // effectively waiting for the query to load before making decisions.
+  }, [user, systemPromptsQuery]); // Re-run if query result or user changes
 
   useEffect(() => {
-    const promptsChangedByUser = lawPrompt !== savedPrompts.lawPrompt ||
-                               tonePrompt !== savedPrompts.tonePrompt ||
-                               policyPrompt !== savedPrompts.policyPrompt;
+    const serverLawPrompt = systemPromptsQuery?.lawPrompt !== undefined ? systemPromptsQuery.lawPrompt : DEFAULT_LAW_PROMPT;
+    const serverTonePrompt = systemPromptsQuery?.tonePrompt !== undefined ? systemPromptsQuery.tonePrompt : DEFAULT_TONE_PROMPT;
+    const serverPolicyPrompt = systemPromptsQuery?.policyPrompt !== undefined ? systemPromptsQuery.policyPrompt : DEFAULT_POLICY_PROMPT;
 
-    if (savedPrompts && promptsChangedByUser) {
+    const promptsChangedByUser = lawPrompt !== serverLawPrompt ||
+                               tonePrompt !== serverTonePrompt ||
+                               policyPrompt !== serverPolicyPrompt;
+
+    // Only save if systemPromptsQuery is not undefined (i.e., has loaded or is null)
+    // and prompts have actually changed from what the server/defaults dictate.
+  // Also, only save if a user is active.
+  // Save if it's a new user (systemPromptsQuery === null) OR if an existing user changed prompts.
+  if (user && systemPromptsQuery !== undefined && (systemPromptsQuery === null || promptsChangedByUser)) {
         if (savePromptTimeoutRef.current !== null) {
             window.clearTimeout(savePromptTimeoutRef.current);
         }
         savePromptTimeoutRef.current = window.setTimeout(() => {
+        console.log(`AuthenticatedContent: Saving prompts. New user: ${systemPromptsQuery === null}, Prompts changed: ${promptsChangedByUser}`, { lawPrompt, tonePrompt, policyPrompt });
             saveSystemPrompt({ lawPrompt, tonePrompt, policyPrompt });
         }, 1000);
     }
@@ -220,15 +258,14 @@ export default function App() {
       if (savePromptTimeoutRef.current !== null) {
         window.clearTimeout(savePromptTimeoutRef.current);
       }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, savedPrompts]);
+  };
+}, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, systemPromptsQuery, user]);
 
   const handleSendMessage = async (content: string, model: string, paneId: string, disableSystemPrompt: boolean, disableTools: boolean) => {
     if (!user?._id) {
       console.error("User not loaded, cannot send message.");
       toast.error("User not loaded. Please wait a moment.");
-      return;
+    // ... rest of your code remains the same ...
     }
     
     // Add detailed logging to track which pane is sending what request with what settings
@@ -280,7 +317,6 @@ export default function App() {
             resetHandler();
           }
         }
-        toast.success("Chat history cleared.");
       } catch (error) {
         console.error("Failed to clear chat:", error);
         toast.error("Failed to clear chat history.");
@@ -311,7 +347,6 @@ export default function App() {
         if (resetHandler) {
           resetHandler();
         }
-        toast.success("Chat history cleared for this panel.");
       } catch (error) {
         console.error("Failed to clear chat for pane:", paneId, error);
         toast.error("Failed to clear chat history for this panel.");
@@ -333,6 +368,9 @@ export default function App() {
         onClearChat={handleClearChat}
         hasActivePrompts={hasActivePrompts}
         onWidthChange={setCurrentSidebarWidth}
+        setLoadDefaultsHandler={(handler) => {
+          loadDefaultsInSidebarRef.current = handler;
+        }}
       />
       {isSidebarOpen && (
         <div
@@ -350,7 +388,7 @@ export default function App() {
         style={{ marginLeft: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
       >
 
-        <div className="flex-1 flex flex-row pb-[90px] sm:pb-[50px] overflow-hidden"> {/* Adjusted padding-bottom to account for fixed input */}
+        <div className="flex-1 flex flex-col sm:flex-row pb-[90px] sm:pb-[50px] overflow-hidden divide-x divide-slate-200"> {/* Added divide-x for proper pane separation */}
           {chatPanes.map(pane => (
             <ChatPane
               key={pane.id}

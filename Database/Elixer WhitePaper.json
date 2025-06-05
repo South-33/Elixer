@@ -1,0 +1,80 @@
+{
+  "projectName": "ELIXIR",
+  "introduction": {
+    "welcomeMessage": "We’re here to help you solve your problems when buying and using insurance—with modern technology that’s easy, efficient, and even fun.",
+    "callToAction": "Let’s start making your life easier with ELIXIR!"
+  },
+  "overview": {
+    "inspiration": "In developing ELIXIR, we've drawn inspiration from the challenges people face with current insurance processes, seeking to introduce solutions that make the experience smoother and more trustworthy.",
+    "researchFinding": "Through our research, we found that around 95% of people find it difficult to buy insurance, often lack the necessary knowledge, and struggle with trust issues regarding insurance products.",
+    "mission": "This insight has guided our mission: to create an application that genuinely addresses these concerns.",
+    "goals": [
+      "Use technology to design an innovative and accessible platform that builds trust, ensures comfort, and provides flexibility.",
+      "Establish ELIXIR as a reliable, user-friendly, and appealing solution that reshapes the perception and accessibility of insurance for our users."
+    ]
+  },
+  "whatIsElixir": {
+    "description": "ELIXIR Helps Cambodia Insurance more accessible and friendly change from Traditional Insurance to Insure-Tech.",
+    "insureTechDefinition": "Insure-Tech is a combination of “Insurance” and “technology”. It means using modern technology to make insurance easier, more efficient, faster and cost-effective.",
+    "gamificationFeature": "ELIXIR allows users to earn rewards while contributing to the activities in gamification."
+  },
+  "problemsAddressed": [
+    {
+      "name": "Buying Process",
+      "description": "Choosing the right insurance policy can feel overwhelming. With numerous insurance companies offering various policies, users often face complex options that make it difficult to decide which one matches their specific needs. This complexity can leave potential buyers feeling uncertain and hesitant, resulting in missed opportunities to get proper coverage."
+    },
+    {
+      "name": "Claiming Process",
+      "description": "Even after purchasing insurance, the claiming process remains a significant challenge. It is often complicated and time-consuming, requiring users to navigate multiple steps before receiving compensation and coverage. This inefficiency not only causes stress but also delays support when it is needed most."
+    },
+    {
+      "name": "Knowledge",
+      "description": "Some people or customers didn't really understand the benefits they can get from insurance. That could be a reason that they didn't get themselves insurance. It's also about how people didn't really know how to prevent risk and take care of themselves better."
+    }
+  ],
+  "solutionsOffered": [
+    {
+      "problemArea": "Buying Process",
+      "solutionDetails": "The complexities involved in buying insurance often overwhelm users. ELIXIR simplifies this by offering clear information, presenting choices in a user-friendly manner, and reducing the administrative burden that often deters potential clients. We also provide a social media where users can express their concerns directly, and insurance representatives can respond to their specific needs. Especially, we also added a chatbot that allows users to ask any questions they want."
+    },
+    {
+      "problemArea": "Claiming Process",
+      "solutionDetails": "Making claims can be complicated and intimidating. ELIXIR enhances the user experience with an Alerting System (InsureBot) that helps users expedite information submission and initiate claims with confidence. This approach ensures easy access to insurance representatives and provides the resources needed for efficient claim processing."
+    },
+    {
+      "problemArea": "Knowledge",
+      "solutionDetails": "Insurance knowledge is often limited, resulting in misunderstandings or mistrust. Our project aims to fill this gap by offering preventive health tips, daily educational content, and even fun activities where users can gain rewards, fostering a more positive relationship with insurance. This educational component encourages users to understand their insurance policies, manage risks, and stay healthy.",
+      "gamificationReward": "During the process, communities can earn a token by contributing to the activities in gamification, which they can later exchange or trade for money and spark fun with other user."
+    }
+  ],
+  "tokenomics": {
+    "tokenSymbol": "$ELIXIR",
+    "totalSupply": "1 Billion $ELXIR tokens",
+    "tokenType": "utility and governance token",
+    "tokenAllocations": {
+      "Treasury": "33%",
+      "Team": "15%",
+      "Public Sale": "15%",
+      "Community": "12%",
+      "Private Sale": "10%",
+      "Partner": "7%",
+      "Advisor": "8%"
+    }
+  },
+  "advisors": [
+    {
+      "name": "H.E Dr. Hor Peng",
+      "role": "Advisor",
+      "title": "Rector of National University of Managemnt",
+      "bio": "Experienced Rector with a demonstrated history of working in the education management industry. Strong community and social services professional with a Master and Doctoral Degree focused on Public Law (Constitutional Law) from Nagoya University, Japan.",
+      "linkedin": "https://www.linkedin.com/in/hor-peng-161a8123/"
+    },
+    {
+      "name": "Dr. Chay Sengtha",
+      "role": "Web 3.0 Advisor",
+      "bio": "Dr. Chay is an advisor to NUM. He is also a managing director at E-KHMER Technology Co., Ltd. He obtained a Master of Management and Information Technology from Kyoto University in 2004 and a PhD in Applied Informatics from University of Hyogo in 2011.",
+      "specialties": ["Blockchain", "Web Application Design and Development", "Internet Marketing", "E-Commerce"],
+      "linkedin": "https://www.linkedin.com/in/sengtha"
+    }
+  ]
+}

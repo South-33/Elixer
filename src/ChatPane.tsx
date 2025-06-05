@@ -37,34 +37,93 @@ interface ChatPaneProps {
 
 // We're not using the TypewriterText component anymore - simplified approach
 
-// Add CSS styles for the typewriter effect
-const typewriterStyles = `
+// Custom component to parse and display search suggestions in our own styling
+const CustomSearchSuggestions = ({ html, expanded }: { html: string, expanded: boolean }) => {
+  // Parse the links from the HTML
+  const [links, setLinks] = useState<{text: string, url: string}[]>([]);
+  
+  useEffect(() => {
+    if (!html) return;
+    
+    try {
+      // Create a temporary element to parse the HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      
+      // Extract all links
+      const anchorElements = tempDiv.querySelectorAll('a');
+      const extractedLinks = Array.from(anchorElements).map(anchor => ({
+        text: anchor.textContent || 'Link',
+        url: anchor.getAttribute('href') || '#'
+      }));
+      
+      setLinks(extractedLinks.slice(0, 5)); // Limit to 5 links for simplicity
+    } catch (error) {
+      console.error('Error parsing search suggestions HTML:', error);
+    }
+  }, [html]);
+  
+  if (!expanded || links.length === 0) return null;
+  
+  return (
+    <div className="search-links-container ml-2 flex-shrink-0 flex items-center space-x-2 animate-fadeIn">
+      {links.map((link, index) => (
+        <a
+          key={index}
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs hover:bg-gray-200 transition-colors border border-gray-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]"
+          style={{ textDecoration: 'none' }}
+        >
+          {link.text}
+        </a>
+      ))}
+    </div>
+  );
+};
+
+// Add CSS styles for the typewriter effect and animations
+const customStyles = `
   .typewriter-container {
-    display: inline-flex;
-    align-items: center;
-    white-space: pre-wrap;
-  }
-  .blinking-cursor {
     display: inline-block;
-    margin-left: 2px;
-    animation: blink 1s step-end infinite;
-    font-weight: 100;
-    color: #666;
   }
-  @keyframes blink {
-    from, to { opacity: 1; }
-    50% { opacity: 0; }
+  .typewriter-text {
+    display: inline-block;
+    overflow: hidden;
+    border-right: 2px solid;
+    white-space: nowrap;
+    margin: 0;
+    letter-spacing: normal;
+    animation: typing 2s steps(40, end), blink-caret 0.75s step-end infinite;
+  }
+  @keyframes typing {
+    from { width: 0 }
+    to { width: 100% }
+  }
+  @keyframes blink-caret {
+    from, to { border-color: transparent }
+    50% { border-color: #888 }
+  }
+  
+  /* Animation for search links fade-in */
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
   }
 `;
 
 // Add the styles to the document (outside of any component)
 (function addStylesOnce() {
   if (typeof document !== 'undefined') {
-    const styleId = 'typewriter-styles';
+    const styleId = 'elixer-custom-styles';
     if (!document.getElementById(styleId)) {
       const styleElement = document.createElement('style');
       styleElement.id = styleId;
-      styleElement.innerHTML = typewriterStyles;
+      styleElement.innerHTML = customStyles;
       document.head.appendChild(styleElement);
     }
   }
@@ -161,6 +220,9 @@ const ChatMessage = ({ message, displayContent, currentPhase }: { message: Messa
   const hasSearchSuggestions = message.role === "assistant" && 
                               message.metadata && 
                               (message.metadata as any).searchSuggestionsHtml;
+  
+  // State to track if search suggestions are expanded or collapsed
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
 
   // Determine the current processing phase
   const processingPhase = getProcessingPhase();
@@ -197,12 +259,31 @@ const ChatMessage = ({ message, displayContent, currentPhase }: { message: Messa
         )}
       </div>
       
-      {/* Render search suggestions HTML if available */}
+      {/* Render horizontally expanding search suggestions if available */}
       {hasSearchSuggestions && !message.isStreaming && (
-        <div 
-          className="mt-2 search-suggestions-container"
-          dangerouslySetInnerHTML={{ __html: (message.metadata as any).searchSuggestionsHtml }}
-        />
+        <div className="mt-2 flex items-center">
+          <button 
+            onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
+            className="text-sm px-3 py-1 rounded-md bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors focus:outline-none flex items-center justify-center flex-shrink-0"
+            style={{ width: '129px' }} /* Fixed width to prevent layout shifts */
+          >
+            <span className="mr-1">{suggestionsExpanded ? 'Hide' : 'Show'} sources</span>
+            <svg 
+              className={`w-4 h-4 transition-transform ${suggestionsExpanded ? 'transform rotate-90' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          
+          <CustomSearchSuggestions 
+            html={(message.metadata as any).searchSuggestionsHtml} 
+            expanded={suggestionsExpanded} 
+          />
+        </div>
       )}
     </div>
   );
@@ -214,7 +295,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
     userId ? { userId, paneId } : "skip"
   ) || [] as MessageDoc[];
 
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-04-17"); // Default model for this pane
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-05-20"); // Default model for this pane
   const [disableSystemPrompt, setDisableSystemPrompt] = useState(false); // New state for disabling system prompt - off by default
   const [disableToolUse, setDisableToolUse] = useState(false); // New state for disabling tool use - off by default
 
@@ -567,7 +648,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             className="p-1.5 border border-slate-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none"
             disabled={isStreaming}
           >
-            <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 Flash</option>
+            <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
             <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
             {/* Add other models here */}
           </select>

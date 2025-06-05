@@ -1,29 +1,38 @@
 "use node";
 
-import { GoogleGenerativeAI, GenerateContentResult } from "@google/generative-ai";
+import { GoogleGenerativeAI, GenerationConfig } from "@google/generative-ai";
 import { api } from "./_generated/api";
-import { LawDatabase, LawChapter, LawSection, LawArticle } from "./chatAI";
+import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other related types are defined
 
-// Simple utility to estimate token count (rough approximation)
-export const estimateTokenCount = (text: string): number => {
-  // A very rough estimate: 1 token is about 4 characters for English text
-  // This is just an approximation - actual tokenization varies by model
-  return Math.ceil(text.length / 4);
-};
+// --- CONSTANTS ---
+const DEFAULT_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; 
+const RANKING_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; // Use a fast model for ranking
 
-// Type definitions for handling Google Search responses
+// --- TYPE DEFINITIONS (Refactored and New) ---
+
+// Interface for Convex context - simplified to avoid generic type issues
+type ConvexActionCtx = any; // This type is only used for method signatures and will be properly typed at usage
+
 interface SearchEntryPoint {
   renderedContent: string;
 }
 
-interface GroundingMetadata {
-  searchEntryPoint?: SearchEntryPoint;
+// Define the interface for Google's generative AI tools
+interface GoogleSearchTool {
+  googleSearch: Record<string, unknown>; // Can be {} for default params
 }
 
-// We'll use any for the tools to avoid TypeScript errors
-type GenAITool = any;
+// This type is for Google's generative AI library tools
+type GenAITool = GoogleSearchTool | any; // Allow other tool types if necessary
 
-// Tool interface definitions
+// This interface is for model configuration when using tools
+interface ModelConfig {
+  model: string;
+  tools?: GenAITool[];
+  generationConfig?: Record<string, any>;
+  systemInstruction?: string;
+}
+
 export interface Tool {
   name: string;
   description: string;
@@ -34,1960 +43,1415 @@ export interface Tool {
   };
 }
 
-export interface ToolCall {
-  id: string;
-  type: string;
-  function: {
-    name: string;
-    arguments: string; // JSON string
-  };
+export interface SystemPrompts {
+  stylingPrompt?: string;
+  lawPrompt?: string;
+  tonePrompt?: string;
+  policyPrompt?: string;
 }
 
-// Available tools for the agent
-export const AVAILABLE_TOOLS: Tool[] = [
-  {
-    name: "no_tool",
-    description: "Answer directly without using any specialized database or search",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The user's query to answer directly"
-        }
-      },
-      required: ["query"]
-    }
-  },
-  {
-    name: "query_law_on_insurance",
-    description: "Query the Law on Insurance database for legal information",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The specific query to search for in the insurance law database"
-        }
-      },
-      required: ["query"]
-    }
-  },
-  {
-    name: "query_law_on_consumer_protection",
-    description: "Query the Law on Consumer Protection database for legal information",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The specific query to search for in the consumer protection law database"
-        }
-      },
-      required: ["query"]
-    }
-  },
-  {
-    name: "query_insurance_qna",
-    description: "Query the Insurance Q&A database for common questions and answers",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The specific question to search for in the Q&A database"
-        }
-      },
-      required: ["query"]
-    }
-  },
-  // Removed query_all_databases tool as we now support parallel execution of relevant tools
-  {
-    name: "search_web",
-    description: "Search the web for general information not found in specialized databases",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The search query for the web"
-        }
-      },
-      required: ["query"]
-    }
-  }
-];
+/**
+ * Represents context accumulated from previous tool executions.
+ */
+interface AccumulatedContext {
+  sources: string[];                            // Which tools contributed to this context
+  content: string;                              // The actual context content
+  searchSuggestionsHtmlToPreserve?: string;     // Preserved search suggestions HTML from a web search tool
+}
 
-// Helper function to ensure a value is a string for safe processing
-const ensureString = (value: any): string => {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  return String(value);
-};
+/**
+ * Parameters for a single tool's execution.
+ */
+interface ToolExecutionParams {
+  query: string;
+  conversationHistory: { role: string; parts: { text: string }[] }[];
+  genAI: GoogleGenerativeAI;
+  selectedModel: string | undefined;
+  systemPrompts?: SystemPrompts;
+  ctx: ConvexActionCtx;
+  remainingTools: string[];
+  messageId?: string;
+  accumulatedContext?: AccumulatedContext;    // Context from previous tools
+  nextToolGroup?: string[];                  // Information about the next group of tools to be executed
+}
 
-// Query a law database and return relevant information based on the query
-export const queryLawDatabase = async (
-  query: string, 
-  lawDatabase: any, // Allow any type to support different database formats
-  conversationHistory?: { role: string; parts: { text: string; }[] }[]
-): Promise<string> => {
-  // Just return the raw database as JSON without any validation
-  if (!lawDatabase) {
-    return "The database is empty or could not be accessed.";
-  }
-  
-  // Log basic database info
-  const dbSize = JSON.stringify(lawDatabase).length;
-  console.log(`[queryLawDatabase] Processing database with ${dbSize} chars of content`);
-  
-  // Log conversation history for context (just for logging purposes)
-  if (conversationHistory && conversationHistory.length > 0) {
-    console.log(`[queryLawDatabase] Including conversation context with ${conversationHistory.length} messages`);
-  }
-  
-  // Return the entire database for the AI to process
-  return JSON.stringify(lawDatabase, null, 2);
-};
+/**
+ * Standardized result from a tool execution.
+ */
+interface ToolExecutionResult {
+  source: string;                               // Name of the tool that produced this result
+  content: string;                              // The primary content/answer from the tool
+  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
+  error?: string;                                // Error if the tool execution failed
+  contextToAdd?: string;                        // Context to preserve for next tools (if TRY_NEXT_TOOL_AND_ADD_CONTEXT)
+  searchSuggestionsHtml?: string;              // HTML to add at the end of the response if FINAL_ANSWER
+  isFullyFormatted?: boolean;                  // Whether the content is already fully formatted and can be used directly
+  synthesisData?: string;                      // Data explicitly for synthesis during parallel tool execution
+}
 
-// Return type for rankInformationSources that includes optional direct response
+export interface IToolExecutor {
+  name: string;
+  execute(params: ToolExecutionParams): Promise<ToolExecutionResult>;
+}
+
+/**
+ * Expected JSON structure for LLM response when deciding tool execution flow.
+ */
+interface LLMToolExecutionDecision {
+  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
+  content: string;       // Full answer for FINAL_ANSWER, or a note for others.
+  reasoning: string;     // Explanation for the decision.
+  contextToPreserve?: string; // Content for TRY_NEXT_TOOL_AND_ADD_CONTEXT.
+}
+
+/**
+ * Expected JSON structure for LLM response when ranking tools.
+ */
+interface LLMRankingDecision {
+    toolGroups: { rank: number; toolNames: string[] }[];
+    directResponse?: string; // Optional direct response if no_tool is ranked first.
+    reasoning?: string;      // Optional reasoning for the ranking.
+}
+
+/**
+ * Expected JSON structure for LLM response when synthesizing parallel tool results.
+ */
+interface LLMParallelSynthesisResponse {
+    synthesizedAnswer: string;
+    reasoning?: string; // Optional reasoning for the synthesis.
+}
+
+
 interface RankingResult {
   rankedToolGroups: string[][];
   directResponse?: string;
 }
 
-// Function to rank information sources based on user query
-export const rankInformationSources = async (
-  userMessage: string,
-  history: { role: string; parts: { text: string; }[] }[],
-  selectedModel: string | undefined,
-  genAI: GoogleGenerativeAI,
-  systemPrompts?: {
-    stylingPrompt?: string,
-    lawPrompt?: string,
-    tonePrompt?: string,
-    policyPrompt?: string
-  }
-): Promise<RankingResult> => {
-  console.log(`[rankInformationSources] Ranking tools for query: '${userMessage.substring(0, 50)}${userMessage.length > 50 ? "..." : ""}'`);
-  console.log(`[rankInformationSources] History has ${history.length} messages`);
-  console.log(`[rankInformationSources] Using model: ${selectedModel || "gemini-2.5-flash-preview-04-17"}`);
-  
-  const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-  
-  // Skip the initial classification step and go straight to ranking all tools
-  // This is more efficient and avoids an extra AI call
-  console.log(`[rankInformationSources] Starting direct tool ranking (skipping classification step)`);
-  
-  // For more complex queries, rank the specialized tools
-  let prompt = `Analyze the following user message and determine which information sources would be most helpful to answer their query.
-  
-  User message: "${userMessage}"
-  `;
-  
-  // Add conversation history context if available
-  if (history && history.length > 1) { // If there's more than just the current message
-    console.log(`[rankInformationSources] Including conversation history (${history.length} messages) for context-aware ranking`);
-    
-    // Add a section for conversation history
-    prompt += `
-  Important context from conversation history:
-`;
-    
-    // Include the last few messages for context (excluding the current message)
-    const relevantHistory = history.slice(0, -1).slice(-5); // Last 5 messages excluding current
-    for (const msg of relevantHistory) {
-      if (msg.role === "user") {
-        prompt += `  - User said: "${msg.parts[0]?.text}"
-`;
-      } else if (msg.role === "model") {
-        prompt += `  - Assistant responded: "${msg.parts[0]?.text}"
-`;
-      }
-    }
-  } else {
-    console.log(`[rankInformationSources] No prior conversation history available`);
-  }
-  
-  // Continue with the rest of the prompt
-  prompt += `
-  Available information sources:
-  - no_tool: Answer directly without using any specialized database or search
-  - query_law_on_insurance: Cambodia's Law on Insurance database
-  - query_law_on_consumer_protection: Cambodia's Consumer Protection Law database
-  - query_insurance_qna: Q&A database about insurance in Cambodia
-  - search_web: General web search for information
-  
-  IMPORTANT INSTRUCTIONS:
-  GROUP TOOLS BY PRIORITY LEVEL. Tools in the same group should be executed together.
-  Return your answer in this exact format:
-  TOOL_GROUPS:
-  [1] tool_name1, tool_name2  (tools to use first, together)
-  [2] tool_name3  (tools to use second)
-  [3] tool_name4  (tools to use third)
-  
-  GUIDELINES:
-  - YOU MUST RANK ALL AVAILABLE TOOLS. Do not leave any tool unranked.
-  - Rank tools in order of relevance for answering this specific query
-  - Group tools by priority level, with most relevant tools in the first group [1]
-  - Tools in the same group [n] will be executed in parallel
-  - If multiple databases would be equally useful for this query, group them at the same priority level
-  - If the query requires web search, include "search_web" in an appropriate group
-  - Do NOT include "query_all_databases" in your response
-  - Your ranking MUST include all 5 tools: no_tool, query_law_on_insurance, query_law_on_consumer_protection, query_insurance_qna, and search_web
-  - IMPORTANT: If the question might benefit from ANY tool, ALWAYS place "no_tool" in the LAST group. Only rank "no_tool" first if you're ABSOLUTELY CERTAIN the question doesn't need any specialized tools or web search
-  
-  SPECIAL CASE - OPTIMIZATION:
-  If you determine that "no_tool" should be ranked first (meaning this is a simple question that can be answered directly without specialized tools),
-  also provide a direct response to the user after your ranking JSON using this exact format:
-  
-  ===DIRECT_RESPONSE_START===
-  Your helpful response to the user (without any reference to tools, ranking, or internal processing). If the user has shared any personal information in previous messages, make sure to reference it appropriately.
-  ===DIRECT_RESPONSE_END===
-  
-  IMPORTANT IDENTITY AND TONE GUIDELINES:${systemPrompts?.tonePrompt ? `
-  ${systemPrompts.tonePrompt}` : ''}${systemPrompts?.policyPrompt ? `
+// --- AVAILABLE TOOLS (Metadata) ---
+export const AVAILABLE_TOOLS: Tool[] = [
+  {
+    name: "no_tool",
+    description: "Answer directly without using any specialized database or search. Use if the query is simple or to synthesize accumulated context.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "The user's query to answer directly, considering accumulated context"}}, required: ["query"]},
+  },
+  {
+    name: "query_law_on_insurance",
+    description: "Query Cambodia's Law on Insurance database for legal information. Provides structured legal text.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the insurance law database"}}, required: ["query"]},
+  },
+  {
+    name: "query_law_on_consumer_protection",
+    description: "Query Cambodia's Law on Consumer Protection database for legal information. Provides structured legal text.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the consumer protection law database"}}, required: ["query"]},
+  },
+  {
+    name: "query_insurance_qna",
+    description: "Query Cambodia's Insurance Q&A database for common questions and answers. Good for specific insurance-related questions.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "The specific question to search for in the Q&A database"}}, required: ["query"]},
+  },
+  {
+    name: "search_web",
+    description: "Search the web for general information, current events, or topics not found in specialized databases. Can provide search suggestion links.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "The search query for the web"}}, required: ["query"]},
+  },
+  {
+    name: "get_elixer_whitepaper",
+    description: "Queries the Elixer WhitePaper for specific information about the ELIXIR project. Use this for details on ELIXIR's mission to simplify insurance in Cambodia, its solutions for buying/claiming processes, knowledge gaps, its gamification features, tokenomics ($ELIXIR token), or project advisors.",
+    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query or topic to get details about from the Elixer WhitePaper" }}, required: ["query"] }
+  },
+];
 
-  COMPANY POLICY:
-  ${systemPrompts.policyPrompt}` : ''}${systemPrompts?.lawPrompt ? `
+// --- UTILITY FUNCTIONS ---
 
-  LAWS AND REGULATIONS:
-  ${systemPrompts.lawPrompt}` : ''}
-
-  `;
-  
-  try {
-    console.log(`[rankInformationSources] Sending ranking prompt to AI (length: ${prompt.length})`);
-    const startTime = Date.now();
-    const response = await model.generateContent(prompt);
-    const endTime = Date.now();
-    console.log(`[rankInformationSources] AI ranking response received in ${endTime - startTime}ms`);
-    
-    const responseText = response.response.text();
-    console.log(`[rankInformationSources] AI suggested ranking: ${responseText}`);
-    
-    // Parse the tool groups from the response
-    const toolGroups = parseToolGroups(responseText);
-    console.log(`[rankInformationSources] Parsed tool groups: ${JSON.stringify(toolGroups)}`);
-    
-    // Check for direct response if the first tool group contains only "no_tool"
-    let directResponse: string | undefined;
-    if (toolGroups.length > 0 && toolGroups[0].length === 1 && toolGroups[0][0] === "no_tool") {
-      const directResponseRegex = /===DIRECT_RESPONSE_START===\s*([\s\S]*?)\s*===DIRECT_RESPONSE_END===/;
-      const directResponseMatch = responseText.match(directResponseRegex);
-      
-      if (directResponseMatch && directResponseMatch[1]) {
-        directResponse = directResponseMatch[1].trim();
-        console.log(`[rankInformationSources] Found direct response (${directResponse.length} chars)`);
-      }
-    }
-    
-    console.log(`[rankInformationSources] Final tool groups after parsing: ${JSON.stringify(toolGroups)}`);
-    
-    // Return both the ranked tool groups and any direct response
-    return {
-      rankedToolGroups: toolGroups,
-      directResponse
-    };
-  } catch (error) {
-    console.error(`[rankInformationSources] Error in ranking: ${error}`);
-    return {
-      rankedToolGroups: [["no_tool"], ["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"]]
-    };
-  }
+/**
+ * Estimates token count (simple approximation).
+ */
+export const estimateTokenCount = (text: string): number => {
+  return Math.ceil(text.length / 4);
 };
 
-// We've removed the combineToolResults function as we're now passing labeled raw data to the AI
+/**
+ * Ensures a value is a string, returning an empty string for null/undefined.
+ */
+const ensureString = (value: any): string => {
+  if (value === null || value === undefined) return "";
+  return String(value);
+};
 
-// Helper function to create a consistent tool result with the new fields
-function createToolResult(source: string, content: string, responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL", systemPrompts?: {
-  stylingPrompt?: string,
-  lawPrompt?: string,
-  tonePrompt?: string,
-  policyPrompt?: string
-}) {
-  // We don't need to modify the content here as system prompts are now added in tool execution
-  return {
+/**
+ * Combines system prompts into a single string.
+ */
+export const combineSystemPrompts = (systemPrompts?: SystemPrompts): string => {
+  if (!systemPrompts) return "";
+  let combined = "SYSTEM GUIDELINES:\n";
+  if (systemPrompts.tonePrompt) combined += `TONE AND PERSONALITY:\n${systemPrompts.tonePrompt}\n\n`;
+  if (systemPrompts.policyPrompt) combined += `COMPANY POLICY:\n${systemPrompts.policyPrompt}\n\n`;
+  if (systemPrompts.lawPrompt) combined += `LAWS AND REGULATIONS:\n${systemPrompts.lawPrompt}\n\n`;
+  if (systemPrompts.stylingPrompt) combined += `RESPONSE FORMATTING:\n${systemPrompts.stylingPrompt}\n\n`;
+  return combined;
+};
+
+/**
+ * Appends search suggestions HTML to content if provided and not already present.
+ * Uses the specific HTML comment format expected by the frontend.
+ */
+const finalizeContentWithSuggestions = (mainContent: string, suggestionsHtml?: string): string => {
+  if (suggestionsHtml && !mainContent.includes("<!-- SEARCH_SUGGESTIONS_HTML:")) {
+    return `${mainContent}\n\n<!-- SEARCH_SUGGESTIONS_HTML:${suggestionsHtml} -->`;
+  }
+  return mainContent;
+};
+
+/**
+ * Creates a standardized ToolExecutionResult.
+ */
+function createToolResult(
+  source: string,
+  content: string,
+  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
+  contextToAdd?: string,
+  error?: string,
+  searchSuggestionsHtml?: string,
+  finalSuggestionsHtmlToPreserve?: string // Used if this is a FINAL_ANSWER and we need to pull from accumulated
+): ToolExecutionResult {
+  
+  let finalContent = content;
+  if (responseType === "FINAL_ANSWER" && finalSuggestionsHtmlToPreserve) {
+    finalContent = finalizeContentWithSuggestions(finalContent, finalSuggestionsHtmlToPreserve);
+    if (finalContent !== content) {
+        console.log(`[createToolResult] Added preserved search suggestions to final answer from ${source}.`);
+    }
+  }
+
+  const res: ToolExecutionResult = {
     source,
-    content,
-    result: content, // Keep the original content in result field
-    isFullyFormatted: true, // Assuming the content is already formatted
-    responseType
+    content: finalContent,
+    responseType,
   };
+
+  if (contextToAdd && responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT") {
+    res.contextToAdd = contextToAdd;
+  }
+  if (error) {
+    res.error = error;
+  }
+  if (searchSuggestionsHtml) {
+    res.searchSuggestionsHtml = searchSuggestionsHtml;
+  }
+  
+  return res;
 }
 
-// Function to parse tool groups from the AI response
-const parseToolGroups = (responseText: string): string[][] => {
-  const groups: string[][] = [];
-  // Define all valid tools
-  const allValidTools = ["no_tool", "query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna", "search_web"];
-  // Keep track of which tools have been ranked
-  const rankedTools = new Set<string>();
+
+/**
+ * Parses the AI's JSON response for tool execution decision.
+ */
+const parseToolExecutionDecision = (responseText: string): LLMToolExecutionDecision | { error: string } => {
+  const result = parseLLMJson<LLMToolExecutionDecision>(responseText, "ToolExecutionDecision", isLLMToolExecutionDecision);
   
-  // Look for patterns like [1] tool1, tool2
-  const groupsSection = responseText.match(/TOOL_GROUPS:\s*([\s\S]*?)(?:\n\n|$)/i)?.[1] || "";
-  const groupRegex = /\[(\d+)\]\s+(.+?)(?=\n\[\d+\]|\n\n|$)/gs;
-  
-  let match;
-  while ((match = groupRegex.exec(groupsSection)) !== null) {
-    const toolNames = match[2].split(',').map(t => t.trim());
-    // Filter out any empty tool names or invalid tools
-    const validToolsInGroup = toolNames.filter(name => name && allValidTools.includes(name));
+  if (!('error' in result)) {
+    console.log(`[parseToolExecutionDecision] Parsed: responseType='${result.responseType}', contentLen=${result.content.length}, reasoningLen=${result.reasoning.length}, contextToPreserveLen=${result.contextToPreserve?.length || 0}`);
     
-    if (validToolsInGroup.length > 0) {
-      groups.push(validToolsInGroup);
-      // Mark these tools as ranked
-      validToolsInGroup.forEach(tool => rankedTools.add(tool));
+    // Additional warning for TRY_NEXT_TOOL_AND_ADD_CONTEXT without context
+    if (result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && !result.contextToPreserve) {
+      console.warn(`[parseToolExecutionDecision] responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT, but contextToPreserve is missing.`);
     }
   }
   
-  // Check if all tools have been ranked as instructed
-  const unrankedTools = allValidTools.filter(tool => !rankedTools.has(tool));
-  const allToolsRanked = unrankedTools.length === 0;
-  
-  // If no valid groups were found or not all tools were ranked, use an intelligent ranking approach
-  if (groups.length === 0) {
-    // If no groups at all, use default ranking
-    console.log('[parseToolGroups] No valid tool groups found, using default ranking');
-    groups.push(["no_tool"]);
-    groups.push(["search_web"]);
-    groups.push(["query_law_on_insurance", "query_law_on_consumer_protection"]);
-    groups.push(["query_insurance_qna"]);
-  } else if (!allToolsRanked) {
-    // Some tools were ranked but not all of them
-    console.log(`[parseToolGroups] Adding unranked tools as separate groups: ${unrankedTools.join(', ')}`);
+  return result;
+};
+
+/**
+ * Parses the AI's JSON response for parallel synthesis.
+ */
+const parseParallelSynthesisResponse = (responseText: string): LLMParallelSynthesisResponse | { error: string } => {
+    const result = parseLLMJson<LLMParallelSynthesisResponse>(responseText, "ParallelSynthesisResponse", isLLMParallelSynthesisResponse);
     
-    // First add search_web if it's unranked, as it's often a good fallback
-    if (unrankedTools.includes("search_web")) {
-      groups.push(["search_web"]);
-      unrankedTools.splice(unrankedTools.indexOf("search_web"), 1);
+    if (!('error' in result)) {
+        console.log(`[parseParallelSynthesisResponse] Parsed synthesis. Answer length: ${result.synthesizedAnswer.length}`);
     }
     
-    // Group law-related databases together if they're unranked
-    const unrankedLawDatabases = unrankedTools.filter(tool => 
-      tool === "query_law_on_insurance" || 
-      tool === "query_law_on_consumer_protection"
+    return result;
+};
+
+
+/**
+ * Updates the processing phase of a message (e.g., in a database).
+ */
+async function updateProcessingPhase(
+    ctx: ConvexActionCtx,
+    messageId: string | undefined,
+    phase: string,
+    toolName: string
+): Promise<void> {
+    if (ctx && messageId) {
+        try {
+            await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase });
+            console.log(`[${toolName}] Updated phase: ${phase}`);
+        } catch (error) {
+            console.error(`[${toolName}] Phase update error for phase '${phase}': ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+}
+
+// --- GEMINI API HELPERS ---
+const getGenerationConfigForJson = (): GenerationConfig => ({
+    responseMimeType: "application/json",
+});
+
+/**
+ * Type-safe JSON parser for LLM responses
+ */
+function parseLLMJson<T>(responseText: string, context: string, typeGuard: (obj: any) => obj is T): T | { error: string } {
+    try {
+        // Clean up code blocks if present
+        const cleanedText = responseText.replace(/^```(?:json)?\s*|```\s*$/g, '').trim();
+        
+        // Parse JSON
+        const parsed = JSON.parse(cleanedText);
+        
+        // Validate parsed object against expected type
+        if (typeGuard(parsed)) {
+            return parsed;
+        } else {
+            console.error(`[parseLLMJson] ${context}: Parsed JSON doesn't match expected structure`);
+            return { error: `Invalid ${context} structure` };
+        }
+    } catch (error: any) {
+        console.error(`[parseLLMJson] ${context}: ${error.message}. Text: "${responseText.substring(0, 300)}..."`);
+        return { error: `Error parsing ${context}: ${error.message}` };
+    }
+}
+
+/**
+ * Type guard for LLMToolExecutionDecision
+ */
+function isLLMToolExecutionDecision(obj: any): obj is LLMToolExecutionDecision {
+    const validResponseTypes = ["FINAL_ANSWER", "TRY_NEXT_TOOL", "TRY_NEXT_TOOL_AND_ADD_CONTEXT"];
+    return (
+        obj && 
+        typeof obj === 'object' &&
+        typeof obj.responseType === 'string' &&
+        validResponseTypes.includes(obj.responseType) &&
+        typeof obj.content === 'string' &&
+        typeof obj.reasoning === 'string' &&
+        (obj.contextToPreserve === undefined || typeof obj.contextToPreserve === 'string')
     );
-    
-    if (unrankedLawDatabases.length > 0) {
-      groups.push(unrankedLawDatabases);
-      unrankedLawDatabases.forEach(db => {
-        unrankedTools.splice(unrankedTools.indexOf(db), 1);
-      });
-    }
-    
-    // Add insurance Q&A separately if unranked
-    if (unrankedTools.includes("query_insurance_qna")) {
-      groups.push(["query_insurance_qna"]);
-      unrankedTools.splice(unrankedTools.indexOf("query_insurance_qna"), 1);
-    }
-    
-    // Add no_tool last if it's unranked (least likely to be useful if not explicitly ranked)
-    if (unrankedTools.includes("no_tool")) {
-      groups.push(["no_tool"]);
-      unrankedTools.splice(unrankedTools.indexOf("no_tool"), 1);
-    }
-    
-    // Add any remaining tools individually
-    unrankedTools.forEach(tool => {
-      groups.push([tool]);
-    });
-  }
-  
-  console.log(`[parseToolGroups] Final tool groups after ensuring all tools are ranked: ${JSON.stringify(groups)}`);
-  return groups;
-};
+}
 
-// Helper function to combine system prompts
-export const combineSystemPrompts = (systemPrompts?: {
-  stylingPrompt?: string,
-  lawPrompt?: string,
-  tonePrompt?: string,
-  policyPrompt?: string
-}): string => {
-  if (!systemPrompts) return "";
-  
-  let combinedPrompt = "";
-  
-  // Add each prompt if it exists
-  if (systemPrompts.tonePrompt) {
-    combinedPrompt += `TONE AND PERSONALITY:\n${systemPrompts.tonePrompt}\n\n`;
-  }
-  
-  if (systemPrompts.policyPrompt) {
-    combinedPrompt += `COMPANY POLICY:\n${systemPrompts.policyPrompt}\n\n`;
-  }
-  
-  if (systemPrompts.lawPrompt) {
-    combinedPrompt += `LAWS AND REGULATIONS:\n${systemPrompts.lawPrompt}\n\n`;
-  }
-  
-  if (systemPrompts.stylingPrompt) {
-    combinedPrompt += `RESPONSE FORMATTING:\n${systemPrompts.stylingPrompt}\n\n`;
-  }
-  return combinedPrompt;
-};
+/**
+ * Type guard for LLMParallelSynthesisResponse
+ */
+function isLLMParallelSynthesisResponse(obj: any): obj is LLMParallelSynthesisResponse {
+    return (
+        obj && 
+        typeof obj === 'object' &&
+        typeof obj.synthesizedAnswer === 'string' &&
+        (obj.reasoning === undefined || typeof obj.reasoning === 'string')
+    );
+}
 
-// Function to execute tools by priority groups, with parallel execution within groups
-export const executeToolsByGroup = async (
-  toolGroups: string[][],
-  query: string,
-  ctx: any,
-  genAI: GoogleGenerativeAI,
-  selectedModel: string | undefined,
-  conversationHistory: { role: string; parts: { text: string; }[] }[] = [],
-  systemPrompts?: {
-    stylingPrompt?: string,
-    lawPrompt?: string,
-    tonePrompt?: string,
-    policyPrompt?: string
-  },
-  messageId?: string // Add messageId parameter to update processing phase
-): Promise<{ 
-  source: string; 
-  content: string; 
-  result: string; 
-  isFullyFormatted: boolean; 
-  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" 
-}> => {
-  console.log(`[executeToolsByGroup] Starting execution with ${toolGroups.length} groups`);
-  
-  // Process each group in priority order
-  for (let groupIndex = 0; groupIndex < toolGroups.length; groupIndex++) {
-    const toolGroup = toolGroups[groupIndex];
-    console.log(`[executeToolsByGroup] Processing group ${groupIndex + 1}: ${toolGroup.join(', ')}`);
-    
-    if (toolGroup.length === 1) {
-      // Single tool case - similar to existing tool execution logic
-      const tool = toolGroup[0];
-      const startTime = Date.now();
-      console.log(`[executeToolsByGroup] Single tool in group: ${tool}`);
-      
-      try {
-        // Update processing phase based on the tool
-        let phase = "Thinking";
-        let toolDisplayName = tool.replace('query_', '').replace(/_/g, ' ');
-        
-        if (tool.startsWith("query_law")) {
-          phase = `Searching ${toolDisplayName} database`;
-        } else if (tool === "search_web") {
-          phase = "Searching web";
-        }
-        
-        // Only update phase if we have a context and messageId
-        if (ctx && messageId) {
-          try {
-            await ctx.runMutation(api.chat.updateProcessingPhase, {
-              messageId,
-              phase
-            });
-            console.log(`[executeToolsByGroup] Updated phase: ${phase}`);
-          } catch (error) {
-            console.error(`[executeToolsByGroup] Phase update error: ${error instanceof Error ? error.message : String(error)}`);
-            // Continue execution despite phase update error
-          }
-        }
-        
-        // Execute tool logic based on the tool name
-        let toolResult = "";
-        
-        switch (tool) {
-          case "no_tool":
-            // Direct response without using specialized tools
-            console.log(`[executeToolsByGroup] Using no_tool direct response`);
-            
-            // If system prompts are available, generate a more personalized response
-            if (systemPrompts) {
-              // Use the model to generate a response that incorporates system prompts
-              try {
-                const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-                const systemPromptsText = combineSystemPrompts(systemPrompts);
-                
-                // Create a prompt that incorporates the system identity and conversation history
-                let conversationContext = '';
-                if (conversationHistory && conversationHistory.length > 0) {
-                  conversationContext = 'Conversation History:\n' + 
-                    conversationHistory.slice(0, -1) // Exclude the current message
-                    .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0].text}`)
-                    .join('\n') + '\n\n';
-                }
+/**
+ * Type guard for LLMRankingDecision
+ */
+function isLLMRankingDecision(obj: any): obj is LLMRankingDecision {
+    return (
+        obj && 
+        typeof obj === 'object' &&
+        Array.isArray(obj.toolGroups) &&
+        obj.toolGroups.every((group: any) => 
+            typeof group === 'object' &&
+            typeof group.rank === 'number' &&
+            Array.isArray(group.toolNames) &&
+            group.toolNames.every((tool: any) => typeof tool === 'string')
+        ) &&
+        (obj.directResponse === undefined || typeof obj.directResponse === 'string') &&
+        (obj.reasoning === undefined || typeof obj.reasoning === 'string')
+    );
+}
 
-                const directPrompt = `${systemPromptsText}
+class PromptFactory {
+  static generateToolExecutionPrompt(
+    query: string,
+    currentTool: string,
+    toolDescriptionOrData: string, // Renamed for clarity
+    remainingTools: string[],
+    conversationHistory: { role: string; parts: { text: string }[] }[],
+    systemPromptsText: string,
+    accumulatedContext?: AccumulatedContext,
+    nextToolGroup?: string[]
+  ): string {
+    let prompt = `${systemPromptsText}You are an AI assistant processing a user query: "${query}"
 
-${conversationContext}User asks: "${query}"
+CURRENT TOOL: ${currentTool}
+${toolDescriptionOrData ? `\nCONTEXT FOR ${currentTool}:\n${toolDescriptionOrData}\n` : `No specific data loaded for ${currentTool}. Rely on its function ('${AVAILABLE_TOOLS.find(t=>t.name === currentTool)?.description}') or your general knowledge if it's 'no_tool'.\n`}
+REMAINING TOOLS TO TRY IF NEEDED (ranked in likely order of utility): ${remainingTools.length > 0 ? remainingTools.join(", ") : "None. This is the last chance."}
 
-Please provide a helpful response that answers the question directly, taking into account the conversation history.`;
-                
-                console.log(`[executeToolsByGroup] Generating no_tool response with system prompts`);
-                const response = await model.generateContent(directPrompt);
-                toolResult = response.response.text();
-                console.log(`[executeToolsByGroup] Generated personalized no_tool response (${toolResult.length} chars)`);
-              } catch (error) {
-                console.error(`[executeToolsByGroup] Error generating personalized no_tool response: ${error}`);
-                // Fallback to generic response
-                toolResult = "I'm Elixer, your friendly AI assistant. How can I help you today?";
-              }
-            } else {
-              // Default response when no system prompts are available
-              toolResult = "I'm Elixer, your friendly AI assistant. How can I help you today?";
-            }
-            break;
-            
-            case "search_web":
-              try {
-                console.log(`[executeToolsByGroup] Using web search for query: ${query}`);
-                
-                // Get remaining tools for context
-                const remainingTools = toolGroups.slice(groupIndex + 1).flat();
-                console.log(`[executeToolsByGroup] Remaining tools: ${JSON.stringify(remainingTools)}`);
-                
-                // Define the Google Search tool
-                const googleSearchTool: GenAITool = {
-                  googleSearch: {}
-                };
-                
-                // Configure the model with Google Search tool
-                const searchModel = genAI.getGenerativeModel({
-                  model: selectedModel || "gemini-2.5-flash-preview-04-17",
-                  tools: [googleSearchTool]
-                });
-                
-                // Create a chat session with the search tool enabled
-                const chat = searchModel.startChat({
-                  tools: [googleSearchTool]
-                });
-                
-                console.log(`[executeToolsByGroup] Preparing search with structured response format`);
-                
-                // If we have conversation history, use it for context-aware search
-                if (conversationHistory && conversationHistory.length > 0) {
-                  console.log(`[executeToolsByGroup] Using conversation history (${conversationHistory.length} messages) for context-aware search`);
-                  
-                  // Initialize the chat with conversation history
-                  for (let i = 0; i < conversationHistory.length - 1; i++) {
-                    const msg = conversationHistory[i];
-                    if (msg.role === "user") {
-                      await chat.sendMessage(msg.parts[0].text);
-                    }
-                  }
-                } else {
-                  console.log(`[executeToolsByGroup] No conversation history available, using only current query`);
-                }
-                
-                // Create a specialized search prompt that includes instructions for structured response
-                // Add system prompts if available
-                const systemPromptsText = combineSystemPrompts(systemPrompts);
-                
-                const searchPrompt = `
-            ${systemPromptsText}I need information about: "${query}"
-            
-            IMPORTANT: When interpreting this query, consider the ENTIRE conversation context to determine what to search for. 
-            
-            If the query is short or ambiguous (like "how about X" or "what about Y"), use the conversation context to determine the FULL search intent. 
-            For example:
-            - If we were previously discussing stock prices and the user asks "how about nvidia", search for "current nvidia stock price"
-            - If we were discussing weather and user asks "what about LA", search for "current weather in Los Angeles"
-            
-            Do not just search for the literal query text if context provides more information about the user's intent.
-            
-            Please search the web and analyze if you can find relevant information.
-            
-            TOOLS INFORMATION:
-            - Current tool: search_web (Web Search)
-            - Remaining tools to try if needed: ${remainingTools.join(", ")}
-            
-            RESPONSE FORMAT:
-            [RESPONSE_TYPE: FINAL_ANSWER or TRY_NEXT_TOOL]
-            [CONTENT]
-            Your answer here...
-            [/CONTENT]
-            [REASONING]
-            Brief explanation of why you chose this response type
-            [/REASONING]
-            
-            RESPONSE GUIDELINES:
-            - Use FINAL_ANSWER if you found sufficient information to answer the query
-            - Use TRY_NEXT_TOOL if you couldn't find relevant information or if the information is insufficient
-            
-            If using FINAL_ANSWER, provide a complete, helpful response that directly addresses the query.
-            If using TRY_NEXT_TOOL, briefly explain why the search results weren't sufficient.
-            `;
-                
-                // Add conversation context to the search prompt
-                let promptWithHistory = searchPrompt;
-                if (conversationHistory && conversationHistory.length > 0) {
-                  promptWithHistory += `
-            
-            CONVERSATION HISTORY:
-            `;
-                  
-                  // Include ALL conversation history, not just a subset
-                  for (const msg of conversationHistory) {
-                    if (msg.role === "user") {
-                      promptWithHistory += `User: ${msg.parts[0]?.text}
-            
-            `;
-                    } else if (msg.role === "model") {
-                      promptWithHistory += `Assistant: ${msg.parts[0]?.text}
-            
-            `;
-                    }
-                  }
-                }
-                
-                // Execute the search with the structured prompt in a single API call
-                console.log(`[executeToolsByGroup] Sending search with structured prompt`);
-                const searchResponse = await chat.sendMessage(promptWithHistory);
-                const responseText = searchResponse.response.text();
-                
-                // Parse the response to determine if it's a final answer or we should try the next tool
-                const parsedResponse = parseToolResponse(responseText);
-                console.log(`[executeToolsByGroup] Parsed response type: ${parsedResponse.responseType}`);
-                
-                // Check if there's grounding metadata (search results)
-                const responseAny = searchResponse as any;
-                const hasGroundingMetadata = responseAny.candidates?.[0]?.groundingMetadata;
-                
-                // Add search suggestions if available and it's a final answer
-                if (parsedResponse.responseType === "FINAL_ANSWER") {
-                  let result = parsedResponse.content;
-                  
-                  if (hasGroundingMetadata && responseAny.candidates?.[0]?.groundingMetadata?.searchEntryPoint) {
-                    const searchSuggestionsHtml = responseAny.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
-                    console.log(`[executeToolsByGroup] Search returned suggestions HTML of length: ${searchSuggestionsHtml.length}`);
-                    result += `
-            
-            <!-- SEARCH_SUGGESTIONS_HTML:${searchSuggestionsHtml} -->`;
-                  }
-                  
-                  console.log(`[executeToolsByGroup] Using search_web final answer (length: ${result.length})`);
-                  return createToolResult("search_web", result, "FINAL_ANSWER", systemPrompts);
-                } else {
-                  console.log(`[executeToolsByGroup] search_web suggested trying next tool: ${parsedResponse.reasoning}`);
-                  // Continue to next tool
-                  toolResult = ""; // Clear tool result to ensure we don't use it
-                }
-              } catch (error) {
-                console.error(`[executeToolsByGroup] Error using search_web: ${error}`);
-              }
-              break;
-            
-          case "query_law_on_insurance":
-          case "query_law_on_consumer_protection":
-          case "query_insurance_qna":
-            // Database query logic with improved error handling and logging
-            const dbQueryStartTime = Date.now();
-            const databaseName = tool === "query_law_on_insurance" ? "Law_on_Insurance" :
-                              tool === "query_law_on_consumer_protection" ? "Law_on_Consumer_Protection" :
-                              "Insurance_and_reinsurance_in_Cambodia_QnA_format";
-            const readableName = databaseName.replace(/_/g, " ");
-            
-            console.log(`[executeToolsByGroup] Querying ${readableName} database`);
-            
-            try {
-              // Get the database content
-              if (!ctx) {
-                console.error(`[executeToolsByGroup] No context available for database query`);
-                toolResult = `I couldn't access the database because the system context is unavailable.`;
-                break;
-              }
-              
-              // Track database query time
-              const dbFetchStartTime = Date.now();
-              const databaseResult = await ctx.runQuery(api.chat.getLawDatabaseContent, {
-                databaseNames: [databaseName]
-              });
-              const dbFetchTime = Date.now() - dbFetchStartTime;
-              
-              // Handle missing database result
-              if (!databaseResult) {
-                console.error(`[executeToolsByGroup] Failed to get ${readableName} database (${dbFetchTime}ms)`);
-                toolResult = `I couldn't access the ${readableName} database. It may be temporarily unavailable.`;
-                break;
-              }
-              
-              try {
-                // Parse database content
-                const databaseContent = JSON.parse(databaseResult);
-                
-                // Validate database structure
-                if (!databaseContent[databaseName]) {
-                  console.error(`[executeToolsByGroup] ${readableName} database not found in result (${dbFetchTime}ms)`);
-                  toolResult = `I couldn't find the ${readableName} database. It may not be properly configured.`;
-                  break;
-                }
-                
-                // Check for explicit database errors
-                if (databaseContent[databaseName].error) {
-                  const errorMsg = databaseContent[databaseName].error;
-                  console.error(`[executeToolsByGroup] ${readableName} database error: ${errorMsg}`);
-                  toolResult = `There was an error accessing the ${readableName} database: ${errorMsg}`;
-                  break;
-                }
-                
-                // Get the raw database
-                const rawDatabase = databaseContent[databaseName];
-                const dbSize = JSON.stringify(rawDatabase).length;
-                
-                // Skip structure validation for QnA format database
-                if (databaseName === "Insurance_and_reinsurance_in_Cambodia_QnA_format") {
-                  console.log(`[executeToolsByGroup] ${readableName} database loaded: ${dbSize} chars (QnA format) (${dbFetchTime}ms)`);
-                  
-                  // Check if database is empty based on size
-                  if (dbSize < 50) {
-                    console.warn(`[executeToolsByGroup] ${readableName} database appears to be empty (${dbSize} chars)`);
-                    toolResult = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
-                    break;
-                  }
-                } else {
-                  // For regular law databases with chapters and articles structure
-                  const chaptersCount = rawDatabase.chapters?.length || 0;
-                  const articlesCount = rawDatabase.chapters?.reduce((count: number, chapter: LawChapter) => 
-                    count + (chapter.articles?.length || 0), 0) || 0;
-                  
-                  console.log(`[executeToolsByGroup] ${readableName} database loaded: ${dbSize} chars, ${chaptersCount} chapters, ~${articlesCount} articles (${dbFetchTime}ms)`);
-                  
-                  // Check if database is empty or has no useful content
-                  if (chaptersCount === 0 || articlesCount === 0) {
-                    console.warn(`[executeToolsByGroup] ${readableName} database appears to be empty (${chaptersCount} chapters, ${articlesCount} articles)`);
-                    toolResult = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
-                    break;
-                  }
-                }
-                
-                // Create a prompt for the AI with the labeled database
-                const promptStartTime = Date.now();
-                let prompt = `I need information about: "${query}"
+TOOL SEQUENCE INFORMATION:
+- CURRENT TOOL: ${currentTool}
+${nextToolGroup && nextToolGroup.length > 0 ? `- NEXT TOOL(S) IF YOU SELECT TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT: ${nextToolGroup.join(', ')}` : `- NEXT TOOL(S): None (this is the last tool in the planned sequence)`}
+`;
 
-I have access to the following database:\n\n`;
-                
-                // Add the database with a clear label
-                prompt += `### ${readableName} Database:\n\n\`\`\`json\n${JSON.stringify(rawDatabase, null, 2)}\n\`\`\`\n\n`;
-                
-                // Add conversation context if available
-                if (conversationHistory && conversationHistory.length > 0) {
-                  prompt += `\n### Conversation Context:\n`;
-                  const lastMessages = conversationHistory.slice(-2); // Just include last 2 messages for context
-                  lastMessages.forEach(msg => {
-                    if (msg.role === "user") {
-                      prompt += `User: ${msg.parts[0]?.text}\n\n`;
-                    }
-                  });
-                }
-                
-                prompt += `\nPlease analyze this database and provide a comprehensive answer to my query. Format your response using proper markdown.`;
-                
-                // Estimate token count for logging
-                const estimatedTokens = estimateTokenCount(prompt);
-                console.log(`[executeToolsByGroup] Prompt prepared: ${prompt.length} chars, ~${estimatedTokens} tokens`);
-                
-                // Use the model to generate a response with error handling
-                try {
-                  console.log(`[executeToolsByGroup] Sending prompt to AI model`);
-                  const aiStartTime = Date.now();
-                  const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-                  const response = await model.generateContent(prompt);
-                  const aiTime = Date.now() - aiStartTime;
-                  
-                  toolResult = response.response.text();
-                  const responseTokens = estimateTokenCount(toolResult);
-                  
-                  console.log(`[executeToolsByGroup] AI response: ${toolResult.length} chars, ~${responseTokens} tokens (${aiTime}ms)`);
-                  
-                  // Check if response is too short, which might indicate a problem
-                  if (toolResult.length < 100) {
-                    console.warn(`[executeToolsByGroup] AI response suspiciously short (${toolResult.length} chars), may be incomplete`);
-                  }
-                } catch (aiError) {
-                  // Handle AI-specific errors
-                  console.error(`[executeToolsByGroup] AI model error: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
-                  toolResult = `I encountered an error while analyzing the ${readableName} database. The AI processing system may be temporarily unavailable.`;
-                }
-                
-              } catch (parseError) {
-                // Handle JSON parsing errors
-                console.error(`[executeToolsByGroup] Database parse error: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
-                toolResult = `I had trouble processing the ${readableName} database format. The database may be corrupted.`;
-              }
-            } catch (error) {
-              // Handle general query errors
-              console.error(`[executeToolsByGroup] Database query error: ${error instanceof Error ? error.message : String(error)}`);
-              toolResult = `An error occurred while accessing the ${readableName} database. Please try again later.`;
-            }
-            
-            // Log total database operation time
-            const totalDbTime = Date.now() - dbQueryStartTime;
-            console.log(`[executeToolsByGroup] ${readableName} database operation completed in ${totalDbTime}ms`);
-            break;
-            
-          default:
-            console.log(`[executeToolsByGroup] Unknown tool: ${tool}`);
-            toolResult = `I don't know how to use the tool: ${tool}`;
-            break;
-        }
-        
-        // Check if the tool provided a sufficient answer
-        if (toolResult) {
-          console.log(`[executeToolsByGroup] Got result from ${tool} (${toolResult.length} chars)`);
-          
-          // Evaluate if this is a final answer or we should try the next tool
-          // This would use similar logic to executeToolsSequentially
-          
-          // For now, assume it's a final answer
-          return createToolResult(tool, toolResult, "FINAL_ANSWER", systemPrompts);
-        }
-      } catch (error) {
-        console.error(`[executeToolsByGroup] Error executing tool ${tool}:`, error);
+    if (accumulatedContext && accumulatedContext.content) {
+      prompt += `\nIMPORTANT ACCUMULATED CONTEXT FROM PREVIOUS TOOLS (Use this to build a comprehensive understanding and avoid redundant work. Total ${accumulatedContext.sources.length} sources: [${accumulatedContext.sources.join(', ')}]):\n${accumulatedContext.content}\n`;
+      if (accumulatedContext.searchSuggestionsHtmlToPreserve) {
+        prompt += `\nNOTE: Search suggestions from a previous web search are being preserved and will be added to the final answer if appropriate. Do not duplicate them in your 'content' output.\n`;
       }
     } else {
-      // Multiple tools case - execute in parallel and provide labeled databases to AI
-      const parallelStartTime = Date.now();
-      console.log(`[executeToolsByGroup] Executing ${toolGroup.length} tools in parallel`);
-      
-      try {
-        // Update processing phase to indicate parallel search
-        if (ctx && messageId) {
-          try {
-            await ctx.runMutation(api.chat.updateProcessingPhase, {
-              messageId,
-              phase: "Searching multiple sources"
-            });
-            console.log(`[executeToolsByGroup] Updated phase: Searching multiple sources`);
-          } catch (error) {
-            console.error(`[executeToolsByGroup] Phase update error: ${error instanceof Error ? error.message : String(error)}`);
-            // Continue execution despite phase update error
-          }
-        }
-        
-        // Create an array of promises for parallel execution
-        const toolPromises = toolGroup.map(async (tool) => {
-          const toolStartTime = Date.now();
-          console.log(`[executeToolsByGroup] Starting parallel tool: ${tool}`);
-          let result = "";
-          let rawDatabase = null;
-          let databaseName = "";
-          let databaseMetadata = {};
-          let remainingTools = toolGroups.slice(groupIndex).flat().filter(t => t !== tool);
-          
-          try {
-            switch (tool) {
-              case "query_law_on_insurance":
-              case "query_law_on_consumer_protection":
-              case "query_insurance_qna":
-                // Extract the database name from the tool name
-                databaseName = tool === "query_law_on_insurance" ? "Law_on_Insurance" :
-                               tool === "query_law_on_consumer_protection" ? "Law_on_Consumer_Protection" :
-                               "Insurance_and_reinsurance_in_Cambodia_QnA_format";
-                const readableName = databaseName.replace(/_/g, " ");
-                
-                console.log(`[executeToolsByGroup] Parallel query: ${readableName}`);
-                
-                // Get the database content
-                if (!ctx) {
-                  console.error(`[executeToolsByGroup] No context for parallel query: ${readableName}`);
-                  result = `I couldn't access the ${readableName} database because the system context is unavailable.`;
-                  break;
-                }
-                
-                // Track database query time
-                const dbFetchStartTime = Date.now();
-                const databaseResult = await ctx.runQuery(api.chat.getLawDatabaseContent, {
-                  databaseNames: [databaseName]
-                });
-                const dbFetchTime = Date.now() - dbFetchStartTime;
-                
-                // Handle missing database result
-                if (!databaseResult) {
-                  console.error(`[executeToolsByGroup] Failed to get ${readableName} (${dbFetchTime}ms)`);
-                  result = `I couldn't access the ${readableName} database. It may be temporarily unavailable.`;
-                  break;
-                }
-                
-                try {
-                  // Parse database content
-                  const databaseContent = JSON.parse(databaseResult);
-                  
-                  // Validate database structure
-                  if (!databaseContent[databaseName]) {
-                    console.error(`[executeToolsByGroup] ${readableName} not found in result (${dbFetchTime}ms)`);
-                    result = `I couldn't find the ${readableName} database. It may not be properly configured.`;
-                    break;
-                  }
-                  
-                  // Check for explicit database errors
-                  if (databaseContent[databaseName].error) {
-                    const errorMsg = databaseContent[databaseName].error;
-                    console.error(`[executeToolsByGroup] ${readableName} error: ${errorMsg}`);
-                    result = `There was an error accessing the ${readableName} database: ${errorMsg}`;
-                    break;
-                  }
-                  
-                  // Store the raw database for later use
-                  rawDatabase = databaseContent[databaseName];
-                  const dbSize = JSON.stringify(rawDatabase).length;
-                  
-                  // Log basic database info without any structure validation
-                  databaseMetadata = { dbSize, dbFetchTime };
-                  console.log(`[executeToolsByGroup] ${readableName} loaded: ${dbSize} chars (${dbFetchTime}ms)`);
-                  
-                  // Only check if it's completely empty based on raw size
-                  if (dbSize < 50) {
-                    console.warn(`[executeToolsByGroup] ${readableName} appears empty (${dbSize} chars)`);
-                    result = `The ${readableName} database appears to be empty or doesn't contain relevant information.`;
-                  }
-                } catch (parseError) {
-                  console.error(`[executeToolsByGroup] Parse error for ${readableName}: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
-                  result = `I had trouble processing the ${readableName} database format. The database may be corrupted.`;
-                }
-                break;
-                
-                case "search_web":
-                  try {
-                    console.log(`[executeToolsByGroup] Parallel web search started for: ${query}`);
-                    
-                    // Define the Google Search tool
-                    const googleSearchTool: GenAITool = {
-                      googleSearch: {}
-                    };
-                    
-                    // Configure the model with Google Search tool
-                    const searchModel = genAI.getGenerativeModel({
-                      model: selectedModel || "gemini-2.5-flash-preview-04-17",
-                      tools: [googleSearchTool]
-                    });
-                    
-                    // Create a chat session with the search tool enabled
-                    const chat = searchModel.startChat({
-                      tools: [googleSearchTool]
-                    });
-                    
-                    // If we have conversation history, use it for context-aware search
-                    if (conversationHistory && conversationHistory.length > 0) {
-                      console.log(`[executeToolsByGroup] Using conversation history for parallel search`);
-                      
-                      // Initialize the chat with conversation history
-                      for (let i = 0; i < conversationHistory.length - 1; i++) {
-                        const msg = conversationHistory[i];
-                        if (msg.role === "user") {
-                          await chat.sendMessage(msg.parts[0].text);
-                        }
-                      }
-                    }
-                    
-                    // Add system prompts if available
-                    const systemPromptsText = combineSystemPrompts(systemPrompts);
-                    
-                    // Create a prompt that includes system identity and instructions
-                    // Get remaining tools for context (all tools in the current group and later groups)
-                    const remainingToolGroups = toolGroups.slice(groupIndex);
-                    const remainingTools = remainingToolGroups.flat().filter(t => t !== tool);
-                    console.log(`[executeToolsByGroup] Remaining tools for parallel execution: ${JSON.stringify(remainingTools)}`);
-                    
-                    const searchPrompt = `
-${systemPromptsText}I need information about: "${query}"
+      prompt += `\nNo accumulated context from previous tools yet.\n`;
+    }
 
-TOOLS INFORMATION:
-- Current tool: search_web (Web Search)
-- Remaining tools to try if needed: ${remainingTools.join(", ")}
+    prompt += `
+TASK:
+1. Analyze the user query, conversation history, any data/context from the current tool, and any accumulated context.
+2. Decide on the best course of action.
+3. Respond in JSON format ONLY, matching this schema:
+   \`\`\`json
+   {
+     "responseType": "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
+     "content": "Your full answer to the user (for FINAL_ANSWER). For TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT, this can be a brief note or empty. The user will not see this intermediate content directly.",
+     "reasoning": "Your detailed reasoning for choosing the responseType. If FINAL_ANSWER, explain sufficiency. If TRY_NEXT_TOOL, explain insufficiency and need for next. If TRY_NEXT_TOOL_AND_ADD_CONTEXT, explain what useful info was found and why it's being passed.",
+     "contextToPreserve": "string (ONLY if responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT). Summarize key findings, quotes, data from CURRENT TOOL to pass to next tools. This will be added to ACCUMULATED CONTEXT."
+   }
+   \`\`\`
 
-Please search the web and provide a comprehensive answer based on reliable sources.
+DECISION GUIDELINES:
+- FINAL_ANSWER: If you have sufficient information from the current tool AND accumulated context for a complete answer.
+- TRY_NEXT_TOOL_AND_ADD_CONTEXT: PREFERRED for most cases. If the current tool provided ANY useful, relevant information (even partial) that should be preserved.
+- TRY_NEXT_TOOL: ONLY if the current tool yielded ABSOLUTELY NOTHING relevant or its output is unusable/error.
+
+CONVERSATION HISTORY (for context):
 `;
-                    
-                    // Execute the search with system prompts included
-                    console.log(`[executeToolsByGroup] Parallel search with system prompts (${systemPromptsText.length > 0 ? 'included' : 'not available'})`); 
-                    const searchResponse = await chat.sendMessage(searchPrompt);
-                    result = searchResponse.response.text();
-                    
-                    // Check for search suggestions metadata
-                    const responseAny = searchResponse as any;
-                    if (responseAny.candidates?.[0]?.groundingMetadata?.searchEntryPoint) {
-                      const searchSuggestionsHtml = responseAny.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
-                      console.log(`[executeToolsByGroup] Parallel search returned suggestions HTML: ${searchSuggestionsHtml.length} chars`);
-                      
-                      // Append search suggestions as a special comment for later extraction
-                      result += `\n\n<!-- SEARCH_SUGGESTIONS_HTML:${searchSuggestionsHtml} -->`;
-                    }
-                    
-                    console.log(`[executeToolsByGroup] Parallel web search completed, result length: ${result.length}`);
-                  } catch (error) {
-                    console.error(`[executeToolsByGroup] Error in parallel web search: ${error instanceof Error ? error.message : String(error)}`);
-                    result = `I encountered an error while searching the web: ${error instanceof Error ? error.message : String(error)}`;
-                  }
-                  break;
-            }
-            
-            const toolTime = Date.now() - toolStartTime;
-            console.log(`[executeToolsByGroup] Tool ${tool} completed in ${toolTime}ms`);
-            return { tool, result, rawDatabase, databaseName, databaseMetadata, executionTime: toolTime, remainingTools };
-          } catch (error) {
-            const toolTime = Date.now() - toolStartTime;
-            console.error(`[executeToolsByGroup] Error in parallel tool ${tool}: ${error instanceof Error ? error.message : String(error)}`);
-            return { 
-              tool, 
-              result: `Error executing ${tool}: ${error instanceof Error ? error.message : String(error)}`, 
-              rawDatabase, 
-              databaseName,
-              executionTime: toolTime,
-              error: true 
-            };
-          }
-        });
-        
-        // Wait for all tools in the group to complete
-        const parallelExecutionStartTime = Date.now();
-        const toolResults = await Promise.all(toolPromises);
-        const parallelExecutionTime = Date.now() - parallelExecutionStartTime;
-        
-        // Log results with timing information
-        const toolsWithTimes = toolResults.map(r => `${r.tool} (${r.executionTime}ms)`).join(', ');
-        console.log(`[executeToolsByGroup] All parallel tools completed in ${parallelExecutionTime}ms: ${toolsWithTimes}`);
-        
-        // Filter out empty results but keep track of errors
-        const validResults = toolResults.filter(r => r.rawDatabase || (r.result && r.result.trim() !== ""));
-        const errorCount = toolResults.filter(r => r.error).length;
-        
-        if (validResults.length === 0) {
-          console.log(`[executeToolsByGroup] No valid results from parallel tools (${errorCount} errors)`);
-          continue; // Try next group
-        }
-        
-        // Create a prompt for the AI with labeled databases
-        const promptStartTime = Date.now();
-        let prompt = `I need information about: "${query}"
+    if (conversationHistory.length > 0) {
+      conversationHistory.forEach(msg => {
+        prompt += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0].text}\n`;
+      });
+    } else {
+      prompt += "No prior conversation history.\n";
+    }
+    prompt += "\nEnsure your entire response is a single, valid JSON object."
+    return prompt;
+  }
 
-I have access to the following databases:\n\n`;
-        
-        // Add each database with a clear label
-        let databaseCount = 0;
-        let hasWebSearchResults = false;
-        validResults.forEach(({ tool, databaseName, rawDatabase, result, databaseMetadata, remainingTools }) => {
-          if (rawDatabase) {
-            databaseCount++;
-            const readableName = databaseName.replace(/_/g, " ");
-            prompt += `### ${readableName} Database:\n\n\`\`\`json\n${JSON.stringify(rawDatabase, null, 2)}\n\`\`\`\n\n`;
-          } else if (tool === "search_web" && result && result.trim() !== "") {
-            hasWebSearchResults = true;
-            prompt += `### Web Search Results:\n\n${result}\n\n`;
-          }
-        });
-        
-        // Add conversation context if available
-        if (conversationHistory && conversationHistory.length > 0) {
-          prompt += `\n### Conversation Context:\n`;
-          const lastMessages = conversationHistory.slice(-2); // Just include last 2 messages for context
-          lastMessages.forEach(msg => {
-            if (msg.role === "user") {
-              prompt += `User: ${msg.parts[0]?.text}\n\n`;
-            }
-          });
-        }
-        
-        prompt += `\nPlease analyze ${hasWebSearchResults ? (databaseCount > 0 ? 'these databases and web search results' : 'these web search results') : (databaseCount > 1 ? 'these databases' : 'this database')} and provide a comprehensive answer to my query. Format your response using proper markdown.`;
-        
-        // Estimate token count for logging
-        const estimatedTokens = estimateTokenCount(prompt);
-        console.log(`[executeToolsByGroup] Parallel prompt prepared: ${prompt.length} chars, ~${estimatedTokens} tokens`);
-        
-        // Use the model to generate a response based on the labeled databases
-        try {
-          console.log(`[executeToolsByGroup] Sending parallel prompt with ${databaseCount} databases${hasWebSearchResults ? ' and web search results' : ''} to AI`);
-          const aiStartTime = Date.now();
-          const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-          const response = await model.generateContent(prompt);
-          const aiResponse = response.response.text();
-          const aiTime = Date.now() - aiStartTime;
-          
-          const responseTokens = estimateTokenCount(aiResponse);
-          console.log(`[executeToolsByGroup] AI parallel response: ${aiResponse.length} chars, ~${responseTokens} tokens (${aiTime}ms)`);
-          
-          // Check if response is too short, which might indicate a problem
-          if (aiResponse.length < 100) {
-            console.warn(`[executeToolsByGroup] AI parallel response suspiciously short (${aiResponse.length} chars)`);
-          }
-          
-          // Log total parallel execution time
-          const totalParallelTime = Date.now() - parallelStartTime;
-          console.log(`[executeToolsByGroup] Total parallel execution completed in ${totalParallelTime}ms`);
-          
-          // Return the AI-generated response
-          return createToolResult(
-            "parallel_databases", 
-            aiResponse,
-            "FINAL_ANSWER",
-            systemPrompts
-          );
-        } catch (aiError) {
-          // Handle AI-specific errors
-          console.error(`[executeToolsByGroup] AI model error in parallel execution: ${aiError instanceof Error ? aiError.message : String(aiError)}`);
-          return createToolResult(
-            "parallel_databases_error", 
-            `I encountered an error while analyzing the databases. The AI processing system may be temporarily unavailable.`,
-            "FINAL_ANSWER",
-            systemPrompts
-          );
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`[executeToolsByGroup] Error executing parallel tools: ${errorMessage}`);
-        
-        // Return error message but allow trying next group
-        return createToolResult(
-          "parallel_error", 
-          `I encountered an error while searching multiple databases. The system may be temporarily unavailable.`,
-          "FINAL_ANSWER",
-          systemPrompts
-        );
+  /**
+   * This is designed to work with parseToolGroupsFromNaturalLanguage and the faster gemini-2.0-flash model.
+   */
+  static generateNaturalLanguageRankingPrompt(
+    userMessage: string,
+    history: { role: string; parts: { text: string }[] }[],
+    tools: Tool[],
+    systemPromptsText: string // Combined system prompts
+  ): string {
+    let prompt = `${systemPromptsText}Analyze the user message and conversation history to determine the optimal sequence and grouping of tools.
+
+User message: "${userMessage}"
+`;
+    if (history && history.length > 1) {
+      prompt += `\nImportant context from conversation history (last 5 messages before current query):\n`;
+      const relevantHistory = history.slice(0, -1).slice(-5); // Exclude the current user message already provided
+      for (const msg of relevantHistory) {
+        prompt += `  - ${msg.role === "user" ? "User" : "Assistant"} said: "${ensureString(msg.parts[0]?.text)}"\n`;
       }
     }
-    
-  }
-  
-  // If we reach here, it means we've tried all tool groups and none provided a satisfactory answer
-  // Log this outcome and return a helpful fallback message
-  console.log(`[executeToolsByGroup] All tool groups exhausted without finding relevant information`);
-  return createToolResult(
-    "fallback", 
-    "I've searched through all available sources but couldn't find specific information to answer your question. You might want to try rephrasing your question or providing more specific details about what you're looking for.",
-    "FINAL_ANSWER",
-    systemPrompts
-  );
-  // Handle any remaining fallback case
-  console.log(`[executeToolsByGroup] Returning generic fallback response`);
-  return createToolResult(
-    "system_error", 
-    `I apologize, but I encountered a system error while processing your request. This might be a temporary issue. Please try again in a moment.`,
-    "FINAL_ANSWER",
-    systemPrompts
-  );
-};
 
-// Parse the AI's structured response to determine if it's a final answer or we should try the next tool
-const parseToolResponse = (responseText: string): { responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL", content: string, reasoning: string } => {
-  // Default values
-  let responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" = "TRY_NEXT_TOOL";
-  let content = "";
-  let reasoning = "";
-  
-  // Extract response type
-  const typeMatch = responseText.match(/\[RESPONSE_TYPE:\s*(FINAL_ANSWER|TRY_NEXT_TOOL)\]/i);
-  if (typeMatch && typeMatch[1]) {
-    responseType = typeMatch[1] as "FINAL_ANSWER" | "TRY_NEXT_TOOL";
+    prompt += `\nAvailable tools and descriptions:\n`;
+    tools.forEach(tool => {
+      prompt += `- ${tool.name}: ${tool.description}\n`;
+    });
+
+    prompt += `
+
+YOUR TASK:
+1. First, briefly analyze the user's query and conversation history. Identify the key entities, intent, and any specific information requested.
+2. Consider the available tools and their descriptions. Briefly note which tool categories or specific tools seem potentially relevant to the identified aspects of the query. This is your 'thinking step'.
+3. After your analysis and consideration, on a NEW LINE, provide the tool ranking strictly following the "IMPORTANT INSTRUCTIONS" for format below.
+
+IMPORTANT GUIDELINES FOR RANKING:
+- YOU MUST RANK ALL AVAILABLE TOOLS.
+- Consider tool descriptions carefully. Prioritize specialized databases over general web search if a direct match for the query's information needs.
+- Group similarly relevant tools in the same priority level.
+- For legal/insurance queries (e.g., 'Articles', 'policy terms', 'legislation'): ALWAYS prioritize relevant database tools FIRST, before general web search. Use web search for these topics only as a supplement or last resort.
+- Rank tools from most to least relevant for the current query.
+- "no_tool" should generally be ranked last, unless no other tool is remotely relevant. If used after other tools, "no_tool" can synthesize their accumulated context.
+- For non-legal/insurance topics, consider placing general web search after other tools to leverage accumulated context.
+
+VERY IMPORTANT INSTRUCTIONS:
+- GROUP TOOLS BY PRIORITY LEVEL (e.g., [1], [2]). Tools in the same group are tried together.
+- List all tools provided: ${tools.map(t => t.name).join(', ')}
+- ALWAYS follow Output format, example:
+"thinking step" 
+[1] tool_name1, tool_name2
+[2] tool_name3
+[3] tool_name4, tool_name5
+
+SPECIAL CASE - OPTIMIZATION:
+Only rank "no_tool" first (in group [1] by itself), IF you are ABSOLUTELY CERTAIN no specialized tools or web search are needed and you can answer directly, if yes, provide a direct response:
+===DIRECT_RESPONSE_START===
+Your helpful response to the user (without reference to tools/ranking).
+===DIRECT_RESPONSE_END===
+
+IMPORTANT IDENTITY AND TONE GUIDELINES: Follow the system instructions provided above.
+`;
+    return prompt;
   }
-  
-  // Extract content
-  const contentMatch = responseText.match(/\[CONTENT\]([\s\S]*?)\[\/CONTENT\]/i);
-  if (contentMatch && contentMatch[1]) {
-    content = contentMatch[1].trim();
-  } else {
-    // If no content markers found, use the whole response as content
-    content = responseText;
+
+  static generateParallelSynthesisPrompt(
+    query: string,
+    collectedData: Array<{ toolName: string; data: string; error?: string }>,
+    conversationHistory: { role: string; parts: { text: string }[] }[],
+    systemPromptsText: string,
+    accumulatedContext?: AccumulatedContext
+  ): string {
+    let prompt = `${systemPromptsText}You are synthesizing an answer for the user query: "${query}"`;
+
+    if (accumulatedContext && accumulatedContext.content) {
+      prompt += `\n\nACCUMULATED CONTEXT FROM PREVIOUS TOOLS (use for broader understanding and to connect information. From sources: [${accumulatedContext.sources.join(', ')}]):\n${accumulatedContext.content}\n`;
+       if (accumulatedContext.searchSuggestionsHtmlToPreserve) {
+        prompt += `\nNOTE: Search suggestions from a previous web search are being preserved and will be added to your synthesized answer automatically if appropriate. Do not duplicate them in your 'synthesizedAnswer' output.\n`;
+      }
+    }
+
+    prompt += `\nYou have received data from multiple sources executed in parallel for the current query stage:\n`;
+    collectedData.forEach(item => {
+      prompt += `\n### Data from ${item.toolName}:\n`;
+      if (item.error) {
+        prompt += `Error reported by ${item.toolName}: ${item.error}\n`;
+      } else if (item.data) {
+        prompt += `${item.data}\n`;
+      } else {
+        prompt += `No specific data returned by ${item.toolName}.\n`;
+      }
+    });
+
+    prompt += `\nCONVERSATION HISTORY (for context):\n`;
+    if (conversationHistory.length > 0) {
+      conversationHistory.forEach(msg => {
+        prompt += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0].text}\n`;
+      });
+    } else {
+      prompt += "No prior conversation history.\n";
+    }
+
+    prompt += `
+TASK:
+1. Analyze ALL the provided data from the different sources AND any accumulated context in the context of the user query and conversation history.
+2. Synthesize a single, comprehensive, and helpful answer for the user.
+3. If some sources provided errors or irrelevant data, acknowledge if necessary but focus on the useful information.
+4. If no source provided useful information, and accumulated context is also unhelpful, state that you couldn't find the answer.
+5. The output from this synthesis will be treated as a FINAL_ANSWER for this stage.
+6. CRITICAL: Your entire response MUST be a single, valid JSON object. Do NOT output any text outside of this JSON object. It MUST conform to the following schema:
+   \`\`\`json
+   {
+     "synthesizedAnswer": "Your single, comprehensive, and helpful answer for the user, formatted using proper markdown.",
+     "reasoning": "string (OPTIONAL: Briefly explain how you synthesized the information or why an answer couldn't be formed.)"
+   }
+   \`\`\`
+Ensure your entire response is a single, valid JSON object.
+`;
+    prompt += "\nIMPORTANT: Remember, your entire output must be ONLY the JSON object described above. No other text, no pleasantries, just the JSON.";
+    return prompt;
   }
-  
-  // Extract reasoning
-  const reasoningMatch = responseText.match(/\[REASONING\]([\s\S]*?)\[\/REASONING\]/i);
-  if (reasoningMatch && reasoningMatch[1]) {
-    reasoning = reasoningMatch[1].trim();
-  }
-  
-  return { responseType, content, reasoning };
 }
 
-export const executeToolsSequentially = async (
-  rankedTools: string[],
-  query: string,
-  ctx: any,
-  genAI: GoogleGenerativeAI,
-  selectedModel: string | undefined,
-  conversationHistory?: { role: string; parts: { text: string; }[] }[],
-  systemPrompts?: {
-    stylingPrompt?: string,
-    lawPrompt?: string,
-    tonePrompt?: string,
-    policyPrompt?: string
-  },
-  messageId?: string // Add messageId parameter to update processing phase
-): Promise<{ 
-  source: string, 
-  result: string, 
-  isFullyFormatted: boolean, 
-  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" 
-}> => {
-  console.log(`[executeToolsSequentially] Starting sequential tool execution`);
-  console.log(`[executeToolsSequentially] Ranked tools (${rankedTools.length}): ${JSON.stringify(rankedTools)}`);
-  console.log(`[executeToolsSequentially] Query: "${query.substring(0, 50)}${query.length > 50 ? "..." : ""}"`);
-  console.log(`[executeToolsSequentially] Selected model: ${selectedModel || "default"}`);
-  
-  // Initialize the model for use with various tools
-  const model = genAI.getGenerativeModel({ model: selectedModel || "gemini-2.5-flash-preview-04-17" });
-  
-  let toolResult = "";
-  let toolsAttempted = 0;
-  
-  // Try each tool in sequence until we get a result
-  for (const tool of rankedTools) {
-    toolsAttempted++;
-    const startTime = Date.now();
-    console.log(`[executeToolsSequentially] Trying tool: ${tool} (${toolsAttempted}/${rankedTools.length}) for query: ${query.substring(0, 50)}${query.length > 50 ? "..." : ""}`);
+// --- TOOL EXECUTORS ---
+
+class NoToolExecutor implements IToolExecutor {
+  public name = "no_tool";
+
+  async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
+    console.log(`[NoToolExecutor] Executing direct response. Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
+    const systemPromptsText = combineSystemPrompts(params.systemPrompts);
     
-    // Update the processing phase if we have a messageId
-    if (messageId) {
-      let phase = "Thinking";
-      
-      // Set appropriate phase based on the tool
-      if (tool === "search_web") {
-        phase = "Searching web";
-      } else if (tool.includes("query_") || tool.includes("database")) {
-        phase = "Searching database";
-      } else if (tool === "no_tool" && toolsAttempted > 1) {
-        phase = "Generating response";
-      }
-      
-      // Update the processing phase in the database
-      try {
-        await ctx.runMutation(api.chat.updateProcessingPhase, {
-          messageId,
-          phase
-        });
-        console.log(`[executeToolsSequentially] Updated processing phase to: ${phase}`);
-      } catch (error) {
-        console.error(`[executeToolsSequentially] Error updating processing phase: ${error}`);
+    // Check for preserved search sources in accumulated context and extract them
+    let searchSources = params.accumulatedContext?.searchSuggestionsHtmlToPreserve;
+    let cleanedContext = params.accumulatedContext?.content;
+    
+    if (cleanedContext) {
+      const sourceMatch = cleanedContext.match(/<!-- PRESERVED_SEARCH_SOURCES:([\s\S]*?) -->/i);
+      if (sourceMatch) {
+        // If we find sources in the content and don't already have them, use them
+        if (!searchSources) {
+          searchSources = sourceMatch[1];
+          console.log(`[NoToolExecutor] Found preserved search sources in accumulated context.`);
+        }
+        
+        // Remove the preserved sources comment from the context for the prompt
+        cleanedContext = cleanedContext.replace(/<!-- PRESERVED_SEARCH_SOURCES:[\s\S]*? -->/gi, '');
+        if (params.accumulatedContext) {
+          params.accumulatedContext.content = cleanedContext;
+        }
       }
     }
     
-    // Execute the appropriate tool
-    switch (tool) {
-      case "no_tool":
-        // For no_tool, we'll use the model directly to generate a response with the optimized approach
-        try {
-          console.log(`[executeToolsSequentially] Using optimized no_tool for query: ${query}`);
-          
-          // Get remaining tools for context
-          const remainingTools = rankedTools.slice(rankedTools.indexOf(tool) + 1);
-          console.log(`[executeToolsSequentially] Remaining tools: ${JSON.stringify(remainingTools)}`);
-          
-          // Create a specialized prompt that includes tool context and response format
-          // Add system prompts if available
-          const systemPromptsText = combineSystemPrompts(systemPrompts);
-          
-          let specializedPrompt = `
-${systemPromptsText}You are a helpful assistant responding to: "${query}"
+    const directPrompt = PromptFactory.generateToolExecutionPrompt(
+        params.query,
+        this.name,
+        `Using general knowledge and accumulated context to generate a response. The user's query is: "${params.query}"`,
+        params.remainingTools,
+        params.conversationHistory,
+        systemPromptsText,
+        params.accumulatedContext,
+        params.nextToolGroup
+    );
 
-TOOLS INFORMATION:
-- Current tool: no_tool (direct response)
-- Remaining tools to try if needed: ${remainingTools.join(", ")}
+    try {
+      const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
+      const response = await model.generateContent(directPrompt);
+      const responseText = response.response.text();
+      const parsedDecision = parseToolExecutionDecision(responseText);
 
-TASK:
-1. Provide a friendly, helpful response using only your general knowledge.
-2. Keep your response concise and directly address what the user is asking.
-3. If this is a greeting or simple conversation, respond naturally.
-
-FORMAT YOUR RESPONSE LIKE THIS:
-[RESPONSE_TYPE: FINAL_ANSWER or TRY_NEXT_TOOL]
-[CONTENT]
-Your answer here...
-[/CONTENT]
-[REASONING]
-Brief explanation of why you chose this response type
-[/REASONING]
-
-RESPONSE GUIDELINES:
-- Use FINAL_ANSWER if you can answer the query with your general knowledge
-- Use TRY_NEXT_TOOL if you think a specialized database or web search would provide better information
-`;
-          
-          // Add full conversation history context
-          if (conversationHistory && conversationHistory.length > 0) {
-            console.log(`[executeToolsSequentially] Including full conversation history in no_tool prompt (${conversationHistory.length} messages)`);
-            
-            specializedPrompt += `
-
-CONVERSATION HISTORY:
-`;
-            
-            // Include ALL conversation history, not just a subset
-            for (const msg of conversationHistory) {
-              if (msg.role === "user") {
-                specializedPrompt += `User: ${msg.parts[0]?.text}
-
-`;
-              } else if (msg.role === "model") {
-                specializedPrompt += `Assistant: ${msg.parts[0]?.text}
-
-`;
-              }
-            }
-          } else {
-            console.log(`[executeToolsSequentially] No conversation history available for no_tool`);
-          }
-          
-          console.log(`[executeToolsSequentially] Sending optimized no_tool prompt with${conversationHistory ? '' : 'out'} conversation context`);
-          const response = await model.generateContent(specializedPrompt);
-          const responseText = response.response.text();
-          
-          // Parse the response to determine if it's a final answer or we should try the next tool
-          const parsedResponse = parseToolResponse(responseText);
-          console.log(`[executeToolsSequentially] Parsed response type: ${parsedResponse.responseType}`);
-          
-          if (parsedResponse.responseType === "FINAL_ANSWER") {
-            console.log(`[executeToolsSequentially] Using no_tool final answer (length: ${parsedResponse.content.length})`);
-            
-            // Set final phase to "Generating response" if we have a messageId
-            if (messageId) {
-              try {
-                await ctx.runMutation(api.chat.updateProcessingPhase, {
-                  messageId,
-                  phase: "Generating response"
-                });
-                console.log(`[executeToolsSequentially] Updated final processing phase to: Generating response`);
-              } catch (error) {
-                console.error(`[executeToolsSequentially] Error updating final processing phase: ${error}`);
-              }
-            }
-            
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
-          } else {
-            console.log(`[executeToolsSequentially] no_tool suggested trying next tool: ${parsedResponse.reasoning}`);
-            // Continue to next tool
-            toolResult = ""; // Clear tool result to ensure we don't use it
-          }
-        } catch (error) {
-          console.error(`[executeToolsSequentially] Error using optimized no_tool: ${error}`);
-        }
-        break;
-        
-      case "query_law_on_insurance":
-        try {
-          console.log(`[executeToolsSequentially] Querying Law_on_Insurance database with optimized approach for: ${query}`);
-          
-          // Get remaining tools for context
-          const remainingTools = rankedTools.slice(rankedTools.indexOf(tool) + 1);
-          console.log(`[executeToolsSequentially] Remaining tools: ${JSON.stringify(remainingTools)}`);
-          
-          // Retrieve the database content
-          const lawDb = await ctx.runQuery(api.lawDatabases.getLawDatabaseContentByName, { 
-            name: "Law_on_Insurance" 
-          });
-          console.log(`[executeToolsSequentially] Law_on_Insurance query result success: ${lawDb.success}, has database: ${!!lawDb.database}`);
-          
-          let toolData = "";
-          
-          if (lawDb.success && lawDb.database && lawDb.database.content) {
-            console.log(`[executeToolsSequentially] Law_on_Insurance database found with content`);
-            
-            // Log the raw database content structure before processing
-            console.log(`[executeToolsSequentially] Law_on_Insurance raw database structure:`);
-            console.log(`  - Content type: ${typeof lawDb.database.content}`);
-            console.log(`  - Has chapters: ${!!lawDb.database.content.chapters}`);
-            console.log(`  - Chapters count: ${lawDb.database.content.chapters?.length || 0}`);
-            
-            if (lawDb.database.content.chapters && lawDb.database.content.chapters.length > 0) {
-              const firstChapter = lawDb.database.content.chapters[0];
-              console.log(`  - First chapter title: ${firstChapter.chapter_title || 'Untitled'}`);
-              console.log(`  - First chapter articles count: ${firstChapter.articles?.length || 0}`);
-              
-              // Log details of first few articles if they exist
-              if (firstChapter.articles && firstChapter.articles.length > 0) {
-                for (let i = 0; i < Math.min(3, firstChapter.articles.length); i++) {
-                  const article = firstChapter.articles[i];
-                  console.log(`  - Article ${article.article_number} title: ${article.article_title || 'Untitled'}`);
-                  
-                  if (typeof article.content === 'string') {
-                    console.log(`    - Content type: string, length: ${article.content.length} chars`);
-                    console.log(`    - Full content: "${article.content}"`);
-                  } else if (Array.isArray(article.content)) {
-                    console.log(`    - Content type: array with ${article.content.length} paragraphs`);
-                    for (let j = 0; j < article.content.length; j++) {
-                      console.log(`      - Paragraph ${j+1}: "${article.content[j]}"`);
-                    }
-                  }
-                }
-              }
-            }
-            
-            // Just pass the raw JSON database instead of formatted
-            toolData = `Here is the full Law on Insurance database in JSON format:\n\n${JSON.stringify(lawDb.database.content, null, 2)}\n\nPlease use this data to answer the query: "${query}"\n\nPay special attention to the 'points' arrays which contain bullet points that follow the main content of some articles.`;
-            console.log(`[executeToolsSequentially] Passing raw Law_on_Insurance database as JSON`);
-            console.log(`[executeToolsSequentially] Raw JSON database length: ${toolData.length}`);
-          } else {
-            toolData = "The Law on Insurance database is not available or could not be accessed.";
-            console.log(`[executeToolsSequentially] Law_on_Insurance database not found or query unsuccessful`);
-          }
-          
-          // Create a specialized prompt that includes tool context and response format
-          let specializedPrompt = `
-You are a helpful assistant responding to: "${query}"
-
-TOOLS INFORMATION:
-- Current tool: ${tool} (Law on Insurance database)
-- Remaining tools to try if needed: ${remainingTools.join(", ")}
-
-DATABASE QUERY RESULTS:
-${toolData}
-
-TASK:
-1. Analyze the database query results above.
-2. If the results contain relevant information to answer the query, provide a complete answer.
-3. If the results don't contain relevant information, indicate we should try the next tool.
-
-FORMAT YOUR RESPONSE LIKE THIS:
-[RESPONSE_TYPE: FINAL_ANSWER or TRY_NEXT_TOOL]
-[CONTENT]
-Your answer here...
-[/CONTENT]
-[REASONING]
-Brief explanation of why you chose this response type
-[/REASONING]
-
-RESPONSE GUIDELINES:
-- Use FINAL_ANSWER if the database provides sufficient information to answer the query
-- Use TRY_NEXT_TOOL if the database lacks relevant information for the query
-`;
-          
-          // Add full conversation history context
-          if (conversationHistory && conversationHistory.length > 0) {
-            console.log(`[executeToolsSequentially] Including full conversation history in ${tool} prompt (${conversationHistory.length} messages)`);
-            
-            specializedPrompt += `
-
-CONVERSATION HISTORY:
-`;
-            
-            // Include ALL conversation history, not just a subset
-            for (const msg of conversationHistory) {
-              if (msg.role === "user") {
-                specializedPrompt += `User: ${msg.parts[0]?.text}
-
-`;
-              } else if (msg.role === "model") {
-                specializedPrompt += `Assistant: ${msg.parts[0]?.text}
-
-`;
-              }
-            }
-          } else {
-            console.log(`[executeToolsSequentially] No conversation history available for ${tool}`);
-          }
-          
-          console.log(`[executeToolsSequentially] Sending optimized ${tool} prompt with${conversationHistory ? '' : 'out'} conversation context`);
-          const response = await model.generateContent(specializedPrompt);
-          const responseText = response.response.text();
-          
-          // Parse the response to determine if it's a final answer or we should try the next tool
-          const parsedResponse = parseToolResponse(responseText);
-          console.log(`[executeToolsSequentially] Parsed response type: ${parsedResponse.responseType}`);
-          
-          if (parsedResponse.responseType === "FINAL_ANSWER") {
-            console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${parsedResponse.content.length})`);
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
-          } else {
-            console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
-            // Continue to next tool
-            toolResult = ""; // Clear tool result to ensure we don't use it
-          }
-        } catch (error) {
-          console.error(`[executeToolsSequentially] Error using optimized ${tool}: ${error}`);
-        }
-        break;
-        
-      case "query_law_on_consumer_protection":
-        try {
-          console.log(`[executeToolsSequentially] Querying Law_on_Consumer_Protection database with optimized approach for: ${query}`);
-          
-          // Get remaining tools for context
-          const remainingTools = rankedTools.slice(rankedTools.indexOf(tool) + 1);
-          console.log(`[executeToolsSequentially] Remaining tools: ${JSON.stringify(remainingTools)}`);
-          
-          // Retrieve the database content
-          const lawDb = await ctx.runQuery(api.lawDatabases.getLawDatabaseContentByName, { 
-            name: "Law_on_Consumer_Protection" 
-          });
-          console.log(`[executeToolsSequentially] Law_on_Consumer_Protection query result success: ${lawDb.success}, has database: ${!!lawDb.database}`);
-          
-          let toolData = "";
-          
-          if (lawDb.success && lawDb.database && lawDb.database.content) {
-            console.log(`[executeToolsSequentially] Law_on_Consumer_Protection database found with content`);
-            
-            // Get the database query results
-            toolData = await queryLawDatabase(query, lawDb.database.content, conversationHistory);
-            console.log(`[executeToolsSequentially] Law_on_Consumer_Protection query result length: ${toolData.length}`);
-            console.log(`[executeToolsSequentially] Law_on_Consumer_Protection query result preview: ${toolData.substring(0, 100)}...`);
-          } else {
-            toolData = "The Law on Consumer Protection database is not available or could not be accessed.";
-            console.log(`[executeToolsSequentially] Law_on_Consumer_Protection database not found or query unsuccessful`);
-          }
-          
-          // Create a specialized prompt that includes tool context and response format
-          let specializedPrompt = `
-You are a helpful assistant responding to: "${query}"
-
-TOOLS INFORMATION:
-- Current tool: ${tool} (Law on Consumer Protection database)
-- Remaining tools to try if needed: ${remainingTools.join(", ")}
-
-DATABASE QUERY RESULTS:
-${toolData}
-
-TASK:
-1. Analyze the database query results above.
-2. If the results contain relevant information to answer the query, provide a complete answer.
-3. If the results don't contain relevant information, indicate we should try the next tool.
-
-FORMAT YOUR RESPONSE LIKE THIS:
-[RESPONSE_TYPE: FINAL_ANSWER or TRY_NEXT_TOOL]
-[CONTENT]
-Your answer here...
-[/CONTENT]
-[REASONING]
-Brief explanation of why you chose this response type
-[/REASONING]
-
-RESPONSE GUIDELINES:
-- Use FINAL_ANSWER if the database provides sufficient information to answer the query
-- Use TRY_NEXT_TOOL if the database lacks relevant information for the query
-`;
-          
-          // Add full conversation history context
-          if (conversationHistory && conversationHistory.length > 0) {
-            console.log(`[executeToolsSequentially] Including full conversation history in ${tool} prompt (${conversationHistory.length} messages)`);
-            
-            specializedPrompt += `
-
-CONVERSATION HISTORY:
-`;
-            
-            // Include ALL conversation history, not just a subset
-            for (const msg of conversationHistory) {
-              if (msg.role === "user") {
-                specializedPrompt += `User: ${msg.parts[0]?.text}
-
-`;
-              } else if (msg.role === "model") {
-                specializedPrompt += `Assistant: ${msg.parts[0]?.text}
-
-`;
-              }
-            }
-          } else {
-            console.log(`[executeToolsSequentially] No conversation history available for ${tool}`);
-          }
-          
-          console.log(`[executeToolsSequentially] Sending optimized ${tool} prompt with${conversationHistory ? '' : 'out'} conversation context`);
-          const response = await model.generateContent(specializedPrompt);
-          const responseText = response.response.text();
-          
-          // Parse the response to determine if it's a final answer or we should try the next tool
-          const parsedResponse = parseToolResponse(responseText);
-          console.log(`[executeToolsSequentially] Parsed response type: ${parsedResponse.responseType}`);
-          
-          if (parsedResponse.responseType === "FINAL_ANSWER") {
-            console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${parsedResponse.content.length})`);
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
-          } else {
-            console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
-            // Continue to next tool
-            toolResult = ""; // Clear tool result to ensure we don't use it
-          }
-        } catch (error) {
-          console.error(`[executeToolsSequentially] Error using optimized ${tool}: ${error}`);
-        }
-        break;
-        
-      case "query_insurance_qna":
-        try {
-          console.log(`[executeToolsSequentially] Querying Insurance QnA database with optimized approach for: ${query}`);
-          
-          // Get remaining tools for context
-          const remainingTools = rankedTools.slice(rankedTools.indexOf(tool) + 1);
-          console.log(`[executeToolsSequentially] Remaining tools: ${JSON.stringify(remainingTools)}`);
-          
-          // Retrieve the database content
-          const qnaDb = await ctx.runQuery(api.lawDatabases.getLawDatabaseContentByName, { 
-            name: "Insurance_and_reinsurance_in_Cambodia_QnA_format" 
-          });
-          console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format query result success: ${qnaDb.success}, has database: ${!!qnaDb.database}`);
-          
-          let toolData = "";
-          
-          if (qnaDb.success && qnaDb.database && qnaDb.database.content) {
-            console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format database found with content`);
-            
-            // Get the database query results
-            toolData = await queryLawDatabase(query, qnaDb.database.content, conversationHistory);
-            console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format query result length: ${toolData.length}`);
-            console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format query result preview: ${toolData.substring(0, 100)}...`);
-          } else {
-            toolData = "The Insurance Q&A database is not available or could not be accessed.";
-            console.log(`[executeToolsSequentially] Insurance_and_reinsurance_in_Cambodia_QnA_format database not found or query unsuccessful`);
-          }
-          
-          // Create a specialized prompt that includes tool context and response format
-          // Add system prompts if available
-          const systemPromptsText = combineSystemPrompts(systemPrompts);
-          let specializedPrompt = `
-${systemPromptsText}You are a helpful assistant responding to: "${query}"
-
-TOOLS INFORMATION:
-- Current tool: ${tool} (Insurance Q&A database)
-- Remaining tools to try if needed: ${remainingTools.join(", ")}
-
-DATABASE QUERY RESULTS:
-${toolData}
-
-TASK:
-1. Analyze the database query results above.
-2. If the results contain relevant information to answer the query, provide a complete answer.
-3. If the results don't contain relevant information, indicate we should try the next tool.
-
-FORMAT YOUR RESPONSE LIKE THIS:
-[RESPONSE_TYPE: FINAL_ANSWER or TRY_NEXT_TOOL]
-[CONTENT]
-Your answer here...
-[/CONTENT]
-[REASONING]
-Brief explanation of why you chose this response type
-[/REASONING]
-
-RESPONSE GUIDELINES:
-- Use FINAL_ANSWER if the database provides sufficient information to answer the query
-- Use TRY_NEXT_TOOL if the database lacks relevant information for the query
-`;
-          
-          // Add full conversation history context
-          if (conversationHistory && conversationHistory.length > 0) {
-            console.log(`[executeToolsSequentially] Including full conversation history in ${tool} prompt (${conversationHistory.length} messages)`);
-            
-            specializedPrompt += `
-
-CONVERSATION HISTORY:
-`;
-            
-            // Include ALL conversation history, not just a subset
-            for (const msg of conversationHistory) {
-              if (msg.role === "user") {
-                specializedPrompt += `User: ${msg.parts[0]?.text}
-
-`;
-              } else if (msg.role === "model") {
-                specializedPrompt += `Assistant: ${msg.parts[0]?.text}
-
-`;
-              }
-            }
-          } else {
-            console.log(`[executeToolsSequentially] No conversation history available for ${tool}`);
-          }
-          
-          console.log(`[executeToolsSequentially] Sending optimized ${tool} prompt with${conversationHistory ? '' : 'out'} conversation context`);
-          const response = await model.generateContent(specializedPrompt);
-          const responseText = response.response.text();
-          
-          // Parse the response to determine if it's a final answer or we should try the next tool
-          const parsedResponse = parseToolResponse(responseText);
-          console.log(`[executeToolsSequentially] Parsed response type: ${parsedResponse.responseType}`);
-          
-          if (parsedResponse.responseType === "FINAL_ANSWER") {
-            console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${parsedResponse.content.length})`);
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
-          } else {
-            console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
-            // Continue to next tool
-            toolResult = ""; // Clear tool result to ensure we don't use it
-          }
-        } catch (error) {
-          console.error(`[executeToolsSequentially] Error using optimized ${tool}: ${error}`);
-        }
-        break;
-        
-      case "search_web":
-        try {
-          console.log(`[executeToolsSequentially] Using search web for query: ${query}`);
-
-          // Get remaining tools for context
-          const remainingTools = rankedTools.slice(rankedTools.indexOf(tool) + 1);
-          console.log(`[executeToolsSequentially] Remaining tools: ${JSON.stringify(remainingTools)}`);
-          
-          // Define the Google Search tool
-          const googleSearchTool: GenAITool = {
-            googleSearch: {}
-          };
-          
-          // Configure the model with Google Search tool
-          const searchModel = genAI.getGenerativeModel({
-            model: selectedModel || "gemini-2.5-flash-preview-04-17",
-            tools: [googleSearchTool]
-          });
-          
-          // Create a chat session with the search tool enabled
-          const chat = searchModel.startChat({
-            tools: [googleSearchTool]
-          });
-          
-          // If we have conversation history, use it for context-aware search
-          if (conversationHistory && conversationHistory.length > 0) {
-            console.log(`[executeToolsSequentially] Using conversation history for search_web`);
-            
-            // Initialize the chat with conversation history
-            for (let i = 0; i < conversationHistory.length - 1; i++) {
-              const msg = conversationHistory[i];
-              if (msg.role === "user") {
-                await chat.sendMessage(msg.parts[0].text);
-              }
-            }
-          }
-          
-          // Add system prompts if available
-          const systemPromptsText = combineSystemPrompts(systemPrompts);
-          
-          // Create a prompt that includes system identity and instructions
-          const searchPrompt = `
-${systemPromptsText}I need information about: "${query}"
-
-IMPORTANT: When interpreting this query, consider the ENTIRE conversation context to determine what to search for. 
-
-If the query is short or ambiguous (like "how about X" or "what about Y"), use the conversation context to determine the FULL search intent. 
-For example:
-- If we were previously discussing stock prices and the user asks "how about nvidia", search for "current nvidia stock price"
-- If we were discussing weather and user asks "what about LA", search for "current weather in Los Angeles"
-
-Do not just search for the literal query text if context provides more information about the user's intent.
-
-Please search the web and analyze if you can find relevant information.
-
-TOOLS INFORMATION:
-- Current tool: ${tool} (Web Search)
-- Remaining tools to try if needed: ${remainingTools.join(", ")}
-
-RESPONSE FORMAT:
-[RESPONSE_TYPE: FINAL_ANSWER or TRY_NEXT_TOOL]
-[CONTENT]
-Your answer here...
-[/CONTENT]
-[REASONING]
-Brief explanation of why you chose this response type
-[/REASONING]
-
-RESPONSE GUIDELINES:
-- Use FINAL_ANSWER if you found sufficient information to answer the query
-- Use TRY_NEXT_TOOL if you couldn't find relevant information or if the information is insufficient
-
-If using FINAL_ANSWER, provide a complete, helpful response that directly addresses the query.
-If using TRY_NEXT_TOOL, briefly explain why the search results weren't sufficient.
-`;
-          
-          // Add conversation context to the search prompt
-          let promptWithHistory = searchPrompt;
-          if (conversationHistory && conversationHistory.length > 0) {
-            promptWithHistory += `
-
-CONVERSATION HISTORY:
-`;
-            
-            // Include ALL conversation history, not just a subset
-            for (const msg of conversationHistory) {
-              if (msg.role === "user") {
-                promptWithHistory += `User: ${msg.parts[0]?.text}
-
-`;
-              } else if (msg.role === "model") {
-                promptWithHistory += `Assistant: ${msg.parts[0]?.text}
-
-`;
-              }
-            }
-          }
-          
-          // Execute the search with the structured prompt in a single API call
-          console.log(`[executeToolsSequentially] Sending one-call search with structured prompt`);
-          const searchResponse = await chat.sendMessage(promptWithHistory);
-          const responseText = searchResponse.response.text();
-          
-          // Parse the response to determine if it's a final answer or we should try the next tool
-          const parsedResponse = parseToolResponse(responseText);
-          console.log(`[executeToolsSequentially] Parsed response type: ${parsedResponse.responseType}`);
-          
-          // Check if there's grounding metadata (search results)
-          const responseAny = searchResponse as any;
-          const hasGroundingMetadata = responseAny.candidates?.[0]?.groundingMetadata;
-          
-          // Add search suggestions if available and it's a final answer
-          if (parsedResponse.responseType === "FINAL_ANSWER") {
-            let result = parsedResponse.content;
-            
-            if (hasGroundingMetadata && responseAny.candidates?.[0]?.groundingMetadata?.searchEntryPoint) {
-              const searchSuggestionsHtml = responseAny.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
-              console.log(`[executeToolsSequentially] Search returned suggestions HTML of length: ${searchSuggestionsHtml.length}`);
-              result += `
-
-<!-- SEARCH_SUGGESTIONS_HTML:${searchSuggestionsHtml} -->`;
-            }
-            
-            console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${result.length})`);
-            return createToolResult(tool, result, "FINAL_ANSWER", systemPrompts);
-          } else {
-            console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
-            // Continue to next tool
-            toolResult = ""; // Clear tool result to ensure we don't use it
-          }
-        } catch (error) {
-          console.error(`[executeToolsSequentially] Error using one-call ${tool}: ${error}`);
-        }
-        break;
-        
-      case "query_all_databases":
-        try {
-          console.log(`[executeToolsSequentially] Querying ALL databases with optimized approach for: ${query}`);
-          
-          // Get remaining tools for context
-          const remainingTools = rankedTools.slice(rankedTools.indexOf(tool) + 1);
-          console.log(`[executeToolsSequentially] Remaining tools: ${JSON.stringify(remainingTools)}`);
-          
-          let combinedResult = "\n--- COMBINED DATABASE SEARCH RESULTS ---\n\n";
-          let foundAnyResults = false;
-          
-          // Query Law_on_Insurance
-          const insuranceDb = await ctx.runQuery(api.lawDatabases.getLawDatabaseContentByName, { 
-            name: "Law_on_Insurance" 
-          });
-          
-          if (insuranceDb.success && insuranceDb.database && insuranceDb.database.content) {
-            console.log(`[executeToolsSequentially] Adding Law_on_Insurance to combined search`);
-            const insuranceResult = await queryLawDatabase(query, insuranceDb.database.content, conversationHistory);
-            if (!insuranceResult.includes("No relevant information found")) {
-              combinedResult += "\n=== FROM LAW ON INSURANCE ===\n\n" + insuranceResult + "\n\n";
-              foundAnyResults = true;
-            } else {
-              combinedResult += "\n=== LAW ON INSURANCE: No relevant information found ===\n";
-            }
-          }
-          
-          // Query Law_on_Consumer_Protection
-          const consumerDb = await ctx.runQuery(api.lawDatabases.getLawDatabaseContentByName, { 
-            name: "Law_on_Consumer_Protection" 
-          });
-          
-          if (consumerDb.success && consumerDb.database && consumerDb.database.content) {
-            console.log(`[executeToolsSequentially] Adding Law_on_Consumer_Protection to combined search`);
-            const consumerResult = await queryLawDatabase(query, consumerDb.database.content, conversationHistory);
-            if (!consumerResult.includes("No relevant information found")) {
-              combinedResult += "\n=== FROM LAW ON CONSUMER PROTECTION ===\n\n" + consumerResult + "\n\n";
-              foundAnyResults = true;
-            } else {
-              combinedResult += "\n=== LAW ON CONSUMER PROTECTION: No relevant information found ===\n";
-            }
-          }
-          
-          // Query Insurance QnA
-          const qnaDb = await ctx.runQuery(api.lawDatabases.getLawDatabaseContentByName, { 
-            name: "Insurance_and_reinsurance_in_Cambodia_QnA_format" 
-          });
-          
-          if (qnaDb.success && qnaDb.database && qnaDb.database.content) {
-            console.log(`[executeToolsSequentially] Adding Insurance QnA to combined search`);
-            const qnaResult = await queryLawDatabase(query, qnaDb.database.content, conversationHistory);
-            if (!qnaResult.includes("No relevant information found")) {
-              combinedResult += "\n=== FROM INSURANCE Q&A ===\n\n" + qnaResult;
-              foundAnyResults = true;
-            } else {
-              combinedResult += "\n=== INSURANCE Q&A: No relevant information found ===\n";
-            }
-          }
-          
-          // Log results of combined search
-          const resultLength = combinedResult.length;
-          console.log(`[executeToolsSequentially] Combined database query result length: ${resultLength}`);
-          
-          // Create a specialized prompt that includes tool context and response format
-          // Add system prompts if available
-          const systemPromptsText = combineSystemPrompts(systemPrompts);
-          
-          let specializedPrompt = `
-${systemPromptsText}You are a helpful assistant responding to: "${query}"
-
-TOOLS INFORMATION:
-- Current tool: ${tool} (Combined Database Search)
-- Remaining tools to try if needed: ${remainingTools.join(", ")}
-
-COMBINED DATABASE SEARCH RESULTS:
-${combinedResult}
-
-TASK:
-1. Analyze the combined database search results above.
-2. If the results contain relevant information to answer the query, provide a complete answer.
-3. If the results don't contain relevant information, indicate we should try the next tool.
-
-FORMAT YOUR RESPONSE LIKE THIS:
-[RESPONSE_TYPE: FINAL_ANSWER or TRY_NEXT_TOOL]
-[CONTENT]
-Your answer here...
-[/CONTENT]
-[REASONING]
-Brief explanation of why you chose this response type
-[/REASONING]
-
-RESPONSE GUIDELINES:
-- Use FINAL_ANSWER if any of the databases provide sufficient information to answer the query
-- Use TRY_NEXT_TOOL if none of the databases contain relevant information for the query
-`;
-          
-          // Add full conversation history context
-          if (conversationHistory && conversationHistory.length > 0) {
-            console.log(`[executeToolsSequentially] Including full conversation history in ${tool} prompt (${conversationHistory.length} messages)`);
-            
-            specializedPrompt += `
-
-CONVERSATION HISTORY:
-`;
-            
-            // Include ALL conversation history, not just a subset
-            for (const msg of conversationHistory) {
-              if (msg.role === "user") {
-                specializedPrompt += `User: ${msg.parts[0]?.text}
-
-`;
-              } else if (msg.role === "model") {
-                specializedPrompt += `Assistant: ${msg.parts[0]?.text}
-
-`;
-              }
-            }
-          } else {
-            console.log(`[executeToolsSequentially] No conversation history available for ${tool}`);
-          }
-          
-          console.log(`[executeToolsSequentially] Sending optimized ${tool} prompt with${conversationHistory ? '' : 'out'} conversation context`);
-          const response = await model.generateContent(specializedPrompt);
-          const responseText = response.response.text();
-          
-          // Parse the response to determine if it's a final answer or we should try the next tool
-          const parsedResponse = parseToolResponse(responseText);
-          console.log(`[executeToolsSequentially] Parsed response type: ${parsedResponse.responseType}`);
-          
-          if (parsedResponse.responseType === "FINAL_ANSWER") {
-            console.log(`[executeToolsSequentially] Using ${tool} final answer (length: ${parsedResponse.content.length})`);
-            return createToolResult(tool, parsedResponse.content, parsedResponse.responseType, systemPrompts);
-          } else {
-            console.log(`[executeToolsSequentially] ${tool} suggested trying next tool: ${parsedResponse.reasoning}`);
-            // Continue to next tool
-            toolResult = ""; // Clear tool result to ensure we don't use it
-          }
-        } catch (error) {
-          console.error(`[executeToolsSequentially] Error using optimized ${tool}: ${error}`);
-        }
-        break;
+      if ('error' in parsedDecision) {
+        throw new Error(parsedDecision.error);
+      }
+      
+      console.log(`[NoToolExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0,100)}..."`);
+      
+      // Create result with all standard fields
+      const result = createToolResult(
+        this.name,
+        parsedDecision.content,
+        parsedDecision.responseType,
+        parsedDecision.contextToPreserve,
+        undefined,
+        undefined, // NoToolExecutor doesn't generate its own search suggestions
+        searchSources // Use the extracted search sources
+      );
+      
+      // For synthesis in parallel execution, provide the direct answer content
+      // This ensures the synthesis has access to the complete direct response
+      result.synthesisData = parsedDecision.content;
+      
+      // If there's context to preserve, include it in the synthesis data
+      if (parsedDecision.contextToPreserve) {
+        result.synthesisData += `\n\nAdditional context: ${parsedDecision.contextToPreserve}`;
+      }
+      
+      return result;
+    } catch (error: any) {
+      console.error(`[NoToolExecutor] LLM Error or Parsing Error: ${error.message || String(error)}`);
+      return createToolResult(
+        this.name,
+        "I'm sorry, I encountered an error in processing your request.",
+        "FINAL_ANSWER", // Fallback to final answer on error
+        undefined,
+        error.message || String(error),
+        undefined,
+        searchSources // Use the extracted search sources
+      );
     }
-    
-    // With the optimized approach, we don't need to check toolResult here anymore
-    // Each tool case now handles its own evaluation and returns directly if it has a final answer
-    // This code will only execute if the tool didn't return a result and we need to try the next tool
-    console.log(`[executeToolsSequentially] Moving to next tool after ${tool}`);
   }
+}
+
+class WebSearchExecutor implements IToolExecutor {
+  public name = "search_web";
+
+  async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
+    console.log(`[WebSearchExecutor] Executing for query: "${params.query.substring(0, 50)}..." Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
+    await updateProcessingPhase(params.ctx, params.messageId, "Searching web", this.name);
+
+    const systemPromptsText = combineSystemPrompts(params.systemPrompts);
+    const googleSearchTool: GoogleSearchTool = { googleSearch: {} };
+    
+    // as the LLM's response will be natural language possibly augmented by tool output.
+    // The subsequent call in this executor *to decide what to do with the search results* WILL use JSON mode.
+    const modelConfig: ModelConfig = {
+      model: params.selectedModel || DEFAULT_MODEL_NAME,
+      tools: [googleSearchTool],
+      // systemInstruction: systemPromptsText, // Some models prefer system instruction here
+    };
+    const searchModel = params.genAI.getGenerativeModel(modelConfig);
+    const chat = searchModel.startChat({ tools: [googleSearchTool] as GenAITool[], history: params.conversationHistory.slice(0, -1) });
+    
+    // This first prompt is to GET search results
+    const searchInvocationPrompt = `Based on the query "${params.query}" and conversation history, perform a web search. Prioritize concise and directly relevant information.
+    ${params.accumulatedContext?.content ? `\nConsider this accumulated context: ${params.accumulatedContext.content.substring(0,500)}...\n` : ''}
+    ${systemPromptsText}
+    Please provide the search results.`;
+
+    let searchResultsText: string;
+    let searchSuggestionsHtml: string | undefined;
+
+    try {
+        console.log(`[WebSearchExecutor] Sending search invocation prompt to LLM.`);
+        const searchResponse = await chat.sendMessage(searchInvocationPrompt);
+        searchResultsText = searchResponse.response.text();
+        console.log(`[WebSearchExecutor] Received search results text (len: ${searchResultsText.length}).`);
+
+        // Extract search suggestions if available (this part remains similar)
+        const responseAny = searchResponse as any; // To access groundingMetadata
+        if (responseAny.response.candidates?.[0]?.groundingMetadata?.searchEntryPoint?.renderedContent) {
+            searchSuggestionsHtml = responseAny.response.candidates[0].groundingMetadata.searchEntryPoint.renderedContent;
+            console.log(`[WebSearchExecutor] Extracted search suggestions HTML (len: ${searchSuggestionsHtml?.length}).`);
+        }
+    } catch (error: any) {
+        console.error(`[WebSearchExecutor] Error during web search LLM call: ${error.message || String(error)}`);
+        return createToolResult(
+            this.name,
+            "Sorry, I encountered an issue during web search.",
+            "TRY_NEXT_TOOL", // Suggest trying next tool on search failure
+            undefined,
+            `Search LLM Error: ${error.message || String(error)}`,
+            undefined,
+            params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+        );
+    }
+
+    // Now, send the search results to another LLM call to decide what to do (using JSON mode)
+    const decisionPrompt = PromptFactory.generateToolExecutionPrompt(
+        params.query,
+        this.name,
+        `Web search results for "${params.query}":\n${searchResultsText}`,
+        params.remainingTools,
+        params.conversationHistory,
+        systemPromptsText,
+        params.accumulatedContext,
+        params.nextToolGroup
+    );
+    
+    try {
+      console.log(`[WebSearchExecutor] Sending search results analysis prompt to LLM for decision.`);
+      const decisionModel = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
+      const decisionResponse = await decisionModel.generateContent(decisionPrompt);
+      const decisionResponseText = decisionResponse.response.text();
+      const parsedDecision = parseToolExecutionDecision(decisionResponseText);
+
+      if ('error' in parsedDecision) {
+        throw new Error(parsedDecision.error);
+      }
+      
+      console.log(`[WebSearchExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0,100)}..."`);
+
+      // Auto-extract context if TRY_NEXT_TOOL but useful info exists (heuristic)
+      let finalContextToPreserve = parsedDecision.contextToPreserve;
+      let finalResponseType = parsedDecision.responseType;
+
+      if (
+          (parsedDecision.responseType === "TRY_NEXT_TOOL" || (parsedDecision.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && !parsedDecision.contextToPreserve)) &&
+          searchResultsText.trim().length > 20 // If we got some search results
+      ) {
+          console.log(`[WebSearchExecutor] Heuristic: Has search results but LLM chose TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT without context. Auto-adding search summary.`);
+          finalResponseType = "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
+          finalContextToPreserve = (finalContextToPreserve ? finalContextToPreserve + "\n\n" : "") + 
+                                   `Summary from web search for "${params.query}":\n${searchResultsText.substring(0, Math.min(searchResultsText.length, 1500))}${searchResultsText.length > 1500 ? '... (truncated)' : ''}`;
+      }
+      
+      const result = createToolResult(
+        this.name,
+        parsedDecision.content,
+        finalResponseType,
+        finalContextToPreserve,
+        undefined,
+        searchSuggestionsHtml, // Pass along the extracted HTML
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+      );
+      
+      // For synthesis in parallel execution, provide the complete search results
+      // This ensures the synthesis has access to all relevant data
+      result.synthesisData = `Web search results for "${params.query}":\n${searchResultsText}`;
+      
+      return result;
+    } catch (error: any) {
+      console.error(`[WebSearchExecutor] LLM Error or Parsing Error on decision: ${error.message || String(error)}`);
+      return createToolResult(
+        this.name,
+        "Sorry, I encountered an issue processing the web search results.",
+        "TRY_NEXT_TOOL",
+        undefined,
+        `Decision LLM Error: ${error.message || String(error)}`,
+        searchSuggestionsHtml, // Still pass if we got them
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+      );
+    }
+  }
+}
+
+abstract class AbstractDatabaseExecutor implements IToolExecutor {
+  public name: string;
+  protected databaseInternalName: string;
+  protected readableName: string;
+
+  constructor(toolName: string, databaseInternalName: string, readableName: string) {
+    this.name = toolName;
+    this.databaseInternalName = databaseInternalName;
+    this.readableName = readableName;
+  }
+
+  protected abstract fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: any | null; error?: string }>;
+
+  async fetchRawData(ctx: ConvexActionCtx): Promise<{ toolName: string; data: string; error?: string; dbSize?: number }> {
+    await updateProcessingPhase(ctx, undefined, `Fetching ${this.readableName} content`, this.name);
+    const dbFetchResult = await this.fetchDatabaseContent(ctx);
+    if (dbFetchResult.content) {
+        const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
+        const MAX_DATA_SIZE_FOR_PROMPT = 50000000000; 
+        const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
+        console.log(`[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`);
+        return { toolName: this.name, data: truncatedJsonData, dbSize: jsonData.length };
+    }
+    console.warn(`[${this.name}] Failed to fetch raw data. Error: ${dbFetchResult.error}`);
+    return { toolName: this.name, data: "", error: dbFetchResult.error || `No content found or error fetching from ${this.readableName}.`, dbSize: 0 };
+  }
+
+  async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
+    console.log(`[${this.name}] Executing for query: \"${params.query.substring(0, 50)}...\" Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
+    await updateProcessingPhase(params.ctx, params.messageId, `Searching ${this.readableName}`, this.name);
+
+    const dbFetchResult = await this.fetchDatabaseContent(params.ctx);
+    let toolDataForPrompt: string;
+
+    if (dbFetchResult.content) {
+      const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
+      toolDataForPrompt = `Contents of ${this.readableName} (JSON format) related to the query:\n\`\`\`json\n${jsonData}\n\`\`\``;
+      console.log(`[${this.name}] Database content loaded for LLM analysis (${toolDataForPrompt.length} chars, full content).`);
+    } else {
+      toolDataForPrompt = `Error accessing or processing data from ${this.readableName}: ${dbFetchResult.error}. Inform the user if this prevents answering the query or try another tool.`;
+      console.warn(`[${this.name}] ${toolDataForPrompt}`);
+    }
+    
+    const systemPromptsText = combineSystemPrompts(params.systemPrompts);
+    const llmPrompt = PromptFactory.generateToolExecutionPrompt(
+      params.query,
+      this.name,
+      toolDataForPrompt,
+      params.remainingTools,
+      params.conversationHistory,
+      systemPromptsText,
+      params.accumulatedContext,
+      params.nextToolGroup
+    );
+
+    try {
+      const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
+      const response = await model.generateContent(llmPrompt);
+      const responseText = response.response.text();
+      const parsedDecision = parseToolExecutionDecision(responseText);
+
+      if ('error' in parsedDecision) {
+        throw new Error(parsedDecision.error);
+      }
+      
+      console.log(`[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: \"${parsedDecision.reasoning.substring(0,100)}...\"`);
+
+      return createToolResult(
+        this.name,
+        parsedDecision.content,
+        parsedDecision.responseType,
+        parsedDecision.contextToPreserve,
+        undefined, 
+        undefined, 
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+      );
+    } catch (error: any) {
+      console.error(`[${this.name}] LLM processing error: ${error.message}. Prompt start:\n${llmPrompt.substring(0,300)}...`);
+      if (dbFetchResult.content) {
+          const fullContentString = JSON.stringify(dbFetchResult.content, null, 2);
+          return createToolResult(
+              this.name,
+              `LLM processing failed. Full content of ${this.readableName} provided as fallback. Consider if this is enough or if another tool should be tried. Original query: \"${params.query}\"`, 
+              "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
+              fullContentString,
+              error.message, 
+              undefined, 
+              params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+          );
+      }
+      return createToolResult(
+        this.name,
+        `LLM processing failed for ${this.readableName}. Error: ${error.message}`,
+        "TRY_NEXT_TOOL",
+        undefined,
+        error.message,
+        undefined,
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+      );
+    }
+  }
+}
+
+
+class DatabaseQueryExecutor extends AbstractDatabaseExecutor {
+  constructor(toolName: string, databaseInternalName: string, readableName: string) {
+    super(toolName, databaseInternalName, readableName);
+  }
+
+  protected async fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: LawDatabase | null; error?: string }> {
+    try {
+      const dbResult = await ctx.runQuery(api.Databases.getLawDatabaseContentByName, {
+        name: this.databaseInternalName,
+      });
+
+      if (dbResult.success && dbResult.database?.content) {
+        if (typeof dbResult.database.content !== 'object' || dbResult.database.content === null) {
+             return { content: null, error: `The ${this.readableName} database content is not in the expected object format.` };
+        }
+        return { content: dbResult.database.content as LawDatabase };
+      } else {
+        // Use dbResult.error if available, otherwise a generic message
+        const errorMessage = dbResult.error || `Failed to retrieve or parse content from ${this.readableName} database.`;
+        console.warn(`[${this.name}] Database fetch warning: ${errorMessage}`);
+        return { content: null, error: errorMessage };
+      }
+    } catch (error: any) {
+      console.error(`[${this.name}] Error fetching database ${this.readableName}: ${error.message || String(error)}`);
+      return { content: null, error: error.message || `An error occurred while accessing the ${this.readableName} database.` };
+    }
+  }
+}
+
+class ElixerWhitepaperContentExecutor extends AbstractDatabaseExecutor {
+  constructor(toolName: string, databaseInternalName: string, readableName: string) {
+    super(toolName, databaseInternalName, readableName);
+  }
+
+  protected async fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: any | null; error?: string }> {
+    try {
+      const dbResult = await ctx.runQuery(api.Databases.getLawDatabaseContentByName, {
+        name: this.databaseInternalName,
+      });
+
+      if (dbResult.success && dbResult.database?.content) {
+        return { content: dbResult.database.content }; // Content is 'any' here
+      } else {
+        // Use dbResult.message if available (as per original ElixerWhitepaperContentExecutor), otherwise a generic message
+        const errorMessage = (dbResult as any).message || `Failed to retrieve content from ${this.readableName} database.`;
+        console.warn(`[${this.name}] Database fetch warning: ${errorMessage}`);
+        return { content: null, error: errorMessage };
+      }
+    } catch (error: any) {
+      console.error(`[${this.name}] Error fetching database ${this.readableName}: ${error.message || String(error)}`);
+      return { content: null, error: error.message || `An error occurred while accessing the ${this.readableName} database.` };
+    }
+  }
+}
+
+// --- AGENT MODE OFF EXECUTOR ---
+class AgentModeOffExecutor implements IToolExecutor {
+  public name = "agent_mode_off";
+
+  async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
+    console.log(`[AgentModeOffExecutor] Executing direct response with agent mode off.`);
+    const systemPromptsText = combineSystemPrompts(params.systemPrompts);
+    
+    // Create a simplified prompt that doesn't mention tools since agent mode is off
+    const directPrompt = `${systemPromptsText}\n\n`;
+    
+    // Add conversation history if available
+    const conversationContext = params.conversationHistory.length > 0 ?
+      'Conversation History:\n' + 
+      params.conversationHistory
+        .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
+        .join('\n') + '\n\n' :
+      '';
+    
+    const fullPrompt = `${directPrompt}${conversationContext}User asks: "${params.query}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
+
+    try {
+      const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME });
+      const response = await model.generateContent(fullPrompt);
+      const responseText = response.response.text();
+      
+      console.log(`[AgentModeOffExecutor] Generated response (${responseText.length} chars).`);
+      
+      // Create a simplified result - always treat it as a final answer
+      const result = createToolResult(
+        this.name,
+        responseText,
+        "FINAL_ANSWER",
+        undefined,
+        undefined,
+        undefined,
+        undefined // No search sources in agent mode off
+      );
+      
+      // For synthesis in parallel execution
+      result.synthesisData = responseText;
+      
+      return result;
+    } catch (error: any) {
+      console.error(`[AgentModeOffExecutor] LLM Error: ${error.message || String(error)}`);
+      return createToolResult(
+        this.name,
+        "I'm sorry, I encountered an error in processing your request.",
+        "FINAL_ANSWER", // Fallback to final answer on error
+        undefined,
+        error.message || String(error),
+        undefined,
+        undefined // No search sources in agent mode off
+      );
+    }
+  }
+}
+
+// --- TOOL EXECUTOR REGISTRY ---
+export const toolExecutors: Record<string, IToolExecutor> = {
+  "no_tool": new NoToolExecutor(),
+  "agent_mode_off": new AgentModeOffExecutor(),
+  "search_web": new WebSearchExecutor(),
+  "query_law_on_insurance": new DatabaseQueryExecutor("query_law_on_insurance", "Law_on_Insurance", "Law on Insurance"),
+  "query_law_on_consumer_protection": new DatabaseQueryExecutor("query_law_on_consumer_protection", "Law_on_Consumer_Protection", "Law on Consumer Protection"),
+  "query_insurance_qna": new DatabaseQueryExecutor("query_insurance_qna", "Insurance_and_reinsurance_in_Cambodia_QnA_format", "Insurance Q&A"),
+  "get_elixer_whitepaper": new ElixerWhitepaperContentExecutor("get_elixer_whitepaper", "Elixer_WhitePaper", "Elixer White Paper"),
+};
+
+// --- CORE LOGIC FUNCTIONS ---
+
+/**
+ * Parses the AI's ranking response from natural language format.
+ * This is optimized for speed and flexibility, not requiring strict JSON format.
+ */
+const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: string[]): RankingResult => {
+    try {
+        console.log(`[parseToolGroupsFromNaturalLanguage] Parsing response with length ${responseText.length}`);
+        const rankedToolGroups: string[][] = [];
+        const rankedToolsSet = new Set<string>();
+        let directResponse: string | undefined;
+        
+        // Extract groups using regex patterns
+        // Look for patterns like "[1] search_web, query_law_on_insurance" or "1. search_web"
+        const groupPatterns = [
+            /\[(\d+)\]\s*([^\n]+)/gm,  // Matches [1] tool1, tool2
+            /(?:Group|Group Priority|Priority|Rank)\s*(\d+)\s*[:\-]\s*([^\n]+)/gi,
+            /(?:Tools|Tool Group|Tools Group)\s*(\d+)\s*[:\-]\s*([^\n]+)/gi,
+            /(?:\b|^)(\d+)[.\)]\s*([^\n]+)/gm,
+        ];
+        
+        // Also look for direct answers
+        const directResponsePatterns = [
+            /(?:Direct\s*Response|Direct\s*Answer)\s*[:\-]\s*([^\n]+(?:\n(?!Group|Tools|\d+[.\)])[^\n]+)*)/i,
+            /(?:Answer without tools|No tools needed)\s*[:\-]\s*([^\n]+(?:\n(?!Group|Tools|\d+[.\)])[^\n]+)*)/i,
+        ];
+        
+        // Try to extract direct response
+        for (const pattern of directResponsePatterns) {
+            const match = responseText.match(pattern);
+            if (match && match[1]) {
+                directResponse = match[1].trim();
+                console.log(`[parseToolGroupsFromNaturalLanguage] Found direct response: "${directResponse.substring(0, 100)}..."`);
+                break;
+            }
+        }
+        
+        // Extract all tool groups with their priority
+        const groupMatches = new Map<number, string[]>();
+        
+        for (const pattern of groupPatterns) {
+            let match;
+            while ((match = pattern.exec(responseText)) !== null) {
+                if (match.length >= 3) {
+                    const rank = parseInt(match[1], 10);
+                    const toolsText = match[2].trim();
+                    
+                    // Extract tool names from the tools text
+                    // Look for words that match available tool names
+                    const extractedTools: string[] = [];
+                    
+                    // Split by common delimiters and check each part
+                    const parts = toolsText.split(/[,;\s]+/);
+                    for (const part of parts) {
+                        const cleanPart = part.trim().toLowerCase();
+                        
+                        // Try to match with available tool names - prioritize exact matches first
+                        let foundMatch = false;
+                        
+                        // First pass: Look for exact matches (highest confidence)
+                        for (const toolName of allToolNames) {
+                            if (cleanPart === toolName.toLowerCase()) {
+                                if (!rankedToolsSet.has(toolName)) {
+                                    extractedTools.push(toolName);
+                                    rankedToolsSet.add(toolName);
+                                    foundMatch = true;
+                                }
+                                break;
+                            }
+                        }
+                        
+                        // Second pass: Only if no exact match was found, try partial matches with minimum length
+                        if (!foundMatch && cleanPart.length >= 4) {
+                            for (const toolName of allToolNames) {
+                                // Check if the tool name contains the clean part or vice versa
+                                // But only for substantial matches (4+ chars)
+                                if (toolName.toLowerCase().includes(cleanPart) || 
+                                    cleanPart.includes(toolName.toLowerCase())) {
+                                    if (!rankedToolsSet.has(toolName)) {
+                                        extractedTools.push(toolName);
+                                        rankedToolsSet.add(toolName);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (extractedTools.length > 0) {
+                        groupMatches.set(rank, extractedTools);
+                    }
+                }
+            }
+        }
+        
+        // Sort groups by rank and add them to the result
+        const sortedRanks = Array.from(groupMatches.keys()).sort((a, b) => a - b);
+        for (const rank of sortedRanks) {
+            const tools = groupMatches.get(rank);
+            if (tools && tools.length > 0) {
+                rankedToolGroups.push(tools);
+            }
+        }
+        
+        // Add any unranked tools to the end, 'no_tool' last among them
+        const unrankedTools = allToolNames.filter(tool => !rankedToolsSet.has(tool));
+        if (unrankedTools.length > 0) {
+            console.log(`[parseToolGroupsFromNaturalLanguage] Tools not ranked by AI: ${unrankedTools.join(', ')}. Adding them as individual trailing groups.`);
+            const noToolIndex = unrankedTools.indexOf("no_tool");
+            if (noToolIndex > -1) {
+                unrankedTools.splice(noToolIndex, 1); // Remove no_tool
+                unrankedTools.push("no_tool");      // Add it to the very end of unranked
+            }
+            unrankedTools.forEach(tool => rankedToolGroups.push([tool]));
+        }
+        
+        // If there's a direct response, ensure no_tool is prioritized at the beginning
+        if (directResponse) {
+            console.log(`[parseToolGroupsFromNaturalLanguage] Direct response found, prioritizing no_tool`);
+            
+            // First, remove no_tool from wherever it is in the groups
+            let noToolRemoved = false;
+            for (let i = 0; i < rankedToolGroups.length; i++) {
+                const groupIndex = rankedToolGroups[i].indexOf("no_tool");
+                if (groupIndex >= 0) {
+                    rankedToolGroups[i].splice(groupIndex, 1);
+                    noToolRemoved = true;
+                    // Remove empty groups
+                    if (rankedToolGroups[i].length === 0) {
+                        rankedToolGroups.splice(i, 1);
+                        i--;
+                    }
+                }
+            }
+            
+            // Add no_tool as the first tool in the first group
+            if (rankedToolGroups.length === 0) {
+                rankedToolGroups.push(["no_tool"]);
+            } else {
+                rankedToolGroups.unshift(["no_tool"]);
+            }
+            
+            console.log(`[parseToolGroupsFromNaturalLanguage] Prioritized no_tool for direct response.`);
+        }
+        
+        if (rankedToolGroups.length === 0) { // Should not happen if unranked tools are added
+            console.warn('[parseToolGroupsFromNaturalLanguage] No valid tool groups parsed. This is unexpected.');
+            return { rankedToolGroups: [allToolNames.includes("search_web") ? ["search_web"] : [allToolNames[0]] ] }; // Basic fallback
+        }
+        
+        console.log(`[parseToolGroupsFromNaturalLanguage] Final tool groups: ${JSON.stringify(rankedToolGroups)}`);
+        return {
+            rankedToolGroups,
+            directResponse: directResponse,
+        };
+    } catch (e: any) {
+        console.error(`[parseToolGroupsFromNaturalLanguage] Error parsing LLM ranking: ${e.message}. Response: "${responseText.substring(0, 300)}..."`);
+        // Fallback to a default ranking on error
+        return {
+            rankedToolGroups: [["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"],["search_web"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
+        };
+    }
+};
+
+/**
+ * Parses the AI's JSON ranking response.
+ * This is the original JSON-based parser, kept for compatibility.
+ */
+const parseToolGroupsFromLLMJson = (responseText: string, allToolNames: string[]): RankingResult => {
+    try {
+        const parsed = parseLLMJson<LLMRankingDecision>(responseText, "RankingDecision", isLLMRankingDecision);
+        
+        if ('error' in parsed) {
+            throw new Error(parsed.error);
+        }
+
+        const rankedToolGroups: string[][] = [];
+        const rankedToolsSet = new Set<string>();
+
+        // Sort groups by rank just in case LLM doesn't order them
+        parsed.toolGroups.sort((a, b) => (a.rank || Infinity) - (b.rank || Infinity));
+
+        for (const group of parsed.toolGroups) {
+            if (!group || !Array.isArray(group.toolNames) || typeof group.rank !== 'number') {
+                console.warn("[parseToolGroupsFromLLMJson] Skipping invalid group in LLM response:", group);
+                continue;
+            }
+            const validToolNamesInGroup = group.toolNames.filter(name => {
+                if (allToolNames.includes(name)) {
+                    if (rankedToolsSet.has(name)) {
+                        console.warn(`[parseToolGroupsFromLLMJson] Tool '${name}' ranked multiple times. Using first occurrence.`);
+                        return false;
+                    }
+                    return true;
+                }
+                console.warn(`[parseToolGroupsFromLLMJson] Invalid or unknown tool name in ranking: '${name}'`);
+                return false;
+            });
+
+            if (validToolNamesInGroup.length > 0) {
+                rankedToolGroups.push(validToolNamesInGroup);
+                validToolNamesInGroup.forEach(name => rankedToolsSet.add(name));
+            }
+        }
+        
+        // Add any unranked tools to the end, 'no_tool' last among them
+        const unrankedTools = allToolNames.filter(tool => !rankedToolsSet.has(tool));
+        if (unrankedTools.length > 0) {
+            console.log(`[parseToolGroupsFromLLMJson] Tools not ranked by AI: ${unrankedTools.join(', ')}. Adding them as individual trailing groups.`);
+            const noToolIndex = unrankedTools.indexOf("no_tool");
+            if (noToolIndex > -1) {
+                unrankedTools.splice(noToolIndex, 1); // Remove no_tool
+                unrankedTools.push("no_tool");      // Add it to the very end of unranked
+            }
+            unrankedTools.forEach(tool => rankedToolGroups.push([tool]));
+        }
+        
+        if (rankedToolGroups.length === 0) { // Should not happen if unranked tools are added
+             console.warn('[parseToolGroupsFromLLMJson] No valid tool groups parsed. This is unexpected.');
+             return { rankedToolGroups: [allToolNames.includes("search_web") ? ["search_web"] : [allToolNames[0]] ] }; // Basic fallback
+        }
+
+        console.log(`[parseToolGroupsFromLLMJson] Final tool groups: ${JSON.stringify(rankedToolGroups)}`);
+        return {
+            rankedToolGroups,
+            directResponse: parsed.directResponse?.trim() || undefined,
+        };
+
+    } catch (e: any) {
+        console.error(`[parseToolGroupsFromLLMJson] Error parsing LLM JSON ranking: ${e.message}. Response: "${responseText.substring(0, 10000)}..."`);
+        // Fallback to a default ranking on error
+        return {
+            rankedToolGroups: [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
+        };
+    }
+};
+
+
+export const rankInformationSources = async (
+  userMessage: string,
+  history: { role: string; parts: { text: string }[] }[],
+  selectedModel: string | undefined, // This param is kept, but RANKING_MODEL_NAME is used
+  genAI: GoogleGenerativeAI,
+  systemPrompts?: SystemPrompts
+): Promise<RankingResult> => {
+  console.log(`[rankInformationSources] Ranking tools for query: '${userMessage.substring(0, 100)}...'`);
   
-  // If no tool provided a sufficient answer, return a fallback message
+  // Use the fast model with natural language output (no JSON config) for better performance
+  const model = genAI.getGenerativeModel({ model: RANKING_MODEL_NAME });
+  const systemPromptsText = combineSystemPrompts(systemPrompts);
+  
+  // Generate a natural language ranking prompt instead of asking for JSON
+  const rankingPrompt = PromptFactory.generateNaturalLanguageRankingPrompt(userMessage, history, AVAILABLE_TOOLS, systemPromptsText);
+  // console.log(`[rankInformationSources] Generated ranking prompt (length: ${rankingPrompt.length}). First 300 chars: ${rankingPrompt.substring(0,300)}`);
+
+  // Move this outside the try block so it's available in the catch block too
+  const allToolNames = AVAILABLE_TOOLS.map(t => t.name);
+  
+  try {
+    const startTime = Date.now();
+    const response = await model.generateContent(rankingPrompt);
+    const responseText = response.response.text();
+    console.log(`[rankInformationSources] AI ranking response received in ${Date.now() - startTime}ms. Response text (first 5000 chars): \n${responseText.substring(0,5000)}`);
+    
+    // Use the natural language parser for faster processing
+    const parsedRanking = parseToolGroupsFromNaturalLanguage(responseText, allToolNames);
+    
+    // Special handling: if directResponse is provided and no_tool is first, it might be the final answer.
+    if (parsedRanking.directResponse && 
+        parsedRanking.rankedToolGroups.length > 0 && 
+        parsedRanking.rankedToolGroups[0].length === 1 && 
+        parsedRanking.rankedToolGroups[0][0] === "no_tool") {
+      console.log(`[rankInformationSources] Extracted direct response (${parsedRanking.directResponse.length} chars).`);
+      // This directResponse will be handled by the calling function if it wants to use it immediately.
+    }
+    return parsedRanking;
+  } catch (error: any) {
+    console.error(`[rankInformationSources] Error: ${error.message}. Prompt: \n${rankingPrompt.substring(0,300)}...`);
+    console.log("[rankInformationSources] Falling back to default ranking.");
+    const defaultGroups = [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna", "get_elixer_whitepaper"], ["no_tool"]];
+    return {
+      rankedToolGroups: defaultGroups.filter(group => group.every(tool => allToolNames.includes(tool) && toolExecutors[tool]))
+    };
+  }
+};
+
+export const executeToolsByGroup = async (
+  toolGroups: string[][], query: string, ctx: ConvexActionCtx, genAI: GoogleGenerativeAI,
+  selectedModel: string | undefined, conversationHistory: { role: string; parts: { text: string }[] }[] = [],
+  systemPrompts?: SystemPrompts, messageId?: string, initialContext?: string
+): Promise<ToolExecutionResult> => {
+  console.log(`[executeToolsByGroup] Start: ${toolGroups.length} groups for query: "${query.substring(0,100)}..."`);
+  
+  const accumulatedContext: AccumulatedContext = {
+    sources: initialContext ? ['initial_context'] : [],
+    content: initialContext || "",
+    searchSuggestionsHtmlToPreserve: undefined // Initialize
+  };
+  
+  if (initialContext) console.log(`[executeToolsByGroup] Initial context: ${initialContext.length} chars.`);
+
+  for (let groupIndex = 0; groupIndex < toolGroups.length; groupIndex++) {
+    const toolGroup = toolGroups[groupIndex];
+    const remainingToolGroups = toolGroups.slice(groupIndex + 1);
+    const remainingToolsForPrompt = remainingToolGroups.flat();
+    const nextToolGroup = remainingToolGroups[0] || [];
+
+    console.log(`[executeToolsByGroup] Group ${groupIndex + 1}/${toolGroups.length}: [${toolGroup.join(', ')}]. Accumulated context: ${accumulatedContext.content.length} chars from [${accumulatedContext.sources.join(', ')}]. Preserved suggestions: ${!!accumulatedContext.searchSuggestionsHtmlToPreserve}`);
+
+    const executionParamsBase: Omit<ToolExecutionParams, 'remainingTools' | 'nextToolGroup' | 'accumulatedContext'> = {
+        query, ctx, genAI, selectedModel, conversationHistory, systemPrompts, messageId
+    };
+
+    if (toolGroup.length === 1) { // Single tool execution
+      const toolName = toolGroup[0];
+      const executor = toolExecutors[toolName];
+      if (!executor) {
+        console.warn(`[executeToolsByGroup] Unknown tool '${toolName}' in single group. Skipping.`);
+        continue;
+      }
+      
+      console.log(`[executeToolsByGroup] Executing single tool: ${toolName}`);
+      const result = await executor.execute({ 
+        ...executionParamsBase, 
+        remainingTools: remainingToolsForPrompt,
+        nextToolGroup: nextToolGroup,
+        accumulatedContext: { ...accumulatedContext } // Pass a copy
+      });
+      
+      console.log(`[executeToolsByGroup] Result from ${toolName}: type='${result.responseType}', contentLen=${result.content.length}, contextToAddLen=${result.contextToAdd?.length || 0}, suggestions: ${!!result.searchSuggestionsHtml}`);
+
+      if (result.searchSuggestionsHtml) {
+        accumulatedContext.searchSuggestionsHtmlToPreserve = result.searchSuggestionsHtml;
+        accumulatedContext.content += `\n\n<!-- PRESERVED_SEARCH_SOURCES:${result.searchSuggestionsHtml} -->`;
+        console.log(`[executeToolsByGroup] Preserved search suggestions from ${toolName}.`);
+      }
+
+      if (result.responseType === "FINAL_ANSWER") {
+        console.log(`[executeToolsByGroup] FINAL_ANSWER from ${toolName}. Returning.`);
+        return createToolResult(
+          result.source, result.content, "FINAL_ANSWER", undefined, result.error,
+          undefined, // searchSuggestionsHtml already in result.content or handled by finalSuggestionsHtmlToPreserve
+          accumulatedContext.searchSuggestionsHtmlToPreserve // This ensures it's added if not already
+        );
+      } else if (result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && result.contextToAdd?.trim()) {
+          accumulatedContext.sources.push(toolName);
+          accumulatedContext.content += (accumulatedContext.content ? "\n\n" : "") + 
+            `--- Context from ${toolName} ---\n${result.contextToAdd.trim()}`;
+          console.log(`[executeToolsByGroup] Added context from ${toolName}. Total: ${accumulatedContext.content.length} chars.`);
+      }
+    
+    } else { // Parallel tool execution
+      console.log(`[executeToolsByGroup] Parallel tools: [${toolGroup.join(', ')}]`);
+      await updateProcessingPhase(ctx, messageId, `Searching multiple sources`, "executeToolsByGroup-parallel");
+      
+      const dataCollectionPromises = toolGroup
+        .map(toolName => {
+            const executor = toolExecutors[toolName];
+            if (!executor) {
+                console.warn(`[executeToolsByGroup] Unknown tool '${toolName}' in parallel. Skipping.`);
+                return Promise.resolve({ toolName, data: "", error: `Unknown tool: ${toolName}` });
+            }
+            if (executor instanceof DatabaseQueryExecutor || executor instanceof ElixerWhitepaperContentExecutor) {
+                return executor.fetchRawData(ctx);
+            } else if (executor instanceof WebSearchExecutor || executor instanceof NoToolExecutor) {
+                console.log(`[executeToolsByGroup] Executing ${executor.name} in parallel (will synthesize its output).`);
+                // For parallel, we want the raw output that can be synthesized, not its decision to continue.
+                // So, we treat its direct output as "data" for synthesis.
+                return executor.execute({
+                        ...executionParamsBase,
+                        remainingTools: [], // No "remaining" in this sub-execution context
+                        nextToolGroup: [],  // No "next group" in this sub-execution
+                        accumulatedContext: { ...accumulatedContext } // Pass current accumulated context
+                    }).then(res => {
+                        // If WebSearch in parallel produced suggestions, capture them.
+                        // The last one from a parallel group will win.
+                        if (res.searchSuggestionsHtml) {
+                            accumulatedContext.searchSuggestionsHtmlToPreserve = res.searchSuggestionsHtml;
+                            accumulatedContext.content += `\n\n<!-- PRESERVED_SEARCH_SOURCES:${res.searchSuggestionsHtml} -->`;
+                            console.log(`[executeToolsByGroup] Parallel ${executor.name} produced search suggestions, will preserve.`);
+                        }
+                        // For synthesis, prioritize the dedicated synthesisData field if available
+                        // Otherwise fall back to content, and include contextToAdd if present
+                        let synthesisData = res.synthesisData || res.content;
+                        if (res.contextToAdd) {
+                            synthesisData += `\n\n${res.contextToAdd}`;
+                        }
+                        return { toolName: executor.name, data: synthesisData, error: res.error };
+                    });
+            }
+            console.warn(`[executeToolsByGroup] Tool ${toolName} not configured for parallel. Placeholder.`);
+            return Promise.resolve({ toolName, data: "", error: `Tool ${toolName} not supported in parallel.` });
+        });
+
+      const collectedData = await Promise.all(dataCollectionPromises);
+      console.log(`[executeToolsByGroup] Parallel data collection complete. Results: ${JSON.stringify(collectedData.map(r => ({tool: r.toolName, dataLen: r.data.length, err: !!r.error})))}`);
+      
+      const hasMeaningfulResults = collectedData.some(d => (d.data && d.data.trim().length > 10) || (d.error && !d.error.startsWith("Unknown tool")));
+      if (!hasMeaningfulResults) {
+        console.log(`[executeToolsByGroup] No meaningful data/errors from parallel group. Skipping synthesis.`);
+        continue;
+      }
+
+      const systemPromptsText = combineSystemPrompts(systemPrompts);
+      const synthesisPrompt = PromptFactory.generateParallelSynthesisPrompt(
+        query, collectedData, conversationHistory, systemPromptsText, accumulatedContext
+      );
+      
+      console.log(`[executeToolsByGroup] Sending parallel synthesis prompt (len: ${synthesisPrompt.length}).`);
+      const model = genAI.getGenerativeModel({ model: selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
+      try {
+        const response = await model.generateContent(synthesisPrompt);
+        const parsedSynthesis = parseLLMJson<LLMParallelSynthesisResponse>(response.response.text(), "ParallelSynthesisResponse", isLLMParallelSynthesisResponse);
+
+        if ('error' in parsedSynthesis) throw new Error(parsedSynthesis.error);
+
+        console.log(`[executeToolsByGroup] Parallel synthesis successful (${parsedSynthesis.synthesizedAnswer.length} chars). FINAL for this group.`);
+        return createToolResult("parallel_synthesis", parsedSynthesis.synthesizedAnswer, "FINAL_ANSWER",
+            undefined, undefined, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
+        );
+      } catch(error: any) {
+        console.error(`[executeToolsByGroup] Parallel synthesis error: ${error.message}. Prompt start:\n${synthesisPrompt.substring(0,300)}...`);
+        console.log(`[executeToolsByGroup] Synthesis failed. Proceeding to next group.`);
+        // Error in synthesis, try next group
+      }
+    }
+  }
+
+  console.log(`[executeToolsByGroup] All tool groups exhausted. Accumulated context: ${accumulatedContext.content.length} chars.`);
+  
+  if (accumulatedContext.content && accumulatedContext.content.trim().length > 10) {
+    console.log("[executeToolsByGroup] Attempting final synthesis with NoToolExecutor using accumulated context.");
+    try {
+      const noToolExecutor = toolExecutors["no_tool"] as NoToolExecutor;
+      if (noToolExecutor) {
+        const finalSynthesisResult = await noToolExecutor.execute({
+          query: `Based on all previously gathered information, provide a comprehensive answer or summary for the original query: "${query}"`,
+          conversationHistory, genAI, selectedModel, systemPrompts, ctx,
+          remainingTools: [], messageId,
+          accumulatedContext: { ...accumulatedContext } // Pass copy
+        });
+        
+        // Ensure this fallback is always FINAL_ANSWER
+        console.log(`[executeToolsByGroup] NoToolExecutor (final synthesis) responded type: '${finalSynthesisResult.responseType}'. Forcing FINAL_ANSWER.`);
+        return createToolResult(
+            "final_synthesis_no_tool", finalSynthesisResult.content, "FINAL_ANSWER",
+            undefined, finalSynthesisResult.error, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
+        );
+      }
+    } catch (error: any) {
+      console.error(`[executeToolsByGroup] Final synthesis error: ${error.message}`);
+    }
+  }
+
+  console.log("[executeToolsByGroup] Returning standard fallback.");
   return createToolResult(
-    "fallback", 
-    "After searching through all available resources, I couldn't find specific information to answer your question completely. You might want to rephrase or provide more details about what you're looking for.",
-    "FINAL_ANSWER",
-    systemPrompts
+    "fallback_standard",
+    "I've processed available information but couldn't formulate a specific answer. Please try rephrasing or adding details.",
+    "FINAL_ANSWER", undefined, undefined, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
   );
 };
