@@ -385,10 +385,20 @@ class PromptFactory {
     accumulatedContext?: AccumulatedContext,
     nextToolGroup?: string[]
   ): string {
-    let prompt = `${systemPromptsText}You are an AI assistant processing a user query: "${query}"
+    const contentInstruction = "If responseType is FINAL_ANSWER, provide the core answer from the tool's context here. Crucially, the 'content' field must be a single string; if the tool's context is JSON, escape it and place it inside the string rather than creating a nested JSON object. This content will be used to generate the final, user-facing response. For TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT, this can be a brief note or empty. Ensure this string is properly escaped for JSON (e.g., \\n for newlines, \\\" for quotes).";
+
+    let prompt = `${systemPromptsText}
+TASK INSTRUCTIONS FOR AI AGENT:
+You are the 'Decider' part of a multi-step AI system. Your goal is to analyze the user's query and the data from the current tool, then decide the next step. You must respond in JSON format.
+
+USER QUERY: "${query}"
 
 CURRENT TOOL: ${currentTool}
-${toolDescriptionOrData ? `\nCONTEXT FOR ${currentTool}:\n${toolDescriptionOrData}\n` : `No specific data loaded for ${currentTool}. Rely on its function ('${AVAILABLE_TOOLS.find(t=>t.name === currentTool)?.description}') or your general knowledge if it's 'no_tool'.\n`}
+${toolDescriptionOrData ? `
+CONTEXT FOR ${currentTool}:
+${toolDescriptionOrData}
+` : `No specific data loaded for ${currentTool}. Rely on its function ('${AVAILABLE_TOOLS.find(t=>t.name === currentTool)?.description}') or your general knowledge if it's 'no_tool'.
+`}
 REMAINING TOOLS TO TRY IF NEEDED (ranked in likely order of utility): ${remainingTools.length > 0 ? remainingTools.join(", ") : "None. This is the last chance."}
 
 TOOL SEQUENCE INFORMATION:
@@ -397,23 +407,30 @@ ${nextToolGroup && nextToolGroup.length > 0 ? `- NEXT TOOL(S) IF YOU SELECT TRY_
 `;
 
     if (accumulatedContext && accumulatedContext.content) {
-      prompt += `\nIMPORTANT ACCUMULATED CONTEXT FROM PREVIOUS TOOLS (Use this to build a comprehensive understanding and avoid redundant work. Total ${accumulatedContext.sources.length} sources: [${accumulatedContext.sources.join(', ')}]):\n${accumulatedContext.content}\n`;
+      prompt += `
+IMPORTANT ACCUMULATED CONTEXT FROM PREVIOUS TOOLS (Use this to build a comprehensive understanding and avoid redundant work. Total ${accumulatedContext.sources.length} sources: [${accumulatedContext.sources.join(', ')}]):
+${accumulatedContext.content}
+`;
       if (accumulatedContext.searchSuggestionsHtmlToPreserve) {
-        prompt += `\nNOTE: Search suggestions from a previous web search are being preserved and will be added to the final answer if appropriate. Do not duplicate them in your 'content' output.\n`;
+        prompt += `
+NOTE: Search suggestions from a previous web search are being preserved and will be added to the final answer if appropriate. Do not duplicate them in your 'content' output.
+`;
       }
     } else {
-      prompt += `\nNo accumulated context from previous tools yet.\n`;
+      prompt += `
+No accumulated context from previous tools yet.
+`;
     }
 
     prompt += `
-TASK:
+YOUR TASK:
 1. Analyze the user query, conversation history, any data/context from the current tool, and any accumulated context.
-2. Decide on the best course of action.
+2. Decide on the best course of action based on the DECISION GUIDELINES below.
 3. Respond in JSON format ONLY, matching this schema. ***ALL FIELDS (\`responseType\`, \`content\`, \`reasoning\`) ARE MANDATORY.*** \`contextToPreserve\` is optional and ONLY used if \`responseType\` is \`TRY_NEXT_TOOL_AND_ADD_CONTEXT\`.
    \`\`\`json
    {
      "responseType": "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
-     "content": "If responseType is FINAL_ANSWER, provide a CONCISE summary or the core answer here (max 1-2 sentences), suitable for a JSON string. The full, detailed, user-facing formatted response will be generated later. For TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT, this can be a brief note or empty. Ensure this string is properly escaped for JSON (e.g., \\n for newlines, \\\" for quotes).",
+     "content": "${contentInstruction}",
      "reasoning": "***MANDATORY***: Your detailed reasoning for choosing the responseType. If FINAL_ANSWER, explain sufficiency. If TRY_NEXT_TOOL, explain insufficiency and need for next. If TRY_NEXT_TOOL_AND_ADD_CONTEXT, explain what useful info was found and why it's being passed. This field must always be present and contain a non-empty string.",
      "contextToPreserve": "string (ONLY if responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT, otherwise omit this field or set to null). Summarize key findings, quotes, or data from CURRENT TOOL to pass to the next tools. This summary will be added to ACCUMULATED CONTEXT. Ensure this string is properly escaped for JSON (e.g., \\n for newlines, \\\" for quotes)."
    }
@@ -439,16 +456,15 @@ CONVERSATION HISTORY (for context):
     return prompt;
   }
 
-  /**
-   * This is designed to work with parseToolGroupsFromNaturalLanguage and the faster gemini-2.0-flash model.
-   */
   static generateNaturalLanguageRankingPrompt(
     userMessage: string,
     history: { role: string; parts: { text: string }[] }[],
     tools: Tool[],
     systemPromptsText: string // Combined system prompts
   ): string {
-    let prompt = `${systemPromptsText}Analyze the user message and conversation history to determine the optimal sequence and grouping of tools.
+    let prompt = `${systemPromptsText}
+TASK INSTRUCTIONS FOR AI AGENT:
+You are the 'Ranker' part of a multi-step AI system. Your goal is to analyze the user's query and determine the optimal sequence and grouping of tools to use.
 
 User message: "${userMessage}"
 `;
@@ -495,8 +511,6 @@ Only rank "no_tool" first (in group [1] by itself), IF you are ABSOLUTELY CERTAI
 ===DIRECT_RESPONSE_START===
 Your helpful response to the user (without reference to tools/ranking).
 ===DIRECT_RESPONSE_END===
-
-IMPORTANT IDENTITY AND TONE GUIDELINES: Follow the system instructions provided above.
 `;
     return prompt;
   }
@@ -508,7 +522,11 @@ IMPORTANT IDENTITY AND TONE GUIDELINES: Follow the system instructions provided 
     systemPromptsText: string,
     accumulatedContext?: AccumulatedContext
   ): string {
-    let prompt = `${systemPromptsText}You are synthesizing an answer for the user query: "${query}"`;
+    let prompt = `${systemPromptsText}
+TASK INSTRUCTIONS FOR AI AGENT:
+You are the 'Synthesizer' part of a multi-step AI system. Your goal is to create a single, comprehensive answer for the user based on data from multiple tools.
+
+USER QUERY: "${query}"`;
 
     if (accumulatedContext && accumulatedContext.content) {
       prompt += `\n\nACCUMULATED CONTEXT FROM PREVIOUS TOOLS (use for broader understanding and to connect information. From sources: [${accumulatedContext.sources.join(', ')}]):\n${accumulatedContext.content}\n`;
@@ -539,7 +557,7 @@ IMPORTANT IDENTITY AND TONE GUIDELINES: Follow the system instructions provided 
     }
 
     prompt += `
-TASK:
+YOUR TASK:
 1. Analyze ALL the provided data from the different sources AND any accumulated context in the context of the user query and conversation history.
 2. Synthesize a single, comprehensive, and helpful answer for the user.
 3. If some sources provided errors or irrelevant data, acknowledge if necessary but focus on the useful information.
@@ -558,8 +576,6 @@ Ensure your entire response is a single, valid JSON object.
     return prompt;
   }
 }
-
-// --- TOOL EXECUTORS ---
 
 class NoToolExecutor implements IToolExecutor {
   public name = "no_tool";

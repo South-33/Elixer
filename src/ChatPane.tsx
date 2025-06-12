@@ -153,7 +153,10 @@ const customStyles = `
 const ProcessingPhase = ({ phase }: { phase: string }) => {
   // Icon mapping for different phases
   const getPhaseIcon = (phaseText: string) => {
-    if (phaseText.includes("Searching") || phaseText.includes("search_web")) {
+
+    if (phaseText.includes("Database") || phaseText.includes("Query")) {
+      return "🗃️ ";
+    } else if (phaseText.includes("Searching") || phaseText.includes("search_web")) {
       return "🔍 ";
     } else if (phaseText.includes("Thinking") || phaseText.includes("Analyzing")) {
       return "💭 ";
@@ -161,8 +164,6 @@ const ProcessingPhase = ({ phase }: { phase: string }) => {
       return "✏️ ";
     } else if (phaseText.includes("Ranking") || phaseText.includes("Prioritizing")) {
       return "🔢 ";
-    } else if (phaseText.includes("Query") || phaseText.includes("Database")) {
-      return "🗃️ ";
     }
     return "";
   };
