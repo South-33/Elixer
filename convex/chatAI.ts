@@ -47,6 +47,7 @@ For legal citations and quotes:
   - Use > at the beginning of a line to format direct quotes or legal citations (a greater-than symbol followed by a space)
   - Use \`inline code\` formatting (with backticks) for specific article numbers or section references
 
+Don't use tables as it will not look good.
 Always ensure key names, important terms, and critical concepts are in **bold text** to make your response easily scannable.
 `;
 const CHECK_NEXT_SOURCE_MARKER = "[CHECK_NEXT_SOURCE]";
