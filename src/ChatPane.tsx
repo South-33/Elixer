@@ -383,11 +383,12 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             disabled={isStreaming}
           >
             <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
+            <option value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash lite</option>
             <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
             {/* Add other models here */}
           </select>
           <button
-            onClick={onClearChat}
+            onClick={onClearChat}   
             className="p-2 rounded-md bg-red-500 hover:bg-red-600 transition-colors duration-150 shadow-sm"
             title="Clear Chat History"
             disabled={isStreaming}

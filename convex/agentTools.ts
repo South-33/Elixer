@@ -6,7 +6,7 @@ import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other relate
 
 // --- CONSTANTS ---
 const DEFAULT_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; 
-const RANKING_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; // Use a fast model for ranking
+const RANKING_MODEL_NAME = "gemini-2.5-flash-lite-preview-06-17"; // Use a fast model for ranking
 
 // --- TYPE DEFINITIONS (Refactored and New) ---
 
