@@ -20,7 +20,8 @@ export function SignOutButton() {
 
   return (
     <button
-      className="flex items-center gap-2 px-3 py-2 rounded-md transition-colors bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-700 text-sm font-medium"
+      className="flex items-center gap-2 px-3 py-2 transition-all duration-150 bg-gray-100 border border-gray-300 hover:bg-gray-200 hover:border-gray-400 text-slate-600 hover:text-slate-800 text-xs font-medium uppercase tracking-wide"
+      style={{ borderRadius: '2px' }}
       onClick={() => void signOut()}
       title="Sign Out"
     >

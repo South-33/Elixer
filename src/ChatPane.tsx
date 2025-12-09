@@ -75,8 +75,8 @@ const CustomSearchSuggestions = ({ html, expanded }: { html: string, expanded: b
           href={link.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs hover:bg-gray-200 transition-colors border border-gray-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]"
-          style={{ textDecoration: 'none' }}
+          className="px-2 py-1 bg-gray-100 text-slate-600 text-xs hover:bg-slate-200 hover:text-slate-900 transition-colors border border-gray-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] font-mono uppercase tracking-wide"
+          style={{ textDecoration: 'none', borderRadius: '2px' }}
         >
           {link.text}
         </a>
@@ -179,10 +179,7 @@ const ProcessingPhase = ({ phase }: { phase: string }) => {
 
 // Chat message component with DOM-based streaming for assistant messages
 const ChatMessage = ({ message, currentPhaseToShow }: { message: MessageDoc, currentPhaseToShow?: string }) => {
-  // State to track if search suggestions are expanded or collapsed
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
-
-  // Determine the current processing phase
   const phaseToDisplay = currentPhaseToShow || message.processingPhase;
 
   return (
@@ -190,19 +187,17 @@ const ChatMessage = ({ message, currentPhaseToShow }: { message: MessageDoc, cur
       className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}
     >
       <div
-        className={`max-w-[85%] sm:max-w-[80%] p-3 rounded-xl shadow-sm ${message.role === "user"
-          ? "bg-blue-500 text-white"
-          : `bg-slate-100 text-slate-800 prose ${message.isStreaming ? "streaming-text-container" : ""}`.trim()
+        className={`max-w-[85%] sm:max-w-[80%] p-4 shadow-sm border ${message.role === "user"
+          ? "bg-slate-800 text-white border-slate-900"
+          : `bg-white text-slate-900 border-gray-300 prose ${message.isStreaming ? "streaming-text-container" : ""}`.trim()
           }`}
+        style={{ borderRadius: '2px' }}
       >
         {message.role === "assistant" && message.isStreaming && message.content === "" && phaseToDisplay ? (
           <div className="processing-phase">
             <ProcessingPhase phase={phaseToDisplay} />
           </div>
         ) : message.role === "assistant" && message.isStreaming && message.content ? (
-          // --- FIX APPLIED HERE ---
-          // The unnecessary wrapper div has been removed.
-          // ReactMarkdown is now a direct child of the bubble, allowing our CSS fix to work correctly.
           <ReactMarkdown>{message.content}</ReactMarkdown>
         ) : (
           <ReactMarkdown>{message.content}</ReactMarkdown>
@@ -214,12 +209,12 @@ const ChatMessage = ({ message, currentPhaseToShow }: { message: MessageDoc, cur
         <div className="mt-2 flex items-center">
           <button
             onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
-            className="text-sm px-3 py-1 rounded-md bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors focus:outline-none flex items-center justify-center flex-shrink-0"
-            style={{ width: '129px' }} /* Fixed width to prevent layout shifts */
+            className="text-xs font-mono uppercase tracking-wider px-3 py-1 bg-gray-100 border border-gray-300 text-slate-600 hover:bg-gray-200 transition-colors focus:outline-none flex items-center justify-center flex-shrink-0"
+            style={{ width: '140px', borderRadius: '2px' }}
           >
-            <span className="mr-1">{suggestionsExpanded ? 'Hide' : 'Show'} sources</span>
+            <span className="mr-1">{suggestionsExpanded ? 'HIDE SOURCES' : 'VIEW SOURCES'}</span>
             <svg
-              className={`w-4 h-4 transition-transform ${suggestionsExpanded ? 'transform rotate-90' : ''}`}
+              className={`w-3 h-3 transition-transform ${suggestionsExpanded ? 'transform rotate-90' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -358,48 +353,54 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
   }, [paneId, registerSendHandler, unregisterSendHandler, registerResetStatesHandler, unregisterResetStatesHandler]);
 
   return (
-    <div className="flex-1 flex flex-col bg-white border-r border-slate-200 last:border-r-0 h-full">
-      <div className="p-2 sm:p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-        <h3 className="text-md font-semibold text-slate-700">Pane: {paneId}</h3>
+    <div className="flex-1 flex flex-col bg-white border-r border-gray-300 last:border-r-0 h-full">
+      <div className="p-3 border-b border-gray-300 bg-[#F9F9F7] flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide flex items-center gap-2">
+          <span className="w-2 h-2 bg-teal-600 rounded-full inline-block"></span>
+          Chat {paneId.replace('pane-', '#')}
+        </h3>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setDisableSystemPrompt(prev => !prev)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${disableSystemPrompt
-              ? "bg-red-100 text-red-700 hover:bg-red-200"
-              : "bg-green-100 text-green-700 hover:bg-green-200"
+            className={`px-3 py-1.5 text-xs font-mono font-medium border transition-colors ${disableSystemPrompt
+              ? "bg-white border-gray-300 text-gray-500 hover:text-red-600"
+              : "bg-slate-800 border-slate-800 text-white"
               }`}
+            style={{ borderRadius: '2px' }}
             disabled={isStreaming}
           >
-            {disableSystemPrompt ? "System Prompt Disabled" : "System Prompt Enabled"}
+            {disableSystemPrompt ? "System [Off]" : "System [On]"}
           </button>
           <button
             onClick={() => setDisableToolUse(prev => !prev)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${disableToolUse
-              ? "bg-red-100 text-red-700 hover:bg-red-200"
-              : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+            className={`px-3 py-1.5 text-xs font-mono font-medium border transition-colors ${disableToolUse
+              ? "bg-white border-gray-300 text-gray-500 hover:text-red-600"
+              : "bg-slate-700 border-slate-700 text-white"
               }`}
+            style={{ borderRadius: '2px' }}
             disabled={isStreaming}
           >
-            {disableToolUse ? "Agent Disabled" : "Agent Enabled"}
+            {disableToolUse ? "AGENT [OFF]" : "AGENT [ON]"}
           </button>
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            className="p-1.5 border border-slate-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none"
+            className="p-1.5 border border-gray-300 bg-white text-xs font-mono focus:ring-1 focus:ring-slate-500 outline-none"
+            style={{ borderRadius: '2px' }}
             disabled={isStreaming}
           >
             <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash lite</option>
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
             <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-            {/* Add other models here */}
           </select>
           <button
             onClick={onClearChat}
-            className="p-2 rounded-md bg-red-500 hover:bg-red-600 transition-colors duration-150 shadow-sm"
-            title="Clear Chat History"
+            className="p-2 bg-white border border-gray-300 text-slate-600 hover:text-red-600 hover:border-red-300 transition-colors shadow-sm"
+            style={{ borderRadius: '2px' }}
+            title="Purge Data"
             disabled={isStreaming}
           >
-            <TrashIcon className="h-5 w-5 text-gray-100" />
+            <TrashIcon className="h-4 w-4" />
             <span className="sr-only">Clear Chat History</span>
           </button>
         </div>
@@ -415,7 +416,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
         {showLocalPendingIndicator &&
           !messages.some((msg: MessageDoc) => msg.role === 'assistant' && msg.isStreaming) && (
             <div className="flex justify-start" key="local-pending-jsx-indicator">
-              <div className="max-w-[80%] p-3 rounded-lg bg-slate-100 text-slate-800 prose">
+              <div className="max-w-[80%] p-4 bg-white border border-gray-300 text-slate-800" style={{ borderRadius: '2px' }}>
                 <div className="processing-phase">
                   <ProcessingPhase phase={currentProcessingPhase} />
                 </div>

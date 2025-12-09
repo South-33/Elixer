@@ -32,23 +32,17 @@ const ExampleMessages = ({ onExampleClick }: { onExampleClick: (message: string)
   ];
 
   return (
-    <div className="w-full overflow-x-auto pb-2 animate-fadeIn custom-scrollbar">
-      <div className="flex gap-2 px-4 pb-1 min-w-max justify-center">
+    <div className="w-full overflow-x-auto pb-4 pt-2 animate-fadeIn custom-scrollbar">
+      <div className="flex gap-4 px-4 min-w-max justify-center">
         {examples.map((example, index) => (
           <button
             key={index}
             onClick={() => onExampleClick(example)}
-            className="group flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 whitespace-nowrap flex-shrink-0"
+            className="group relative flex items-center gap-3 px-4 py-3 bg-white border border-gray-300 shadow-sm hover:border-slate-500 hover:shadow-md transition-all duration-200 whitespace-nowrap flex-shrink-0"
+            style={{ borderRadius: '2px' }}
           >
-            <svg
-              className="w-4 h-4 text-blue-500 flex-shrink-0 group-hover:scale-110 transition-transform"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <span className="text-sm text-slate-700 group-hover:text-blue-700 transition-colors font-medium">
+            <div className="w-1 h-3 bg-slate-300 group-hover:bg-teal-700 transition-colors" />
+            <span className="text-sm text-slate-700 group-hover:text-slate-900 font-medium tracking-wide">
               {example}
             </span>
           </button>
@@ -110,44 +104,48 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100 text-slate-800">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md p-3 sm:p-4 flex justify-between items-center border-b border-slate-200 h-16 shadow-sm">
-        <div className="flex items-center gap-2">
+    <div className="h-screen flex flex-col bg-[#F8F9FA] text-slate-800 font-sans">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-300 h-16 flex justify-between items-center px-6 shadow-sm">
+        <div className="flex items-center gap-4">
+          {/* Sidebar toggle hidden for now
           <Authenticated>
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="p-2 text-slate-600 hover:bg-gray-100 hover:text-black transition-colors rounded-sm focus:outline-none focus:ring-1 focus:ring-slate-300"
               title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-              aria-expanded={isSidebarOpen}
-              aria-controls="app-sidebar"
             >
               {isSidebarOpen ? <CloseIcon /> : <MenuIcon />}
-              <span className="sr-only">{isSidebarOpen ? "Close sidebar" : "Open sidebar"}</span>
             </button>
           </Authenticated>
-          <h1 className="text-xl font-semibold text-slate-700">ELIXIR AI Agent</h1>
+          */}
+          <div className="flex flex-col">
+            <h1 className="text-lg font-bold text-slate-900 tracking-[0.15em] uppercase leading-none">
+              Elixir
+            </h1>
+            <span className="text-[10px] text-slate-400 tracking-wider uppercase mt-0.5">AI Agent</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2"> {/* New div to group buttons */}
+        <div className="flex items-center gap-4">
           <Authenticated>
-            <button
-              onClick={addChatPane}
-              className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
-              title="Add Comparison Pane"
-              disabled={chatPanes.length >= 4}
-            >
-              <AddPaneIcon />
-              <span className="sr-only">Add Comparison Pane</span>
-            </button>
-            {chatPanes.length > 1 && (
+            <div className="flex items-center border-r border-gray-300 pr-4 mr-2 gap-2">
               <button
-                onClick={() => removeChatPane(chatPanes[chatPanes.length - 1].id)} // Remove last pane
-                className="p-2 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                title="Remove Last Pane"
+                onClick={addChatPane}
+                className="p-2 text-slate-600 hover:text-teal-700 hover:bg-teal-50 transition-colors rounded-sm"
+                title="Add Pane"
+                disabled={chatPanes.length >= 4}
               >
-                <RemovePaneIcon />
-                <span className="sr-only">Remove Last Pane</span>
+                <AddPaneIcon />
               </button>
-            )}
+              {chatPanes.length > 1 && (
+                <button
+                  onClick={() => removeChatPane(chatPanes[chatPanes.length - 1].id)}
+                  className="p-2 text-slate-600 hover:text-red-700 hover:bg-red-50 transition-colors rounded-sm"
+                  title="Remove Pane"
+                >
+                  <RemovePaneIcon />
+                </button>
+              )}
+            </div>
           </Authenticated>
           <SignOutButton />
         </div>
@@ -155,10 +153,11 @@ export default function App() {
 
       <div className="flex flex-grow mt-16 overflow-hidden">
         <Unauthenticated>
-          <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-white p-6 sm:p-8 rounded-xl shadow-xl">
-              <h2 className="text-2xl font-semibold text-center text-slate-700 mb-6">
-                Welcome Back
+          <div className="flex-1 flex flex-col items-center justify-center p-4 bg-[#F2F2F2]">
+            <div className="w-full max-w-sm bg-white p-8 border border-gray-300 shadow-sm relative">
+              <div className="absolute top-0 left-0 w-full h-1 bg-teal-800"></div>
+              <h2 className="text-xl font-bold text-center text-slate-900 mb-8 uppercase tracking-widest">
+                Sign In
               </h2>
               <SignInForm />
             </div>
@@ -503,26 +502,24 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
 
         <form
           onSubmit={handleGlobalSend}
-          className="fixed bottom-0 right-0 z-40 p-3 sm:p-4 border-t border-slate-200 bg-slate-50 transition-[left] duration-300 ease-in-out"
+          className="fixed bottom-0 right-0 z-40 p-4 border-t border-gray-300 bg-[#F2F2F2] transition-[left] duration-300 ease-in-out"
           style={{ left: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
         >
-          <div className="flex gap-2 sm:gap-3 items-center">
+          <div className="flex gap-0 shadow-sm border border-gray-400 bg-white">
             <input
               type="text"
               value={currentInputMessage}
               onChange={(e) => setCurrentInputMessage(e.target.value)}
               placeholder="Type your message..."
-              className="flex-1 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
-              disabled={isAnyPaneStreaming} // Disable if any pane is streaming
-              aria-label="Chat message input"
+              className="flex-1 p-3 bg-transparent border-none focus:ring-0 text-slate-800 placeholder-slate-400 font-mono text-sm"
+              disabled={isAnyPaneStreaming}
             />
             <button
               type="submit"
               disabled={isAnyPaneStreaming || !currentInputMessage.trim()}
-              className="px-4 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-colors font-medium"
-              aria-label={isAnyPaneStreaming ? "Sending message" : "Send message"}
+              className="px-6 py-2 bg-slate-800 text-white font-medium text-sm tracking-wider hover:bg-teal-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-l border-gray-400 uppercase"
             >
-              {isAnyPaneStreaming ? "..." : "Send"}
+              {isAnyPaneStreaming ? "Sending..." : "Send"}
             </button>
           </div>
         </form>

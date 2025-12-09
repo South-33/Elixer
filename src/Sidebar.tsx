@@ -1,4 +1,4 @@
-  // src/Sidebar.tsx
+// src/Sidebar.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDownIcon, ChevronUpIcon, TrashIcon, XMarkIcon, ArrowsPointingOutIcon } from '@heroicons/react/20/solid';
 
@@ -153,164 +153,167 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         transform ${isResizing ? '' : 'transition-all duration-300 ease-in-out'}
         fixed top-16 bottom-0 left-0 z-40
-        flex flex-col bg-slate-50 shadow-xl
+        flex flex-col bg-[#F2F2F2] border-r border-[#D1D5DB]
       `}
       style={{
         width: isOpen ? `${sidebarWidth}px` : '0px',
-        padding: isOpen ? '1rem' : '0', // p-4 = 1rem
-        borderRight: isOpen ? '1px solid #e2e8f0' : 'none', // border-r border-slate-200
-        overflow: isOpen ? 'auto' : 'hidden', // Hide overflow when closed
+        padding: isOpen ? '0' : '0',
+        overflow: isOpen ? 'visible' : 'hidden', // Allow resizer to be caught
       }}
     >
       {isOpen && ( // Only render content when sidebar is open
         <>
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center p-4 border-b border-gray-300 bg-[#E8E8E8]">
             <div>
-              <h3 className="text-lg font-semibold text-slate-700">System Prompts</h3>
+              <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Configuration</h3>
               {hasActivePrompts && arePromptsExpanded && (
-                <span className="text-xs text-slate-500 -mt-1 block">Prompts active</span>
+                <span className="text-[10px] text-teal-700 font-mono mt-0.5 block">Custom prompts active</span>
               )}
             </div>
-            <div className="flex items-center gap-1 -mr-2">
+            <div className="flex items-center gap-1">
               <button
-                title={arePromptsExpanded ? "Collapse Prompts" : "Expand Prompts"}
+                title={arePromptsExpanded ? "Collapse" : "Expand"}
                 onClick={() => setArePromptsExpanded(!arePromptsExpanded)}
-                className="p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200"
+                className="p-1.5 rounded-sm border border-transparent hover:border-gray-400 hover:bg-white text-slate-600 transition-all"
               >
-                {arePromptsExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                <span className="sr-only">{arePromptsExpanded ? "Collapse Prompts" : "Expand Prompts"}</span>
+                {arePromptsExpanded ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
               </button>
               <button
                 title="Close Sidebar"
                 onClick={onClose}
-                className="p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 md:hidden"
+                className="p-1.5 rounded-sm border border-transparent hover:border-gray-400 hover:bg-white text-slate-600 md:hidden"
               >
-                <XMarkIcon className="h-6 w-6" />
-                <span className="sr-only">Close Sidebar</span>
+                <XMarkIcon className="h-4 w-4" />
               </button>
             </div>
           </div>
 
           {/* Resizer Handle */}
           <div
-            className="absolute top-0 right-0 w-2 h-full cursor-ew-resize z-50"
+            className="absolute top-0 right-[-4px] w-2 h-full cursor-ew-resize z-50 hover:bg-teal-500/20 transition-colors"
             onMouseDown={handleMouseDown}
           />
 
-          <div className={`flex-1 flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar pb-[70px] ${arePromptsExpanded ? 'flex' : 'hidden'}`}>
-            {/* Removed AI Model Select from Sidebar */}
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor="tonePromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
-                  Tone (How the AI respond):
+          <div className={`flex-1 flex-col gap-0 overflow-y-auto custom-scrollbar pb-[70px] ${arePromptsExpanded ? 'flex' : 'hidden'}`}>
+            {/* Tone Section */}
+            <div className="bg-white border-b border-gray-200 p-4">
+              <div className="flex justify-between items-center mb-2">
+                <label htmlFor="tonePromptAreaSidebar" className="block text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Tone & Style
                 </label>
                 <button
-                  title="Expand Tone Prompt"
                   onClick={() => setShowToneFullscreen(true)}
-                  className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+                  className="text-slate-400 hover:text-teal-700 transition-colors"
                 >
-                  <ArrowsPointingOutIcon className="h-5 w-5" />
+                  <ArrowsPointingOutIcon className="h-4 w-4" />
                 </button>
               </div>
               <textarea
                 id="tonePromptAreaSidebar"
-                className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder="e.g., Formal, empathetic, expert role..."
+                className="w-full p-3 border border-gray-300 bg-gray-50 text-sm focus:ring-1 focus:ring-slate-500 focus:border-slate-500 outline-none rounded-none font-mono"
+                placeholder="DEFINE PARAMETERS..."
                 value={tonePrompt}
                 onChange={(e) => onTonePromptChange(e.target.value)}
                 rows={4}
+                style={{ resize: 'none' }}
               />
             </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor="policyPromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
-                  Company Policy:
+
+            {/* Policy Section */}
+            <div className="bg-white border-b border-gray-200 p-4">
+              <div className="flex justify-between items-center mb-2">
+                <label htmlFor="policyPromptAreaSidebar" className="block text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Company Policy
                 </label>
                 <button
-                  title="Expand Company Policy Prompt"
                   onClick={() => setShowPolicyFullscreen(true)}
-                  className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+                  className="text-slate-400 hover:text-teal-700 transition-colors"
                 >
-                  <ArrowsPointingOutIcon className="h-5 w-5" />
+                  <ArrowsPointingOutIcon className="h-4 w-4" />
                 </button>
               </div>
               <textarea
                 id="policyPromptAreaSidebar"
-                className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder="e.g., Return policy, code of conduct..."
+                className="w-full p-3 border border-gray-300 bg-gray-50 text-sm focus:ring-1 focus:ring-slate-500 focus:border-slate-500 outline-none rounded-none font-mono"
+                placeholder="DEFINE POLICY..."
                 value={policyPrompt}
                 onChange={(e) => onPolicyPromptChange(e.target.value)}
                 rows={4}
+                style={{ resize: 'none' }}
               />
             </div>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor="lawPromptAreaSidebar" className="block text-sm font-medium text-gray-700 flex-grow">
-                  Laws & Regulations:
+
+            {/* Law Section */}
+            <div className="bg-white border-b border-gray-200 p-4">
+              <div className="flex justify-between items-center mb-2">
+                <label htmlFor="lawPromptAreaSidebar" className="block text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Regulations
                 </label>
                 <button
-                  title="Expand Laws & Regulations Prompt"
                   onClick={() => setShowLawFullscreen(true)}
-                  className="p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 flex-shrink-0"
+                  className="text-slate-400 hover:text-teal-700 transition-colors"
                 >
-                  <ArrowsPointingOutIcon className="h-5 w-5" />
+                  <ArrowsPointingOutIcon className="h-4 w-4" />
                 </button>
               </div>
               <textarea
                 id="lawPromptAreaSidebar"
-                className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
-                placeholder="e.g., GDPR, HIPAA compliance..."
+                className="w-full p-3 border border-gray-300 bg-gray-50 text-sm focus:ring-1 focus:ring-slate-500 focus:border-slate-500 outline-none rounded-none font-mono"
+                placeholder="DEFINE REGULATIONS..."
                 value={lawPrompt}
                 onChange={(e) => onLawPromptChange(e.target.value)}
                 rows={4}
+                style={{ resize: 'none' }}
               />
             </div>
           </div>
 
-          {!arePromptsExpanded && <div className="flex-1"></div>}
+          {!arePromptsExpanded && <div className="flex-1 bg-[#F2F2F2]"></div>}
 
-          <button
+          <div className="p-4 border-t border-gray-300 bg-[#E8E8E8] space-y-2">
+            <button
               onClick={handleLoadDefaultPrompts}
-              className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
-              title="Load Default Prompts"
-          >
-              Load Default Prompts
-          </button>
+              className="w-full px-4 py-2.5 bg-white border border-gray-400 text-slate-700 hover:bg-slate-50 hover:border-slate-500 hover:text-slate-900 transition-all duration-150 text-xs font-bold tracking-widest uppercase shadow-sm"
+              title="Reset to Baseline"
+              style={{ borderRadius: '2px' }}
+            >
+              Restore Defaults
+            </button>
 
-          <button
-            onClick={onClearChat}
-            className="w-full px-4 py-2 mt-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-150 flex items-center justify-center gap-2 font-medium text-sm"
-            title="Clear Chat History"
-          >
-            <TrashIcon className="h-5 w-5 text-gray-100" />
-            Clear Chat History
-          </button>
+            <button
+              onClick={onClearChat}
+              className="w-full px-4 py-2.5 bg-slate-700 text-white hover:bg-red-800 transition-all duration-150 text-xs font-bold tracking-widest uppercase shadow-sm flex items-center justify-center gap-2"
+              title="Purge All Records"
+              style={{ borderRadius: '2px' }}
+            >
+              <TrashIcon className="h-3.5 w-3.5" />
+              Clear History
+            </button>
+          </div>
 
 
           {showToneFullscreen && (
             <div
-              className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
               onClick={() => setShowToneFullscreen(false)}
             >
               <div
-                className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+                className="bg-white shadow-2xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col border border-gray-400"
                 onClick={(e) => e.stopPropagation()}
+                style={{ borderRadius: '2px' }}
               >
-                <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-800">Edit Tone Prompt</h4>
+                <div className="flex justify-between items-center p-4 border-b border-gray-300 bg-[#F9F9F7]">
+                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Parameter Config: Tone</h4>
                   <button
                     onClick={() => setShowToneFullscreen(false)}
-                    className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
-                    title="Close Fullscreen Editor"
-                    aria-label="Close Fullscreen Editor"
-                    tabIndex={0}
-                    role="button"
+                    className="p-1 hover:bg-white hover:text-red-600 transition-colors"
+                    title="Close"
                   >
-                    <XMarkIcon className="h-6 w-6" />
+                    <XMarkIcon className="h-5 w-5" />
                   </button>
                 </div>
                 <textarea
-                  className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+                  className="flex-1 w-full p-6 text-sm font-mono border-0 focus:ring-0 resize-none custom-scrollbar bg-white text-slate-700"
                   value={tonePrompt}
                   onChange={(e) => onTonePromptChange(e.target.value)}
                 />
@@ -320,28 +323,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {showPolicyFullscreen && (
             <div
-              className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
               onClick={() => setShowPolicyFullscreen(false)}
             >
               <div
-                className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+                className="bg-white shadow-2xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col border border-gray-400"
                 onClick={(e) => e.stopPropagation()}
+                style={{ borderRadius: '2px' }}
               >
-                <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-800">Edit Company Policy Prompt</h4>
+                <div className="flex justify-between items-center p-4 border-b border-gray-300 bg-[#F9F9F7]">
+                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Parameter Config: Policy</h4>
                   <button
                     onClick={() => setShowPolicyFullscreen(false)}
-                    className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
-                    title="Close Fullscreen Editor"
-                    aria-label="Close Fullscreen Editor"
-                    tabIndex={0}
-                    role="button"
+                    className="p-1 hover:bg-white hover:text-red-600 transition-colors"
+                    title="Close"
                   >
-                    <XMarkIcon className="h-6 w-6" />
+                    <XMarkIcon className="h-5 w-5" />
                   </button>
                 </div>
                 <textarea
-                  className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+                  className="flex-1 w-full p-6 text-sm font-mono border-0 focus:ring-0 resize-none custom-scrollbar bg-white text-slate-700"
                   value={policyPrompt}
                   onChange={(e) => onPolicyPromptChange(e.target.value)}
                 />
@@ -351,28 +352,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {showLawFullscreen && (
             <div
-              className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
               onClick={() => setShowLawFullscreen(false)}
             >
               <div
-                className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col"
+                className="bg-white shadow-2xl w-full max-w-3xl h-full max-h-[80vh] flex flex-col border border-gray-400"
                 onClick={(e) => e.stopPropagation()}
+                style={{ borderRadius: '2px' }}
               >
-                <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-800">Edit Laws & Regulations Prompt</h4>
+                <div className="flex justify-between items-center p-4 border-b border-gray-300 bg-[#F9F9F7]">
+                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Parameter Config: Regulations</h4>
                   <button
                     onClick={() => setShowLawFullscreen(false)}
-                    className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
-                    title="Close Fullscreen Editor"
-                    aria-label="Close Fullscreen Editor"
-                    tabIndex={0}
-                    role="button"
+                    className="p-1 hover:bg-white hover:text-red-600 transition-colors"
+                    title="Close"
                   >
-                    <XMarkIcon className="h-6 w-6" />
+                    <XMarkIcon className="h-5 w-5" />
                   </button>
                 </div>
                 <textarea
-                  className="flex-1 w-full p-4 text-base border-0 focus:ring-0 focus:border-0 resize-none custom-scrollbar"
+                  className="flex-1 w-full p-6 text-sm font-mono border-0 focus:ring-0 resize-none custom-scrollbar bg-white text-slate-700"
                   value={lawPrompt}
                   onChange={(e) => onLawPromptChange(e.target.value)}
                 />

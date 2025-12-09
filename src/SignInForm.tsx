@@ -20,63 +20,69 @@ export function SignInForm() {
           void signIn("password", formData).catch((_error) => {
             const toastTitle =
               flow === "signIn"
-                ? "Could not sign in. Check credentials or sign up."
-                : "Could not sign up. Maybe that email is taken?";
+                ? "Could not sign in. Please check your credentials."
+                : "Could not sign up. That email may already be in use.";
             toast.error(toastTitle);
             setSubmitting(false);
           }).finally(() => {
-            // setSubmitting(false) is called in catch, ensure it's also called on success if signIn doesn't navigate away
-            // For password auth, it usually implies a session change which re-renders, so explicit false might not always be needed.
-            // However, if there's a scenario where it doesn't re-render immediately:
-            // if (flow === "signUp") setSubmitting(false); // Or always set it if UI doesn't change fast enough
+            // setSubmitting(false) 
           });
         }}
       >
-        <input
-          className="input-field"
-          type="email"
-          name="email"
-          placeholder="Email"
-          required
-          aria-label="Email"
-        />
-        <input
-          className="input-field"
-          type="password"
-          name="password"
-          placeholder="Password"
-          required
-          aria-label="Password"
-        />
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Email</label>
+          <input
+            className="lumon-input"
+            type="email"
+            name="email"
+            placeholder="you@example.com"
+            required
+            aria-label="Email"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Password</label>
+          <input
+            className="lumon-input"
+            type="password"
+            name="password"
+            placeholder="••••••••"
+            required
+            aria-label="Password"
+          />
+        </div>
         <button className="auth-button" type="submit" disabled={submitting}>
-          {submitting ? (flow === "signIn" ? "Signing in..." : "Signing up...") : (flow === "signIn" ? "Sign in" : "Sign up")}
+          {submitting ? "Processing..." : (flow === "signIn" ? "Sign In" : "Create Account")}
         </button>
-        <div className="text-center text-sm text-slate-600">
-          <span>
+        <div className="text-center text-xs mt-2">
+          <span className="text-slate-500 mr-1">
             {flow === "signIn"
-              ? "Don't have an account? "
-              : "Already have an account? "}
+              ? "Don't have an account?"
+              : "Already have an account?"}
           </span>
           <button
             type="button"
-            className="link-text"
+            className="font-medium text-teal-700 hover:text-teal-900 hover:underline"
             onClick={() => setFlow(flow === "signIn" ? "signUp" : "signIn")}
           >
-            {flow === "signIn" ? "Sign up instead" : "Sign in instead"}
+            {flow === "signIn" ? "Sign up" : "Sign in"}
           </button>
         </div>
       </form>
-      <div className="flex items-center justify-center my-4"> {/* Adjusted margin */}
-        <hr className="my-4 grow border-slate-200" /> {/* Styled hr */}
-        <span className="mx-4 text-slate-400 text-sm">or</span>
-        <hr className="my-4 grow border-slate-200" /> {/* Styled hr */}
+
+      <div className="flex items-center justify-center my-6 opacity-50">
+        <div className="h-px bg-gray-300 w-full"></div>
+        <span className="mx-3 text-[10px] text-slate-400 uppercase tracking-wide">or</span>
+        <div className="h-px bg-gray-300 w-full"></div>
       </div>
-      <button 
-        className="auth-button bg-slate-600 hover:bg-slate-700" // Different style for anonymous
+
+      <button
+        className="w-full py-2.5 border border-slate-400 text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-colors text-xs font-medium tracking-wide shadow-sm"
+        style={{ borderRadius: '2px' }}
         onClick={() => void signIn("anonymous")}
         disabled={submitting}
       >
-        Sign in anonymously
+        Continue as Guest
       </button>
     </div>
   );
