@@ -5,8 +5,8 @@ import { api } from "./_generated/api";
 import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other related types are defined
 
 // --- CONSTANTS ---
-const DEFAULT_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; 
-const RANKING_MODEL_NAME = "gemini-2.5-flash-lite-preview-06-17"; // Use a fast model for ranking
+const DEFAULT_MODEL_NAME = "gemini-2.5-flash";
+const RANKING_MODEL_NAME = "gemini-2.5-flash-lite"; // Use a fast model for ranking
 
 // --- TYPE DEFINITIONS (Refactored and New) ---
 
@@ -108,17 +108,17 @@ interface LLMToolExecutionDecision {
  * Expected JSON structure for LLM response when ranking tools.
  */
 interface LLMRankingDecision {
-    toolGroups: { rank: number; toolNames: string[] }[];
-    directResponse?: string; // Optional direct response if no_tool is ranked first.
-    reasoning?: string;      // Optional reasoning for the ranking.
+  toolGroups: { rank: number; toolNames: string[] }[];
+  directResponse?: string; // Optional direct response if no_tool is ranked first.
+  reasoning?: string;      // Optional reasoning for the ranking.
 }
 
 /**
  * Expected JSON structure for LLM response when synthesizing parallel tool results.
  */
 interface LLMParallelSynthesisResponse {
-    synthesizedAnswer: string;
-    reasoning?: string; // Optional reasoning for the synthesis.
+  synthesizedAnswer: string;
+  reasoning?: string; // Optional reasoning for the synthesis.
 }
 
 
@@ -132,32 +132,32 @@ export const AVAILABLE_TOOLS: Tool[] = [
   {
     name: "no_tool",
     description: "Answer directly without using any specialized database or search. Use if the query is simple or to synthesize accumulated context.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The user's query to answer directly, considering accumulated context"}}, required: ["query"]},
+    parameters: { type: "object", properties: { query: { type: "string", description: "The user's query to answer directly, considering accumulated context" } }, required: ["query"] },
   },
   {
     name: "query_law_on_insurance",
     description: "Query Cambodia's Law on Insurance database for legal information. Provides structured legal text.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the insurance law database"}}, required: ["query"]},
+    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the insurance law database" } }, required: ["query"] },
   },
   {
     name: "query_law_on_consumer_protection",
     description: "Query Cambodia's Law on Consumer Protection database for legal information. Provides structured legal text.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the consumer protection law database"}}, required: ["query"]},
+    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the consumer protection law database" } }, required: ["query"] },
   },
   {
     name: "query_insurance_qna",
     description: "Query Cambodia's Insurance Q&A database for common questions and answers. Good for specific insurance-related questions.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The specific question to search for in the Q&A database"}}, required: ["query"]},
+    parameters: { type: "object", properties: { query: { type: "string", description: "The specific question to search for in the Q&A database" } }, required: ["query"] },
   },
   {
     name: "search_web",
     description: "Search the web for general information, current events, or topics not found in specialized databases. Can provide search suggestion links.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The search query for the web"}}, required: ["query"]},
+    parameters: { type: "object", properties: { query: { type: "string", description: "The search query for the web" } }, required: ["query"] },
   },
   {
     name: "get_elixer_whitepaper",
     description: "Queries the Elixer WhitePaper for specific information about the ELIXIR project. Use this for details on ELIXIR's mission to simplify insurance in Cambodia, its solutions for buying/claiming processes, knowledge gaps, its gamification features, tokenomics ($ELIXIR token), or project advisors.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query or topic to get details about from the Elixer WhitePaper" }}, required: ["query"] }
+    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query or topic to get details about from the Elixer WhitePaper" } }, required: ["query"] }
   },
 ];
 
@@ -214,12 +214,12 @@ function createToolResult(
   searchSuggestionsHtml?: string,
   finalSuggestionsHtmlToPreserve?: string // Used if this is a FINAL_ANSWER and we need to pull from accumulated
 ): ToolExecutionResult {
-  
+
   let finalContent = content;
   if (responseType === "FINAL_ANSWER" && finalSuggestionsHtmlToPreserve) {
     finalContent = finalizeContentWithSuggestions(finalContent, finalSuggestionsHtmlToPreserve);
     if (finalContent !== content) {
-        console.log(`[createToolResult] Added preserved search suggestions to final answer from ${source}.`);
+      console.log(`[createToolResult] Added preserved search suggestions to final answer from ${source}.`);
     }
   }
 
@@ -239,7 +239,7 @@ function createToolResult(
   if (searchSuggestionsHtml) {
     res.searchSuggestionsHtml = searchSuggestionsHtml;
   }
-  
+
   return res;
 }
 
@@ -249,10 +249,10 @@ function createToolResult(
  */
 const parseToolExecutionDecision = (responseText: string): LLMToolExecutionDecision | { error: string } => {
   const result = parseLLMJson<LLMToolExecutionDecision>(responseText, "ToolExecutionDecision", isLLMToolExecutionDecision);
-  
+
   if (!('error' in result)) {
     console.log(`[parseToolExecutionDecision] Parsed: responseType='${result.responseType}', contentLen=${result.content.length}, reasoningLen=${result.reasoning.length}, contextToPreserveLen=${result.contextToPreserve?.length || 0}`);
-    
+
     // Additional warning for TRY_NEXT_TOOL_AND_ADD_CONTEXT without context
     if (result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && !result.contextToPreserve) {
       console.warn(`[parseToolExecutionDecision] responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT, but contextToPreserve is missing.`);
@@ -261,7 +261,7 @@ const parseToolExecutionDecision = (responseText: string): LLMToolExecutionDecis
     // Log the raw responseText if parsing failed, to help debug LLM output
     console.error(`[parseToolExecutionDecision] Error during ToolExecutionDecision parsing. Raw LLM responseText (up to 1000 chars): "${responseText.substring(0, 1000)}..."`);
   }
-  
+
   return result;
 };
 
@@ -269,13 +269,13 @@ const parseToolExecutionDecision = (responseText: string): LLMToolExecutionDecis
  * Parses the AI's JSON response for parallel synthesis.
  */
 const parseParallelSynthesisResponse = (responseText: string): LLMParallelSynthesisResponse | { error: string } => {
-    const result = parseLLMJson<LLMParallelSynthesisResponse>(responseText, "ParallelSynthesisResponse", isLLMParallelSynthesisResponse);
-    
-    if (!('error' in result)) {
-        console.log(`[parseParallelSynthesisResponse] Parsed synthesis. Answer length: ${result.synthesizedAnswer.length}`);
-    }
-    
-    return result;
+  const result = parseLLMJson<LLMParallelSynthesisResponse>(responseText, "ParallelSynthesisResponse", isLLMParallelSynthesisResponse);
+
+  if (!('error' in result)) {
+    console.log(`[parseParallelSynthesisResponse] Parsed synthesis. Answer length: ${result.synthesizedAnswer.length}`);
+  }
+
+  return result;
 };
 
 
@@ -283,95 +283,95 @@ const parseParallelSynthesisResponse = (responseText: string): LLMParallelSynthe
  * Updates the processing phase of a message (e.g., in a database).
  */
 async function updateProcessingPhase(
-    ctx: ConvexActionCtx,
-    messageId: string | undefined,
-    phase: string,
-    toolName: string
+  ctx: ConvexActionCtx,
+  messageId: string | undefined,
+  phase: string,
+  toolName: string
 ): Promise<void> {
-    if (ctx && messageId) {
-        try {
-            await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase });
-            console.log(`[${toolName}] Updated phase: ${phase}`);
-        } catch (error) {
-            console.error(`[${toolName}] Phase update error for phase '${phase}': ${error instanceof Error ? error.message : String(error)}`);
-        }
+  if (ctx && messageId) {
+    try {
+      await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase });
+      console.log(`[${toolName}] Updated phase: ${phase}`);
+    } catch (error) {
+      console.error(`[${toolName}] Phase update error for phase '${phase}': ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
 }
 
 // --- GEMINI API HELPERS ---
 const getGenerationConfigForJson = (): GenerationConfig => ({
-    responseMimeType: "application/json",
+  responseMimeType: "application/json",
 });
 
 /**
  * Type-safe JSON parser for LLM responses
  */
 function parseLLMJson<T>(responseText: string, context: string, typeGuard: (obj: any) => obj is T): T | { error: string } {
-    try {
-        // Clean up code blocks if present
-        const cleanedText = responseText.replace(/^```(?:json)?\s*|```\s*$/g, '').trim();
-        
-        // Parse JSON
-        const parsed = JSON.parse(cleanedText);
-        
-        // Validate parsed object against expected type
-        if (typeGuard(parsed)) {
-            return parsed;
-        } else {
-            console.error(`[parseLLMJson] ${context}: Parsed JSON doesn't match expected structure`);
-            return { error: `Invalid ${context} structure` };
-        }
-    } catch (error: any) {
-        console.error(`[parseLLMJson] ${context}: ${error.message}. Text: "${responseText.substring(0, 300)}..."`);
-        return { error: `Error parsing ${context}: ${error.message}` };
+  try {
+    // Clean up code blocks if present
+    const cleanedText = responseText.replace(/^```(?:json)?\s*|```\s*$/g, '').trim();
+
+    // Parse JSON
+    const parsed = JSON.parse(cleanedText);
+
+    // Validate parsed object against expected type
+    if (typeGuard(parsed)) {
+      return parsed;
+    } else {
+      console.error(`[parseLLMJson] ${context}: Parsed JSON doesn't match expected structure`);
+      return { error: `Invalid ${context} structure` };
     }
+  } catch (error: any) {
+    console.error(`[parseLLMJson] ${context}: ${error.message}. Text: "${responseText.substring(0, 300)}..."`);
+    return { error: `Error parsing ${context}: ${error.message}` };
+  }
 }
 
 /**
  * Type guard for LLMToolExecutionDecision
  */
 function isLLMToolExecutionDecision(obj: any): obj is LLMToolExecutionDecision {
-    const validResponseTypes = ["FINAL_ANSWER", "TRY_NEXT_TOOL", "TRY_NEXT_TOOL_AND_ADD_CONTEXT"];
-    return (
-        obj && 
-        typeof obj === 'object' &&
-        typeof obj.responseType === 'string' &&
-        validResponseTypes.includes(obj.responseType) &&
-        typeof obj.content === 'string' &&
-        typeof obj.reasoning === 'string' &&
-        (obj.contextToPreserve === undefined || obj.contextToPreserve === null || typeof obj.contextToPreserve === 'string')
-    );
+  const validResponseTypes = ["FINAL_ANSWER", "TRY_NEXT_TOOL", "TRY_NEXT_TOOL_AND_ADD_CONTEXT"];
+  return (
+    obj &&
+    typeof obj === 'object' &&
+    typeof obj.responseType === 'string' &&
+    validResponseTypes.includes(obj.responseType) &&
+    typeof obj.content === 'string' &&
+    typeof obj.reasoning === 'string' &&
+    (obj.contextToPreserve === undefined || obj.contextToPreserve === null || typeof obj.contextToPreserve === 'string')
+  );
 }
 
 /**
  * Type guard for LLMParallelSynthesisResponse
  */
 function isLLMParallelSynthesisResponse(obj: any): obj is LLMParallelSynthesisResponse {
-    return (
-        obj && 
-        typeof obj === 'object' &&
-        typeof obj.synthesizedAnswer === 'string' &&
-        (obj.reasoning === undefined || typeof obj.reasoning === 'string')
-    );
+  return (
+    obj &&
+    typeof obj === 'object' &&
+    typeof obj.synthesizedAnswer === 'string' &&
+    (obj.reasoning === undefined || typeof obj.reasoning === 'string')
+  );
 }
 
 /**
  * Type guard for LLMRankingDecision
  */
 function isLLMRankingDecision(obj: any): obj is LLMRankingDecision {
-    return (
-        obj && 
-        typeof obj === 'object' &&
-        Array.isArray(obj.toolGroups) &&
-        obj.toolGroups.every((group: any) => 
-            typeof group === 'object' &&
-            typeof group.rank === 'number' &&
-            Array.isArray(group.toolNames) &&
-            group.toolNames.every((tool: any) => typeof tool === 'string')
-        ) &&
-        (obj.directResponse === undefined || typeof obj.directResponse === 'string') &&
-        (obj.reasoning === undefined || typeof obj.reasoning === 'string')
-    );
+  return (
+    obj &&
+    typeof obj === 'object' &&
+    Array.isArray(obj.toolGroups) &&
+    obj.toolGroups.every((group: any) =>
+      typeof group === 'object' &&
+      typeof group.rank === 'number' &&
+      Array.isArray(group.toolNames) &&
+      group.toolNames.every((tool: any) => typeof tool === 'string')
+    ) &&
+    (obj.directResponse === undefined || typeof obj.directResponse === 'string') &&
+    (obj.reasoning === undefined || typeof obj.reasoning === 'string')
+  );
 }
 
 class PromptFactory {
@@ -397,7 +397,7 @@ CURRENT TOOL: ${currentTool}
 ${toolDescriptionOrData ? `
 CONTEXT FOR ${currentTool}:
 ${toolDescriptionOrData}
-` : `No specific data loaded for ${currentTool}. Rely on its function ('${AVAILABLE_TOOLS.find(t=>t.name === currentTool)?.description}') or your general knowledge if it's 'no_tool'.
+` : `No specific data loaded for ${currentTool}. Rely on its function ('${AVAILABLE_TOOLS.find(t => t.name === currentTool)?.description}') or your general knowledge if it's 'no_tool'.
 `}
 REMAINING TOOLS TO TRY IF NEEDED (ranked in likely order of utility): ${remainingTools.length > 0 ? remainingTools.join(", ") : "None. This is the last chance."}
 
@@ -530,7 +530,7 @@ USER QUERY: "${query}"`;
 
     if (accumulatedContext && accumulatedContext.content) {
       prompt += `\n\nACCUMULATED CONTEXT FROM PREVIOUS TOOLS (use for broader understanding and to connect information. From sources: [${accumulatedContext.sources.join(', ')}]):\n${accumulatedContext.content}\n`;
-       if (accumulatedContext.searchSuggestionsHtmlToPreserve) {
+      if (accumulatedContext.searchSuggestionsHtmlToPreserve) {
         prompt += `\nNOTE: Search suggestions from a previous web search are being preserved and will be added to your synthesized answer automatically if appropriate. Do not duplicate them in your 'synthesizedAnswer' output.\n`;
       }
     }
@@ -583,11 +583,11 @@ class NoToolExecutor implements IToolExecutor {
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
     console.log(`[NoToolExecutor] Executing direct response. Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
-    
+
     // Check for preserved search sources in accumulated context and extract them
     let searchSources = params.accumulatedContext?.searchSuggestionsHtmlToPreserve;
     let cleanedContext = params.accumulatedContext?.content;
-    
+
     if (cleanedContext) {
       const sourceMatch = cleanedContext.match(/<!-- PRESERVED_SEARCH_SOURCES:([\s\S]*?) -->/i);
       if (sourceMatch) {
@@ -596,7 +596,7 @@ class NoToolExecutor implements IToolExecutor {
           searchSources = sourceMatch[1];
           console.log(`[NoToolExecutor] Found preserved search sources in accumulated context.`);
         }
-        
+
         // Remove the preserved sources comment from the context for the prompt
         cleanedContext = cleanedContext.replace(/<!-- PRESERVED_SEARCH_SOURCES:[\s\S]*? -->/gi, '');
         if (params.accumulatedContext) {
@@ -604,16 +604,16 @@ class NoToolExecutor implements IToolExecutor {
         }
       }
     }
-    
+
     const directPrompt = PromptFactory.generateToolExecutionPrompt(
-        params.query,
-        this.name,
-        `Using general knowledge and accumulated context to generate a response. The user's query is: "${params.query}"`,
-        params.remainingTools,
-        params.conversationHistory,
-        systemPromptsText,
-        params.accumulatedContext,
-        params.nextToolGroup
+      params.query,
+      this.name,
+      `Using general knowledge and accumulated context to generate a response. The user's query is: "${params.query}"`,
+      params.remainingTools,
+      params.conversationHistory,
+      systemPromptsText,
+      params.accumulatedContext,
+      params.nextToolGroup
     );
 
     try {
@@ -625,9 +625,9 @@ class NoToolExecutor implements IToolExecutor {
       if ('error' in parsedDecision) {
         throw new Error(parsedDecision.error);
       }
-      
-      console.log(`[NoToolExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0,100)}..."`);
-      
+
+      console.log(`[NoToolExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0, 100)}..."`);
+
       // Create result with all standard fields
       const result = createToolResult(
         this.name,
@@ -638,16 +638,16 @@ class NoToolExecutor implements IToolExecutor {
         undefined, // NoToolExecutor doesn't generate its own search suggestions
         searchSources // Use the extracted search sources
       );
-      
+
       // For synthesis in parallel execution, provide the direct answer content
       // This ensures the synthesis has access to the complete direct response
       result.synthesisData = parsedDecision.content;
-      
+
       // If there's context to preserve, include it in the synthesis data
       if (parsedDecision.contextToPreserve) {
         result.synthesisData += `\n\nAdditional context: ${parsedDecision.contextToPreserve}`;
       }
-      
+
       return result;
     } catch (error: any) {
       console.error(`[NoToolExecutor] LLM Error or Parsing Error: ${error.message || String(error)}`);
@@ -673,7 +673,7 @@ class WebSearchExecutor implements IToolExecutor {
 
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
     const googleSearchTool: GoogleSearchTool = { googleSearch: {} };
-    
+
     // as the LLM's response will be natural language possibly augmented by tool output.
     // The subsequent call in this executor *to decide what to do with the search results* WILL use JSON mode.
     const modelConfig: ModelConfig = {
@@ -683,31 +683,31 @@ class WebSearchExecutor implements IToolExecutor {
     };
     const searchModel = params.genAI.getGenerativeModel(modelConfig);
     const chat = searchModel.startChat({ tools: [googleSearchTool] as GenAITool[], history: params.conversationHistory.slice(0, -1) });
-    
+
     // This first prompt is to GET search results
     let focusedQuery = params.query; // Start with the original query
-  const nextTools = params.nextToolGroup || [];
-  
-  // Check if a specialized law/insurance tool is coming up
-  const hasPendingLawInsuranceTool = nextTools.includes("query_law_on_insurance") || 
-                                   nextTools.includes("query_insurance_qna") || 
-                                   nextTools.includes("query_law_on_consumer_protection");
+    const nextTools = params.nextToolGroup || [];
 
-  let searchDirectives = "Prioritize concise and directly relevant information for all parts of the query.";
+    // Check if a specialized law/insurance tool is coming up
+    const hasPendingLawInsuranceTool = nextTools.includes("query_law_on_insurance") ||
+      nextTools.includes("query_insurance_qna") ||
+      nextTools.includes("query_law_on_consumer_protection");
 
-  if (hasPendingLawInsuranceTool && (params.query.toLowerCase().includes("law") || params.query.toLowerCase().includes("insurance") || params.query.toLowerCase().includes("article"))) {
-    searchDirectives = `
+    let searchDirectives = "Prioritize concise and directly relevant information for all parts of the query.";
+
+    if (hasPendingLawInsuranceTool && (params.query.toLowerCase().includes("law") || params.query.toLowerCase().includes("insurance") || params.query.toLowerCase().includes("article"))) {
+      searchDirectives = `
 The user's query has multiple parts. Some parts relate to legal or insurance matters that will likely be handled by a specialized database tool later (e.g., tools like 'query_law_on_insurance', 'query_insurance_qna'). 
 For THIS web search, please FOCUS PRIMARILY on the non-legal/non-insurance aspects of the query. 
 For example, if the query is "current Tesla stock and what does Article 3 of the Law on Insurance say?", you should focus your web search on "current Tesla stock".
 If the query ONLY contains legal/insurance questions and a specialized tool is pending, you can state that a web search is not the best primary source for that specific legal/insurance detail.
 Perform a web search based on these refined instructions.
     `.trim();
-  }
+    }
 
-  const searchInvocationPrompt = `Based on the user query "${params.query}" and conversation history, perform a web search.
+    const searchInvocationPrompt = `Based on the user query "${params.query}" and conversation history, perform a web search.
 ${searchDirectives}
-  ${params.accumulatedContext?.content ? `\nConsider this accumulated context: ${params.accumulatedContext.content.substring(0,500)}...\n` : ''}
+  ${params.accumulatedContext?.content ? `\nConsider this accumulated context: ${params.accumulatedContext.content.substring(0, 500)}...\n` : ''}
   ${systemPromptsText}
   Please provide the search results.`;
 
@@ -715,65 +715,65 @@ ${searchDirectives}
     let searchSuggestionsHtml: string | undefined;
 
     try {
-        console.log(`[WebSearchExecutor] Sending search invocation prompt to LLM.`);
-        const searchResponse = await chat.sendMessage(searchInvocationPrompt);
-        searchResultsText = searchResponse.response.text();
-        console.log(`[WebSearchExecutor] Received search results text (len: ${searchResultsText.length}).`);
+      console.log(`[WebSearchExecutor] Sending search invocation prompt to LLM.`);
+      const searchResponse = await chat.sendMessage(searchInvocationPrompt);
+      searchResultsText = searchResponse.response.text();
+      console.log(`[WebSearchExecutor] Received search results text (len: ${searchResultsText.length}).`);
 
-        // Extract search suggestions if available (this part remains similar)
-        const responseAny = searchResponse as any; // To access groundingMetadata
-        const groundingMeta = responseAny.response.candidates?.[0]?.groundingMetadata;
+      // Extract search suggestions if available (this part remains similar)
+      const responseAny = searchResponse as any; // To access groundingMetadata
+      const groundingMeta = responseAny.response.candidates?.[0]?.groundingMetadata;
 
-        if (groundingMeta) {
-            const groundingChunks = groundingMeta.groundingChunks;
+      if (groundingMeta) {
+        const groundingChunks = groundingMeta.groundingChunks;
 
-            if (groundingChunks && Array.isArray(groundingChunks) && groundingChunks.length > 0) {
-                let html = "<strong>Sources:</strong><ul>";
-                for (const chunk of groundingChunks) {
-                    if (chunk.web && chunk.web.uri) {
-                        const url = chunk.web.uri;
-                        const title = chunk.web.title || url; // Use title if available, otherwise URL
-                        html += `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a></li>`;
-                    }
-                }
-                html += "</ul>";
-                searchSuggestionsHtml = html;
-                console.log(`[WebSearchExecutor] Extracted search suggestions HTML from groundingChunks (len: ${searchSuggestionsHtml?.length}).`);
-            } else if (groundingMeta.searchEntryPoint?.renderedContent) {
-                // Fallback to the general rendered content if no specific groundingChunks are found
-                searchSuggestionsHtml = groundingMeta.searchEntryPoint.renderedContent;
-                console.log(`[WebSearchExecutor] Extracted search suggestions HTML from renderedContent (fallback) (len: ${searchSuggestionsHtml?.length}).`);
-            } else {
-                console.log('[WebSearchExecutor] No groundingChunks or renderedContent found in groundingMetadata for suggestions.');
+        if (groundingChunks && Array.isArray(groundingChunks) && groundingChunks.length > 0) {
+          let html = "<strong>Sources:</strong><ul>";
+          for (const chunk of groundingChunks) {
+            if (chunk.web && chunk.web.uri) {
+              const url = chunk.web.uri;
+              const title = chunk.web.title || url; // Use title if available, otherwise URL
+              html += `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a></li>`;
             }
+          }
+          html += "</ul>";
+          searchSuggestionsHtml = html;
+          console.log(`[WebSearchExecutor] Extracted search suggestions HTML from groundingChunks (len: ${searchSuggestionsHtml?.length}).`);
+        } else if (groundingMeta.searchEntryPoint?.renderedContent) {
+          // Fallback to the general rendered content if no specific groundingChunks are found
+          searchSuggestionsHtml = groundingMeta.searchEntryPoint.renderedContent;
+          console.log(`[WebSearchExecutor] Extracted search suggestions HTML from renderedContent (fallback) (len: ${searchSuggestionsHtml?.length}).`);
         } else {
-            console.log('[WebSearchExecutor] No groundingMetadata found in search response.');
+          console.log('[WebSearchExecutor] No groundingChunks or renderedContent found in groundingMetadata for suggestions.');
         }
+      } else {
+        console.log('[WebSearchExecutor] No groundingMetadata found in search response.');
+      }
     } catch (error: any) {
-        console.error(`[WebSearchExecutor] Error during web search LLM call: ${error.message || String(error)}`);
-        return createToolResult(
-            this.name,
-            "Sorry, I encountered an issue during web search.",
-            "TRY_NEXT_TOOL", // Suggest trying next tool on search failure
-            undefined,
-            `Search LLM Error: ${error.message || String(error)}`,
-            undefined,
-            params.accumulatedContext?.searchSuggestionsHtmlToPreserve
-        );
+      console.error(`[WebSearchExecutor] Error during web search LLM call: ${error.message || String(error)}`);
+      return createToolResult(
+        this.name,
+        "Sorry, I encountered an issue during web search.",
+        "TRY_NEXT_TOOL", // Suggest trying next tool on search failure
+        undefined,
+        `Search LLM Error: ${error.message || String(error)}`,
+        undefined,
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+      );
     }
 
     // Now, send the search results to another LLM call to decide what to do (using JSON mode)
     const decisionPrompt = PromptFactory.generateToolExecutionPrompt(
-        params.query,
-        this.name,
-        `Web search results for "${params.query}":\n${searchResultsText}`,
-        params.remainingTools,
-        params.conversationHistory,
-        systemPromptsText,
-        params.accumulatedContext,
-        params.nextToolGroup
+      params.query,
+      this.name,
+      `Web search results for "${params.query}":\n${searchResultsText}`,
+      params.remainingTools,
+      params.conversationHistory,
+      systemPromptsText,
+      params.accumulatedContext,
+      params.nextToolGroup
     );
-    
+
     try {
       console.log(`[WebSearchExecutor] Sending search results analysis prompt to LLM for decision.`);
       const decisionModel = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
@@ -784,23 +784,23 @@ ${searchDirectives}
       if ('error' in parsedDecision) {
         throw new Error(parsedDecision.error);
       }
-      
-      console.log(`[WebSearchExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0,100)}..."`);
+
+      console.log(`[WebSearchExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0, 100)}..."`);
 
       // Auto-extract context if TRY_NEXT_TOOL but useful info exists (heuristic)
       let finalContextToPreserve = parsedDecision.contextToPreserve;
       let finalResponseType = parsedDecision.responseType;
 
       if (
-          (parsedDecision.responseType === "TRY_NEXT_TOOL" || (parsedDecision.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && !parsedDecision.contextToPreserve)) &&
-          searchResultsText.trim().length > 20 // If we got some search results
+        (parsedDecision.responseType === "TRY_NEXT_TOOL" || (parsedDecision.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && !parsedDecision.contextToPreserve)) &&
+        searchResultsText.trim().length > 20 // If we got some search results
       ) {
-          console.log(`[WebSearchExecutor] Heuristic: Has search results but LLM chose TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT without context. Auto-adding search summary.`);
-          finalResponseType = "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
-          finalContextToPreserve = (finalContextToPreserve ? finalContextToPreserve + "\n\n" : "") + 
-                                   `Summary from web search for "${params.query}":\n${searchResultsText.substring(0, Math.min(searchResultsText.length, 1500))}${searchResultsText.length > 1500 ? '... (truncated)' : ''}`;
+        console.log(`[WebSearchExecutor] Heuristic: Has search results but LLM chose TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT without context. Auto-adding search summary.`);
+        finalResponseType = "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
+        finalContextToPreserve = (finalContextToPreserve ? finalContextToPreserve + "\n\n" : "") +
+          `Summary from web search for "${params.query}":\n${searchResultsText.substring(0, Math.min(searchResultsText.length, 1500))}${searchResultsText.length > 1500 ? '... (truncated)' : ''}`;
       }
-      
+
       const result = createToolResult(
         this.name,
         parsedDecision.content,
@@ -810,11 +810,11 @@ ${searchDirectives}
         searchSuggestionsHtml, // Pass along the extracted HTML
         params.accumulatedContext?.searchSuggestionsHtmlToPreserve
       );
-      
+
       // For synthesis in parallel execution, provide the complete search results
       // This ensures the synthesis has access to all relevant data
       result.synthesisData = `Web search results for "${params.query}":\n${searchResultsText}`;
-      
+
       return result;
     } catch (error: any) {
       console.error(`[WebSearchExecutor] LLM Error or Parsing Error on decision: ${error.message || String(error)}`);
@@ -848,11 +848,11 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
     await updateProcessingPhase(ctx, undefined, `Fetching ${this.readableName} content`, this.name);
     const dbFetchResult = await this.fetchDatabaseContent(ctx);
     if (dbFetchResult.content) {
-        const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
-        const MAX_DATA_SIZE_FOR_PROMPT = 50000000000; 
-        const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
-        console.log(`[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`);
-        return { toolName: this.name, data: truncatedJsonData, dbSize: jsonData.length };
+      const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
+      const MAX_DATA_SIZE_FOR_PROMPT = 50000000000;
+      const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
+      console.log(`[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`);
+      return { toolName: this.name, data: truncatedJsonData, dbSize: jsonData.length };
     }
     console.warn(`[${this.name}] Failed to fetch raw data. Error: ${dbFetchResult.error}`);
     return { toolName: this.name, data: "", error: dbFetchResult.error || `No content found or error fetching from ${this.readableName}.`, dbSize: 0 };
@@ -873,7 +873,7 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
       toolDataForPrompt = `Error accessing or processing data from ${this.readableName}: ${dbFetchResult.error}. Inform the user if this prevents answering the query or try another tool.`;
       console.warn(`[${this.name}] ${toolDataForPrompt}`);
     }
-    
+
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
     const llmPrompt = PromptFactory.generateToolExecutionPrompt(
       params.query,
@@ -895,31 +895,31 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
       if ('error' in parsedDecision) {
         throw new Error(parsedDecision.error);
       }
-      
-      console.log(`[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: \"${parsedDecision.reasoning.substring(0,100)}...\"`);
+
+      console.log(`[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: \"${parsedDecision.reasoning.substring(0, 100)}...\"`);
 
       return createToolResult(
         this.name,
         parsedDecision.content,
         parsedDecision.responseType,
         parsedDecision.contextToPreserve,
-        undefined, 
-        undefined, 
+        undefined,
+        undefined,
         params.accumulatedContext?.searchSuggestionsHtmlToPreserve
       );
     } catch (error: any) {
-      console.error(`[${this.name}] LLM processing error: ${error.message}. Prompt start:\n${llmPrompt.substring(0,300)}...`);
+      console.error(`[${this.name}] LLM processing error: ${error.message}. Prompt start:\n${llmPrompt.substring(0, 300)}...`);
       if (dbFetchResult.content) {
-          const fullContentString = JSON.stringify(dbFetchResult.content, null, 2);
-          return createToolResult(
-              this.name,
-              `LLM processing failed. Full content of ${this.readableName} provided as fallback. Consider if this is enough or if another tool should be tried. Original query: \"${params.query}\"`, 
-              "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
-              fullContentString,
-              error.message, 
-              undefined, 
-              params.accumulatedContext?.searchSuggestionsHtmlToPreserve
-          );
+        const fullContentString = JSON.stringify(dbFetchResult.content, null, 2);
+        return createToolResult(
+          this.name,
+          `LLM processing failed. Full content of ${this.readableName} provided as fallback. Consider if this is enough or if another tool should be tried. Original query: \"${params.query}\"`,
+          "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
+          fullContentString,
+          error.message,
+          undefined,
+          params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+        );
       }
       return createToolResult(
         this.name,
@@ -948,7 +948,7 @@ class DatabaseQueryExecutor extends AbstractDatabaseExecutor {
 
       if (dbResult.success && dbResult.database?.content) {
         if (typeof dbResult.database.content !== 'object' || dbResult.database.content === null) {
-             return { content: null, error: `The ${this.readableName} database content is not in the expected object format.` };
+          return { content: null, error: `The ${this.readableName} database content is not in the expected object format.` };
         }
         return { content: dbResult.database.content as LawDatabase };
       } else {
@@ -997,27 +997,27 @@ class AgentModeOffExecutor implements IToolExecutor {
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
     console.log(`[AgentModeOffExecutor] Executing direct response with agent mode off.`);
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
-    
+
     // Create a simplified prompt that doesn't mention tools since agent mode is off
     const directPrompt = `${systemPromptsText}\n\n`;
-    
+
     // Add conversation history if available
     const conversationContext = params.conversationHistory.length > 0 ?
-      'Conversation History:\n' + 
+      'Conversation History:\n' +
       params.conversationHistory
         .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
         .join('\n') + '\n\n' :
       '';
-    
+
     const fullPrompt = `${directPrompt}${conversationContext}User asks: "${params.query}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
 
     try {
       const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME });
       const response = await model.generateContent(fullPrompt);
       const responseText = response.response.text();
-      
+
       console.log(`[AgentModeOffExecutor] Generated response (${responseText.length} chars).`);
-      
+
       // Create a simplified result - always treat it as a final answer
       const result = createToolResult(
         this.name,
@@ -1028,10 +1028,10 @@ class AgentModeOffExecutor implements IToolExecutor {
         undefined,
         undefined // No search sources in agent mode off
       );
-      
+
       // For synthesis in parallel execution
       result.synthesisData = responseText;
-      
+
       return result;
     } catch (error: any) {
       console.error(`[AgentModeOffExecutor] LLM Error: ${error.message || String(error)}`);
@@ -1066,163 +1066,163 @@ export const toolExecutors: Record<string, IToolExecutor> = {
  * This is optimized for speed and flexibility, not requiring strict JSON format.
  */
 const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: string[]): RankingResult => {
-    try {
-        console.log(`[parseToolGroupsFromNaturalLanguage] Parsing response with length ${responseText.length}`);
-        const rankedToolGroups: string[][] = [];
-        const rankedToolsSet = new Set<string>();
-        let directResponse: string | undefined;
-        
-        // Extract groups using regex patterns
-        // Look for patterns like "[1] search_web, query_law_on_insurance" or "1. search_web"
-        const groupPatterns = [
-            /\[(\d+)\]\s*([^\n]+)/gm,  // Matches [1] tool1, tool2
-            /(?:Group|Group Priority|Priority|Rank)\s*(\d+)\s*[:\-]\s*([^\n]+)/gi,
-            /(?:Tools|Tool Group|Tools Group)\s*(\d+)\s*[:\-]\s*([^\n]+)/gi,
-            /(?:\b|^)(\d+)[.\)]\s*([^\n]+)/gm,
-        ];
-        
-        // Also look for direct answers
-        const directResponsePatterns = [
-            /===DIRECT_RESPONSE_START===\s*([\s\S]*?)\s*===DIRECT_RESPONSE_END===/i, // New pattern for specific markers
-            /(?:Direct\s*Response|Direct\s*Answer)\s*[:\-]\s*([^\n]+(?:\n(?!Group|Tools|\d+[.\)])[^\n]+)*)/i,
-            /(?:Answer without tools|No tools needed)\s*[:\-]\s*([^\n]+(?:\n(?!Group|Tools|\d+[.\)])[^\n]+)*)/i,
-        ];
-        
-        // Try to extract direct response
-        for (const pattern of directResponsePatterns) {
-            const match = responseText.match(pattern);
-            if (match && match[1]) {
-                directResponse = match[1].trim();
-                console.log(`[parseToolGroupsFromNaturalLanguage] Found direct response: "${directResponse.substring(0, 100)}..."`);
-                break;
-            }
-        }
-        
-        // Extract all tool groups with their priority
-        const groupMatches = new Map<number, string[]>();
-        
-        for (const pattern of groupPatterns) {
-            let match;
-            while ((match = pattern.exec(responseText)) !== null) {
-                if (match.length >= 3) {
-                    const rank = parseInt(match[1], 10);
-                    const toolsText = match[2].trim();
-                    
-                    // Extract tool names from the tools text
-                    // Look for words that match available tool names
-                    const extractedTools: string[] = [];
-                    
-                    // Split by common delimiters and check each part
-                    const parts = toolsText.split(/[,;\s]+/);
-                    for (const part of parts) {
-                        const cleanPart = part.trim().toLowerCase();
-                        
-                        // Try to match with available tool names - prioritize exact matches first
-                        let foundMatch = false;
-                        
-                        // First pass: Look for exact matches (highest confidence)
-                        for (const toolName of allToolNames) {
-                            if (cleanPart === toolName.toLowerCase()) {
-                                if (!rankedToolsSet.has(toolName)) {
-                                    extractedTools.push(toolName);
-                                    rankedToolsSet.add(toolName);
-                                    foundMatch = true;
-                                }
-                                break;
-                            }
-                        }
-                        
-                        // Second pass: Only if no exact match was found, try partial matches with minimum length
-                        if (!foundMatch && cleanPart.length >= 4) {
-                            for (const toolName of allToolNames) {
-                                // Check if the tool name contains the clean part or vice versa
-                                // But only for substantial matches (4+ chars)
-                                if (toolName.toLowerCase().includes(cleanPart) || 
-                                    cleanPart.includes(toolName.toLowerCase())) {
-                                    if (!rankedToolsSet.has(toolName)) {
-                                        extractedTools.push(toolName);
-                                        rankedToolsSet.add(toolName);
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (extractedTools.length > 0) {
-                        groupMatches.set(rank, extractedTools);
-                    }
-                }
-            }
-        }
-        
-        // Sort groups by rank and add them to the result
-        const sortedRanks = Array.from(groupMatches.keys()).sort((a, b) => a - b);
-        for (const rank of sortedRanks) {
-            const tools = groupMatches.get(rank);
-            if (tools && tools.length > 0) {
-                rankedToolGroups.push(tools);
-            }
-        }
-        
-        // Add any unranked tools to the end, 'no_tool' last among them
-        const unrankedTools = allToolNames.filter(tool => !rankedToolsSet.has(tool));
-        if (unrankedTools.length > 0) {
-            console.log(`[parseToolGroupsFromNaturalLanguage] Tools not ranked by AI: ${unrankedTools.join(', ')}. Adding them as individual trailing groups.`);
-            const noToolIndex = unrankedTools.indexOf("no_tool");
-            if (noToolIndex > -1) {
-                unrankedTools.splice(noToolIndex, 1); // Remove no_tool
-                unrankedTools.push("no_tool");      // Add it to the very end of unranked
-            }
-            unrankedTools.forEach(tool => rankedToolGroups.push([tool]));
-        }
-        
-        // If there's a direct response, ensure no_tool is prioritized at the beginning
-        if (directResponse) {
-            console.log(`[parseToolGroupsFromNaturalLanguage] Direct response found, prioritizing no_tool`);
-            
-            // First, remove no_tool from wherever it is in the groups
-            let noToolRemoved = false;
-            for (let i = 0; i < rankedToolGroups.length; i++) {
-                const groupIndex = rankedToolGroups[i].indexOf("no_tool");
-                if (groupIndex >= 0) {
-                    rankedToolGroups[i].splice(groupIndex, 1);
-                    noToolRemoved = true;
-                    // Remove empty groups
-                    if (rankedToolGroups[i].length === 0) {
-                        rankedToolGroups.splice(i, 1);
-                        i--;
-                    }
-                }
-            }
-            
-            // Add no_tool as the first tool in the first group
-            if (rankedToolGroups.length === 0) {
-                rankedToolGroups.push(["no_tool"]);
-            } else {
-                rankedToolGroups.unshift(["no_tool"]);
-            }
-            
-            console.log(`[parseToolGroupsFromNaturalLanguage] Prioritized no_tool for direct response.`);
-        }
-        
-        if (rankedToolGroups.length === 0) { // Should not happen if unranked tools are added
-            console.warn('[parseToolGroupsFromNaturalLanguage] No valid tool groups parsed. This is unexpected.');
-            return { rankedToolGroups: [allToolNames.includes("search_web") ? ["search_web"] : [allToolNames[0]] ] }; // Basic fallback
-        }
-        
-        console.log(`[parseToolGroupsFromNaturalLanguage] Final tool groups: ${JSON.stringify(rankedToolGroups)}`);
-        return {
-            rankedToolGroups,
-            directResponse: directResponse,
-        };
-    } catch (e: any) {
-        console.error(`[parseToolGroupsFromNaturalLanguage] Error parsing LLM ranking: ${e.message}. Response: "${responseText.substring(0, 300)}..."`);
-        // Fallback to a default ranking on error
-        return {
-            rankedToolGroups: [["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"],["search_web"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
-        };
+  try {
+    console.log(`[parseToolGroupsFromNaturalLanguage] Parsing response with length ${responseText.length}`);
+    const rankedToolGroups: string[][] = [];
+    const rankedToolsSet = new Set<string>();
+    let directResponse: string | undefined;
+
+    // Extract groups using regex patterns
+    // Look for patterns like "[1] search_web, query_law_on_insurance" or "1. search_web"
+    const groupPatterns = [
+      /\[(\d+)\]\s*([^\n]+)/gm,  // Matches [1] tool1, tool2
+      /(?:Group|Group Priority|Priority|Rank)\s*(\d+)\s*[:\-]\s*([^\n]+)/gi,
+      /(?:Tools|Tool Group|Tools Group)\s*(\d+)\s*[:\-]\s*([^\n]+)/gi,
+      /(?:\b|^)(\d+)[.\)]\s*([^\n]+)/gm,
+    ];
+
+    // Also look for direct answers
+    const directResponsePatterns = [
+      /===DIRECT_RESPONSE_START===\s*([\s\S]*?)\s*===DIRECT_RESPONSE_END===/i, // New pattern for specific markers
+      /(?:Direct\s*Response|Direct\s*Answer)\s*[:\-]\s*([^\n]+(?:\n(?!Group|Tools|\d+[.\)])[^\n]+)*)/i,
+      /(?:Answer without tools|No tools needed)\s*[:\-]\s*([^\n]+(?:\n(?!Group|Tools|\d+[.\)])[^\n]+)*)/i,
+    ];
+
+    // Try to extract direct response
+    for (const pattern of directResponsePatterns) {
+      const match = responseText.match(pattern);
+      if (match && match[1]) {
+        directResponse = match[1].trim();
+        console.log(`[parseToolGroupsFromNaturalLanguage] Found direct response: "${directResponse.substring(0, 100)}..."`);
+        break;
+      }
     }
+
+    // Extract all tool groups with their priority
+    const groupMatches = new Map<number, string[]>();
+
+    for (const pattern of groupPatterns) {
+      let match;
+      while ((match = pattern.exec(responseText)) !== null) {
+        if (match.length >= 3) {
+          const rank = parseInt(match[1], 10);
+          const toolsText = match[2].trim();
+
+          // Extract tool names from the tools text
+          // Look for words that match available tool names
+          const extractedTools: string[] = [];
+
+          // Split by common delimiters and check each part
+          const parts = toolsText.split(/[,;\s]+/);
+          for (const part of parts) {
+            const cleanPart = part.trim().toLowerCase();
+
+            // Try to match with available tool names - prioritize exact matches first
+            let foundMatch = false;
+
+            // First pass: Look for exact matches (highest confidence)
+            for (const toolName of allToolNames) {
+              if (cleanPart === toolName.toLowerCase()) {
+                if (!rankedToolsSet.has(toolName)) {
+                  extractedTools.push(toolName);
+                  rankedToolsSet.add(toolName);
+                  foundMatch = true;
+                }
+                break;
+              }
+            }
+
+            // Second pass: Only if no exact match was found, try partial matches with minimum length
+            if (!foundMatch && cleanPart.length >= 4) {
+              for (const toolName of allToolNames) {
+                // Check if the tool name contains the clean part or vice versa
+                // But only for substantial matches (4+ chars)
+                if (toolName.toLowerCase().includes(cleanPart) ||
+                  cleanPart.includes(toolName.toLowerCase())) {
+                  if (!rankedToolsSet.has(toolName)) {
+                    extractedTools.push(toolName);
+                    rankedToolsSet.add(toolName);
+                  }
+                  break;
+                }
+              }
+            }
+          }
+
+          if (extractedTools.length > 0) {
+            groupMatches.set(rank, extractedTools);
+          }
+        }
+      }
+    }
+
+    // Sort groups by rank and add them to the result
+    const sortedRanks = Array.from(groupMatches.keys()).sort((a, b) => a - b);
+    for (const rank of sortedRanks) {
+      const tools = groupMatches.get(rank);
+      if (tools && tools.length > 0) {
+        rankedToolGroups.push(tools);
+      }
+    }
+
+    // Add any unranked tools to the end, 'no_tool' last among them
+    const unrankedTools = allToolNames.filter(tool => !rankedToolsSet.has(tool));
+    if (unrankedTools.length > 0) {
+      console.log(`[parseToolGroupsFromNaturalLanguage] Tools not ranked by AI: ${unrankedTools.join(', ')}. Adding them as individual trailing groups.`);
+      const noToolIndex = unrankedTools.indexOf("no_tool");
+      if (noToolIndex > -1) {
+        unrankedTools.splice(noToolIndex, 1); // Remove no_tool
+        unrankedTools.push("no_tool");      // Add it to the very end of unranked
+      }
+      unrankedTools.forEach(tool => rankedToolGroups.push([tool]));
+    }
+
+    // If there's a direct response, ensure no_tool is prioritized at the beginning
+    if (directResponse) {
+      console.log(`[parseToolGroupsFromNaturalLanguage] Direct response found, prioritizing no_tool`);
+
+      // First, remove no_tool from wherever it is in the groups
+      let noToolRemoved = false;
+      for (let i = 0; i < rankedToolGroups.length; i++) {
+        const groupIndex = rankedToolGroups[i].indexOf("no_tool");
+        if (groupIndex >= 0) {
+          rankedToolGroups[i].splice(groupIndex, 1);
+          noToolRemoved = true;
+          // Remove empty groups
+          if (rankedToolGroups[i].length === 0) {
+            rankedToolGroups.splice(i, 1);
+            i--;
+          }
+        }
+      }
+
+      // Add no_tool as the first tool in the first group
+      if (rankedToolGroups.length === 0) {
+        rankedToolGroups.push(["no_tool"]);
+      } else {
+        rankedToolGroups.unshift(["no_tool"]);
+      }
+
+      console.log(`[parseToolGroupsFromNaturalLanguage] Prioritized no_tool for direct response.`);
+    }
+
+    if (rankedToolGroups.length === 0) { // Should not happen if unranked tools are added
+      console.warn('[parseToolGroupsFromNaturalLanguage] No valid tool groups parsed. This is unexpected.');
+      return { rankedToolGroups: [allToolNames.includes("search_web") ? ["search_web"] : [allToolNames[0]]] }; // Basic fallback
+    }
+
+    console.log(`[parseToolGroupsFromNaturalLanguage] Final tool groups: ${JSON.stringify(rankedToolGroups)}`);
+    return {
+      rankedToolGroups,
+      directResponse: directResponse,
+    };
+  } catch (e: any) {
+    console.error(`[parseToolGroupsFromNaturalLanguage] Error parsing LLM ranking: ${e.message}. Response: "${responseText.substring(0, 300)}..."`);
+    // Fallback to a default ranking on error
+    return {
+      rankedToolGroups: [["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"], ["search_web"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
+    };
+  }
 };
 
 /**
@@ -1230,72 +1230,72 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
  * This is the original JSON-based parser, kept for compatibility.
  */
 const parseToolGroupsFromLLMJson = (responseText: string, allToolNames: string[]): RankingResult => {
-    try {
-        const parsed = parseLLMJson<LLMRankingDecision>(responseText, "RankingDecision", isLLMRankingDecision);
-        
-        if ('error' in parsed) {
-            throw new Error(parsed.error);
-        }
+  try {
+    const parsed = parseLLMJson<LLMRankingDecision>(responseText, "RankingDecision", isLLMRankingDecision);
 
-        const rankedToolGroups: string[][] = [];
-        const rankedToolsSet = new Set<string>();
-
-        // Sort groups by rank just in case LLM doesn't order them
-        parsed.toolGroups.sort((a, b) => (a.rank || Infinity) - (b.rank || Infinity));
-
-        for (const group of parsed.toolGroups) {
-            if (!group || !Array.isArray(group.toolNames) || typeof group.rank !== 'number') {
-                console.warn("[parseToolGroupsFromLLMJson] Skipping invalid group in LLM response:", group);
-                continue;
-            }
-            const validToolNamesInGroup = group.toolNames.filter(name => {
-                if (allToolNames.includes(name)) {
-                    if (rankedToolsSet.has(name)) {
-                        console.warn(`[parseToolGroupsFromLLMJson] Tool '${name}' ranked multiple times. Using first occurrence.`);
-                        return false;
-                    }
-                    return true;
-                }
-                console.warn(`[parseToolGroupsFromLLMJson] Invalid or unknown tool name in ranking: '${name}'`);
-                return false;
-            });
-
-            if (validToolNamesInGroup.length > 0) {
-                rankedToolGroups.push(validToolNamesInGroup);
-                validToolNamesInGroup.forEach(name => rankedToolsSet.add(name));
-            }
-        }
-        
-        // Add any unranked tools to the end, 'no_tool' last among them
-        const unrankedTools = allToolNames.filter(tool => !rankedToolsSet.has(tool));
-        if (unrankedTools.length > 0) {
-            console.log(`[parseToolGroupsFromLLMJson] Tools not ranked by AI: ${unrankedTools.join(', ')}. Adding them as individual trailing groups.`);
-            const noToolIndex = unrankedTools.indexOf("no_tool");
-            if (noToolIndex > -1) {
-                unrankedTools.splice(noToolIndex, 1); // Remove no_tool
-                unrankedTools.push("no_tool");      // Add it to the very end of unranked
-            }
-            unrankedTools.forEach(tool => rankedToolGroups.push([tool]));
-        }
-        
-        if (rankedToolGroups.length === 0) { // Should not happen if unranked tools are added
-             console.warn('[parseToolGroupsFromLLMJson] No valid tool groups parsed. This is unexpected.');
-             return { rankedToolGroups: [allToolNames.includes("search_web") ? ["search_web"] : [allToolNames[0]] ] }; // Basic fallback
-        }
-
-        console.log(`[parseToolGroupsFromLLMJson] Final tool groups: ${JSON.stringify(rankedToolGroups)}`);
-        return {
-            rankedToolGroups,
-            directResponse: parsed.directResponse?.trim() || undefined,
-        };
-
-    } catch (e: any) {
-        console.error(`[parseToolGroupsFromLLMJson] Error parsing LLM JSON ranking: ${e.message}. Response: "${responseText.substring(0, 10000)}..."`);
-        // Fallback to a default ranking on error
-        return {
-            rankedToolGroups: [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
-        };
+    if ('error' in parsed) {
+      throw new Error(parsed.error);
     }
+
+    const rankedToolGroups: string[][] = [];
+    const rankedToolsSet = new Set<string>();
+
+    // Sort groups by rank just in case LLM doesn't order them
+    parsed.toolGroups.sort((a, b) => (a.rank || Infinity) - (b.rank || Infinity));
+
+    for (const group of parsed.toolGroups) {
+      if (!group || !Array.isArray(group.toolNames) || typeof group.rank !== 'number') {
+        console.warn("[parseToolGroupsFromLLMJson] Skipping invalid group in LLM response:", group);
+        continue;
+      }
+      const validToolNamesInGroup = group.toolNames.filter(name => {
+        if (allToolNames.includes(name)) {
+          if (rankedToolsSet.has(name)) {
+            console.warn(`[parseToolGroupsFromLLMJson] Tool '${name}' ranked multiple times. Using first occurrence.`);
+            return false;
+          }
+          return true;
+        }
+        console.warn(`[parseToolGroupsFromLLMJson] Invalid or unknown tool name in ranking: '${name}'`);
+        return false;
+      });
+
+      if (validToolNamesInGroup.length > 0) {
+        rankedToolGroups.push(validToolNamesInGroup);
+        validToolNamesInGroup.forEach(name => rankedToolsSet.add(name));
+      }
+    }
+
+    // Add any unranked tools to the end, 'no_tool' last among them
+    const unrankedTools = allToolNames.filter(tool => !rankedToolsSet.has(tool));
+    if (unrankedTools.length > 0) {
+      console.log(`[parseToolGroupsFromLLMJson] Tools not ranked by AI: ${unrankedTools.join(', ')}. Adding them as individual trailing groups.`);
+      const noToolIndex = unrankedTools.indexOf("no_tool");
+      if (noToolIndex > -1) {
+        unrankedTools.splice(noToolIndex, 1); // Remove no_tool
+        unrankedTools.push("no_tool");      // Add it to the very end of unranked
+      }
+      unrankedTools.forEach(tool => rankedToolGroups.push([tool]));
+    }
+
+    if (rankedToolGroups.length === 0) { // Should not happen if unranked tools are added
+      console.warn('[parseToolGroupsFromLLMJson] No valid tool groups parsed. This is unexpected.');
+      return { rankedToolGroups: [allToolNames.includes("search_web") ? ["search_web"] : [allToolNames[0]]] }; // Basic fallback
+    }
+
+    console.log(`[parseToolGroupsFromLLMJson] Final tool groups: ${JSON.stringify(rankedToolGroups)}`);
+    return {
+      rankedToolGroups,
+      directResponse: parsed.directResponse?.trim() || undefined,
+    };
+
+  } catch (e: any) {
+    console.error(`[parseToolGroupsFromLLMJson] Error parsing LLM JSON ranking: ${e.message}. Response: "${responseText.substring(0, 10000)}..."`);
+    // Fallback to a default ranking on error
+    return {
+      rankedToolGroups: [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
+    };
+  }
 };
 
 
@@ -1307,38 +1307,38 @@ export const rankInformationSources = async (
   systemPrompts?: SystemPrompts
 ): Promise<RankingResult> => {
   console.log(`[rankInformationSources] Ranking tools for query: '${userMessage.substring(0, 100)}...'`);
-  
+
   // Use the fast model with natural language output (no JSON config) for better performance
   const model = genAI.getGenerativeModel({ model: RANKING_MODEL_NAME });
   const systemPromptsText = combineSystemPrompts(systemPrompts);
-  
+
   // Generate a natural language ranking prompt instead of asking for JSON
   const rankingPrompt = PromptFactory.generateNaturalLanguageRankingPrompt(userMessage, history, AVAILABLE_TOOLS, systemPromptsText);
   // console.log(`[rankInformationSources] Generated ranking prompt (length: ${rankingPrompt.length}). First 300 chars: ${rankingPrompt.substring(0,300)}`);
 
   // Move this outside the try block so it's available in the catch block too
   const allToolNames = AVAILABLE_TOOLS.map(t => t.name);
-  
+
   try {
     const startTime = Date.now();
     const response = await model.generateContent(rankingPrompt);
     const responseText = response.response.text();
-    console.log(`[rankInformationSources] AI ranking response received in ${Date.now() - startTime}ms. Response text (first 5000 chars): \n${responseText.substring(0,5000)}`);
-    
+    console.log(`[rankInformationSources] AI ranking response received in ${Date.now() - startTime}ms. Response text (first 5000 chars): \n${responseText.substring(0, 5000)}`);
+
     // Use the natural language parser for faster processing
     const parsedRanking = parseToolGroupsFromNaturalLanguage(responseText, allToolNames);
-    
+
     // Special handling: if directResponse is provided and no_tool is first, it might be the final answer.
-    if (parsedRanking.directResponse && 
-        parsedRanking.rankedToolGroups.length > 0 && 
-        parsedRanking.rankedToolGroups[0].length === 1 && 
-        parsedRanking.rankedToolGroups[0][0] === "no_tool") {
+    if (parsedRanking.directResponse &&
+      parsedRanking.rankedToolGroups.length > 0 &&
+      parsedRanking.rankedToolGroups[0].length === 1 &&
+      parsedRanking.rankedToolGroups[0][0] === "no_tool") {
       console.log(`[rankInformationSources] Extracted direct response (${parsedRanking.directResponse.length} chars).`);
       // This directResponse will be handled by the calling function if it wants to use it immediately.
     }
     return parsedRanking;
   } catch (error: any) {
-    console.error(`[rankInformationSources] Error: ${error.message}. Prompt: \n${rankingPrompt.substring(0,300)}...`);
+    console.error(`[rankInformationSources] Error: ${error.message}. Prompt: \n${rankingPrompt.substring(0, 300)}...`);
     console.log("[rankInformationSources] Falling back to default ranking.");
     const defaultGroups = [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna", "get_elixer_whitepaper"], ["no_tool"]];
     return {
@@ -1352,14 +1352,14 @@ export const executeToolsByGroup = async (
   selectedModel: string | undefined, conversationHistory: { role: string; parts: { text: string }[] }[] = [],
   systemPrompts?: SystemPrompts, messageId?: string, initialContext?: string
 ): Promise<ToolExecutionResult> => {
-  console.log(`[executeToolsByGroup] Start: ${toolGroups.length} groups for query: "${query.substring(0,100)}..."`);
-  
+  console.log(`[executeToolsByGroup] Start: ${toolGroups.length} groups for query: "${query.substring(0, 100)}..."`);
+
   const accumulatedContext: AccumulatedContext = {
     sources: initialContext ? ['initial_context'] : [],
     content: initialContext || "",
     searchSuggestionsHtmlToPreserve: undefined // Initialize
   };
-  
+
   if (initialContext) console.log(`[executeToolsByGroup] Initial context: ${initialContext.length} chars.`);
 
   for (let groupIndex = 0; groupIndex < toolGroups.length; groupIndex++) {
@@ -1371,7 +1371,7 @@ export const executeToolsByGroup = async (
     console.log(`[executeToolsByGroup] Group ${groupIndex + 1}/${toolGroups.length}: [${toolGroup.join(', ')}]. Accumulated context: ${accumulatedContext.content.length} chars from [${accumulatedContext.sources.join(', ')}]. Preserved suggestions: ${!!accumulatedContext.searchSuggestionsHtmlToPreserve}`);
 
     const executionParamsBase: Omit<ToolExecutionParams, 'remainingTools' | 'nextToolGroup' | 'accumulatedContext'> = {
-        query, ctx, genAI, selectedModel, conversationHistory, systemPrompts, messageId
+      query, ctx, genAI, selectedModel, conversationHistory, systemPrompts, messageId
     };
 
     if (toolGroup.length === 1) { // Single tool execution
@@ -1381,15 +1381,15 @@ export const executeToolsByGroup = async (
         console.warn(`[executeToolsByGroup] Unknown tool '${toolName}' in single group. Skipping.`);
         continue;
       }
-      
+
       console.log(`[executeToolsByGroup] Executing single tool: ${toolName}`);
-      const result = await executor.execute({ 
-        ...executionParamsBase, 
+      const result = await executor.execute({
+        ...executionParamsBase,
         remainingTools: remainingToolsForPrompt,
         nextToolGroup: nextToolGroup,
         accumulatedContext: { ...accumulatedContext } // Pass a copy
       });
-      
+
       console.log(`[executeToolsByGroup] Result from ${toolName}: type='${result.responseType}', contentLen=${result.content.length}, contextToAddLen=${result.contextToAdd?.length || 0}, suggestions: ${!!result.searchSuggestionsHtml}`);
 
       if (result.searchSuggestionsHtml) {
@@ -1406,58 +1406,58 @@ export const executeToolsByGroup = async (
           accumulatedContext.searchSuggestionsHtmlToPreserve // This ensures it's added if not already
         );
       } else if (result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && result.contextToAdd?.trim()) {
-          accumulatedContext.sources.push(toolName);
-          accumulatedContext.content += (accumulatedContext.content ? "\n\n" : "") + 
-            `--- Context from ${toolName} ---\n${result.contextToAdd.trim()}`;
-          console.log(`[executeToolsByGroup] Added context from ${toolName}. Total: ${accumulatedContext.content.length} chars.`);
+        accumulatedContext.sources.push(toolName);
+        accumulatedContext.content += (accumulatedContext.content ? "\n\n" : "") +
+          `--- Context from ${toolName} ---\n${result.contextToAdd.trim()}`;
+        console.log(`[executeToolsByGroup] Added context from ${toolName}. Total: ${accumulatedContext.content.length} chars.`);
       }
-    
+
     } else { // Parallel tool execution
       console.log(`[executeToolsByGroup] Parallel tools: [${toolGroup.join(', ')}]`);
       await updateProcessingPhase(ctx, messageId, `Searching multiple sources`, "executeToolsByGroup-parallel");
-      
+
       const dataCollectionPromises = toolGroup
         .map(toolName => {
-            const executor = toolExecutors[toolName];
-            if (!executor) {
-                console.warn(`[executeToolsByGroup] Unknown tool '${toolName}' in parallel. Skipping.`);
-                return Promise.resolve({ toolName, data: "", error: `Unknown tool: ${toolName}` });
-            }
-            if (executor instanceof DatabaseQueryExecutor || executor instanceof ElixerWhitepaperContentExecutor) {
-                return executor.fetchRawData(ctx);
-            } else if (executor instanceof WebSearchExecutor || executor instanceof NoToolExecutor) {
-                console.log(`[executeToolsByGroup] Executing ${executor.name} in parallel (will synthesize its output).`);
-                // For parallel, we want the raw output that can be synthesized, not its decision to continue.
-                // So, we treat its direct output as "data" for synthesis.
-                return executor.execute({
-                        ...executionParamsBase,
-                        remainingTools: [], // No "remaining" in this sub-execution context
-                        nextToolGroup: [],  // No "next group" in this sub-execution
-                        accumulatedContext: { ...accumulatedContext } // Pass current accumulated context
-                    }).then(res => {
-                        // If WebSearch in parallel produced suggestions, capture them.
-                        // The last one from a parallel group will win.
-                        if (res.searchSuggestionsHtml) {
-                            accumulatedContext.searchSuggestionsHtmlToPreserve = res.searchSuggestionsHtml;
-                            accumulatedContext.content += `\n\n<!-- PRESERVED_SEARCH_SOURCES:${res.searchSuggestionsHtml} -->`;
-                            console.log(`[executeToolsByGroup] Parallel ${executor.name} produced search suggestions, will preserve.`);
-                        }
-                        // For synthesis, prioritize the dedicated synthesisData field if available
-                        // Otherwise fall back to content, and include contextToAdd if present
-                        let synthesisData = res.synthesisData || res.content;
-                        if (res.contextToAdd) {
-                            synthesisData += `\n\n${res.contextToAdd}`;
-                        }
-                        return { toolName: executor.name, data: synthesisData, error: res.error };
-                    });
-            }
-            console.warn(`[executeToolsByGroup] Tool ${toolName} not configured for parallel. Placeholder.`);
-            return Promise.resolve({ toolName, data: "", error: `Tool ${toolName} not supported in parallel.` });
+          const executor = toolExecutors[toolName];
+          if (!executor) {
+            console.warn(`[executeToolsByGroup] Unknown tool '${toolName}' in parallel. Skipping.`);
+            return Promise.resolve({ toolName, data: "", error: `Unknown tool: ${toolName}` });
+          }
+          if (executor instanceof DatabaseQueryExecutor || executor instanceof ElixerWhitepaperContentExecutor) {
+            return executor.fetchRawData(ctx);
+          } else if (executor instanceof WebSearchExecutor || executor instanceof NoToolExecutor) {
+            console.log(`[executeToolsByGroup] Executing ${executor.name} in parallel (will synthesize its output).`);
+            // For parallel, we want the raw output that can be synthesized, not its decision to continue.
+            // So, we treat its direct output as "data" for synthesis.
+            return executor.execute({
+              ...executionParamsBase,
+              remainingTools: [], // No "remaining" in this sub-execution context
+              nextToolGroup: [],  // No "next group" in this sub-execution
+              accumulatedContext: { ...accumulatedContext } // Pass current accumulated context
+            }).then(res => {
+              // If WebSearch in parallel produced suggestions, capture them.
+              // The last one from a parallel group will win.
+              if (res.searchSuggestionsHtml) {
+                accumulatedContext.searchSuggestionsHtmlToPreserve = res.searchSuggestionsHtml;
+                accumulatedContext.content += `\n\n<!-- PRESERVED_SEARCH_SOURCES:${res.searchSuggestionsHtml} -->`;
+                console.log(`[executeToolsByGroup] Parallel ${executor.name} produced search suggestions, will preserve.`);
+              }
+              // For synthesis, prioritize the dedicated synthesisData field if available
+              // Otherwise fall back to content, and include contextToAdd if present
+              let synthesisData = res.synthesisData || res.content;
+              if (res.contextToAdd) {
+                synthesisData += `\n\n${res.contextToAdd}`;
+              }
+              return { toolName: executor.name, data: synthesisData, error: res.error };
+            });
+          }
+          console.warn(`[executeToolsByGroup] Tool ${toolName} not configured for parallel. Placeholder.`);
+          return Promise.resolve({ toolName, data: "", error: `Tool ${toolName} not supported in parallel.` });
         });
 
       const collectedData = await Promise.all(dataCollectionPromises);
-      console.log(`[executeToolsByGroup] Parallel data collection complete. Results: ${JSON.stringify(collectedData.map(r => ({tool: r.toolName, dataLen: r.data.length, err: !!r.error})))}`);
-      
+      console.log(`[executeToolsByGroup] Parallel data collection complete. Results: ${JSON.stringify(collectedData.map(r => ({ tool: r.toolName, dataLen: r.data.length, err: !!r.error })))}`);
+
       const hasMeaningfulResults = collectedData.some(d => (d.data && d.data.trim().length > 10) || (d.error && !d.error.startsWith("Unknown tool")));
       if (!hasMeaningfulResults) {
         console.log(`[executeToolsByGroup] No meaningful data/errors from parallel group. Skipping synthesis.`);
@@ -1468,7 +1468,7 @@ export const executeToolsByGroup = async (
       const synthesisPrompt = PromptFactory.generateParallelSynthesisPrompt(
         query, collectedData, conversationHistory, systemPromptsText, accumulatedContext
       );
-      
+
       console.log(`[executeToolsByGroup] Sending parallel synthesis prompt (len: ${synthesisPrompt.length}).`);
       const model = genAI.getGenerativeModel({ model: selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
       try {
@@ -1479,10 +1479,10 @@ export const executeToolsByGroup = async (
 
         console.log(`[executeToolsByGroup] Parallel synthesis successful (${parsedSynthesis.synthesizedAnswer.length} chars). FINAL for this group.`);
         return createToolResult("parallel_synthesis", parsedSynthesis.synthesizedAnswer, "FINAL_ANSWER",
-            undefined, undefined, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
+          undefined, undefined, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
         );
-      } catch(error: any) {
-        console.error(`[executeToolsByGroup] Parallel synthesis error: ${error.message}. Prompt start:\n${synthesisPrompt.substring(0,300)}...`);
+      } catch (error: any) {
+        console.error(`[executeToolsByGroup] Parallel synthesis error: ${error.message}. Prompt start:\n${synthesisPrompt.substring(0, 300)}...`);
         console.log(`[executeToolsByGroup] Synthesis failed. Proceeding to next group.`);
         // Error in synthesis, try next group
       }
@@ -1490,7 +1490,7 @@ export const executeToolsByGroup = async (
   }
 
   console.log(`[executeToolsByGroup] All tool groups exhausted. Accumulated context: ${accumulatedContext.content.length} chars.`);
-  
+
   if (accumulatedContext.content && accumulatedContext.content.trim().length > 10) {
     console.log("[executeToolsByGroup] Attempting final synthesis with NoToolExecutor using accumulated context.");
     try {
@@ -1502,12 +1502,12 @@ export const executeToolsByGroup = async (
           remainingTools: [], messageId,
           accumulatedContext: { ...accumulatedContext } // Pass copy
         });
-        
+
         // Ensure this fallback is always FINAL_ANSWER
         console.log(`[executeToolsByGroup] NoToolExecutor (final synthesis) responded type: '${finalSynthesisResult.responseType}'. Forcing FINAL_ANSWER.`);
         return createToolResult(
-            "final_synthesis_no_tool", finalSynthesisResult.content, "FINAL_ANSWER",
-            undefined, finalSynthesisResult.error, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
+          "final_synthesis_no_tool", finalSynthesisResult.content, "FINAL_ANSWER",
+          undefined, finalSynthesisResult.error, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
         );
       }
     } catch (error: any) {

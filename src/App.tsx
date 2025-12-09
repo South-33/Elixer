@@ -23,6 +23,41 @@ const RemovePaneIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
 );
 
+// Example Messages Component
+const ExampleMessages = ({ onExampleClick }: { onExampleClick: (message: string) => void }) => {
+  const examples = [
+    "What is the 13th article of Cambodia Insurance Law?",
+    "Explain the key provisions of liability insurance in Cambodia",
+    "What is the current Tesla Stock Price, and what is the 12th article of Cambodia Insurance Law?"
+  ];
+
+  return (
+    <div className="w-full overflow-x-auto pb-2 animate-fadeIn custom-scrollbar">
+      <div className="flex gap-2 px-4 pb-1 min-w-max justify-center">
+        {examples.map((example, index) => (
+          <button
+            key={index}
+            onClick={() => onExampleClick(example)}
+            className="group flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 whitespace-nowrap flex-shrink-0"
+          >
+            <svg
+              className="w-4 h-4 text-blue-500 flex-shrink-0 group-hover:scale-110 transition-transform"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span className="text-sm text-slate-700 group-hover:text-blue-700 transition-colors font-medium">
+              {example}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -90,7 +125,7 @@ export default function App() {
               <span className="sr-only">{isSidebarOpen ? "Close sidebar" : "Open sidebar"}</span>
             </button>
           </Authenticated>
-          <h1 className="text-xl font-semibold text-slate-700">ELIXIR AI Assistant</h1>
+          <h1 className="text-xl font-semibold text-slate-700">ELIXIR AI Agent</h1>
         </div>
         <div className="flex items-center gap-2"> {/* New div to group buttons */}
           <Authenticated>
@@ -145,15 +180,15 @@ export default function App() {
   );
 }
 
-  function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addChatPane, removeChatPane }: {
-    isSidebarOpen: boolean,
-    setIsSidebarOpen: (isOpen: boolean) => void,
-    chatPanes: { id: string }[],
-    addChatPane: () => void,
-    removeChatPane: (id: string) => Promise<void>
-  }) {
-    const user = useQuery(api.auth.loggedInUser);
-    const [currentSidebarWidth, setCurrentSidebarWidth] = useState(0); // State to hold sidebar width
+function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addChatPane, removeChatPane }: {
+  isSidebarOpen: boolean,
+  setIsSidebarOpen: (isOpen: boolean) => void,
+  chatPanes: { id: string }[],
+  addChatPane: () => void,
+  removeChatPane: (id: string) => Promise<void>
+}) {
+  const user = useQuery(api.auth.loggedInUser);
+  const [currentSidebarWidth, setCurrentSidebarWidth] = useState(0); // State to hold sidebar width
   const loadDefaultsInSidebarRef = useRef<(() => void) | null>(null);
 
   const chatPaneResetStatesHandlers = useRef<Record<string, () => void>>({}); // New ref to store reset state handlers for each pane
@@ -238,36 +273,36 @@ export default function App() {
     const serverPolicyPrompt = systemPromptsQuery?.policyPrompt !== undefined ? systemPromptsQuery.policyPrompt : DEFAULT_POLICY_PROMPT;
 
     const promptsChangedByUser = lawPrompt !== serverLawPrompt ||
-                               tonePrompt !== serverTonePrompt ||
-                               policyPrompt !== serverPolicyPrompt;
+      tonePrompt !== serverTonePrompt ||
+      policyPrompt !== serverPolicyPrompt;
 
     // Only save if systemPromptsQuery is not undefined (i.e., has loaded or is null)
     // and prompts have actually changed from what the server/defaults dictate.
-  // Also, only save if a user is active.
-  // Save if it's a new user (systemPromptsQuery === null) OR if an existing user changed prompts.
-  if (user && systemPromptsQuery !== undefined && (systemPromptsQuery === null || promptsChangedByUser)) {
-        if (savePromptTimeoutRef.current !== null) {
-            window.clearTimeout(savePromptTimeoutRef.current);
-        }
-        savePromptTimeoutRef.current = window.setTimeout(() => {
+    // Also, only save if a user is active.
+    // Save if it's a new user (systemPromptsQuery === null) OR if an existing user changed prompts.
+    if (user && systemPromptsQuery !== undefined && (systemPromptsQuery === null || promptsChangedByUser)) {
+      if (savePromptTimeoutRef.current !== null) {
+        window.clearTimeout(savePromptTimeoutRef.current);
+      }
+      savePromptTimeoutRef.current = window.setTimeout(() => {
         console.log(`AuthenticatedContent: Saving prompts. New user: ${systemPromptsQuery === null}, Prompts changed: ${promptsChangedByUser}`, { lawPrompt, tonePrompt, policyPrompt });
-            saveSystemPrompt({ lawPrompt, tonePrompt, policyPrompt });
-        }, 1000);
+        saveSystemPrompt({ lawPrompt, tonePrompt, policyPrompt });
+      }, 1000);
     }
     return () => {
       if (savePromptTimeoutRef.current !== null) {
         window.clearTimeout(savePromptTimeoutRef.current);
       }
-  };
-}, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, systemPromptsQuery, user]);
+    };
+  }, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, systemPromptsQuery, user]);
 
   const handleSendMessage = async (content: string, model: string, paneId: string, disableSystemPrompt: boolean, disableTools: boolean) => {
     if (!user?._id) {
       console.error("User not loaded, cannot send message.");
       toast.error("User not loaded. Please wait a moment.");
-    // ... rest of your code remains the same ...
+      // ... rest of your code remains the same ...
     }
-    
+
     // Add detailed logging to track which pane is sending what request with what settings
     console.log(`[App] Sending message to pane ${paneId}:`, {
       content: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
@@ -276,7 +311,7 @@ export default function App() {
       disableTools,
       timestamp: new Date().toISOString()
     });
-    
+
     await sendMessageMutation({
       content,
       lawPrompt: disableSystemPrompt ? undefined : lawPrompt,
@@ -305,6 +340,28 @@ export default function App() {
       }
     }
   };
+
+  // Handler for when user clicks an example message
+  const handleExampleClick = async (exampleText: string) => {
+    // Check if already streaming
+    if (isAnyPaneStreaming) return;
+
+    // Set the input field (for visual feedback)
+    setCurrentInputMessage(exampleText);
+
+    // Automatically send to all panes
+    for (const paneId of chatPanes.map(pane => pane.id)) {
+      const sendHandler = chatPaneSendHandlers.current[paneId];
+      if (sendHandler) {
+        console.log(`[App] Sending example message to pane ${paneId}`);
+        await sendHandler(exampleText);
+      }
+    }
+
+    // Clear the input after sending
+    setCurrentInputMessage("");
+  };
+
 
   const handleClearChat = async () => {
     if (window.confirm("Are you sure you want to clear all messages? This action cannot be undone.")) {
@@ -336,6 +393,19 @@ export default function App() {
   }, [setPaneStreamingStatus]); // Dependency array includes setPaneStreamingStatus
 
   const isAnyPaneStreaming = Object.values(paneStreamingStatus).some(status => status);
+
+  // Track if any pane has messages to determine if we should show example prompts
+  const [paneHasMessages, setPaneHasMessages] = useState<Record<string, boolean>>({});
+
+  const handlePaneMessagesStatusChange = React.useCallback((paneId: string, hasMessages: boolean) => {
+    setPaneHasMessages(prevStatus => ({
+      ...prevStatus,
+      [paneId]: hasMessages,
+    }));
+  }, []);
+
+  const hasAnyMessages = Object.values(paneHasMessages).some(status => status);
+
 
 
   // Pane-specific clear chat handler
@@ -402,6 +472,7 @@ export default function App() {
                 await handlePaneClearChat(pane.id);
               }}
               onStreamingStatusChange={handlePaneStreamingStatusChange} // Pass the new callback
+              onMessagesStatusChange={handlePaneMessagesStatusChange} // Pass message status callback
               registerSendHandler={(paneId, handler) => {
                 chatPaneSendHandlers.current[paneId] = handler;
               }}
@@ -415,8 +486,20 @@ export default function App() {
                 delete chatPaneResetStatesHandlers.current[paneId];
               }}
             />
+
           ))}
         </div>
+
+
+        {/* Example Messages - shown when there are no messages */}
+        {!hasAnyMessages && (
+          <div
+            className="fixed bottom-[70px] sm:bottom-[66px] right-0 z-30 pb-2 bg-gradient-to-t from-white via-white to-transparent transition-[left] duration-300 ease-in-out"
+            style={{ left: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
+          >
+            <ExampleMessages onExampleClick={handleExampleClick} />
+          </div>
+        )}
 
         <form
           onSubmit={handleGlobalSend}
@@ -443,6 +526,7 @@ export default function App() {
             </button>
           </div>
         </form>
+
       </main>
     </>
   );

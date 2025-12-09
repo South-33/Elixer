@@ -29,42 +29,44 @@ interface ChatPaneProps {
   onSendMessage: (content: string, model: string, paneId: string, disableSystemPrompt: boolean, disableToolUse: boolean) => Promise<void>;
   onClearChat: () => void; // Callback for clearing chat
   onStreamingStatusChange: (paneId: string, isStreaming: boolean) => void; // New callback
+  onMessagesStatusChange: (paneId: string, hasMessages: boolean) => void; // New callback for message presence
   registerSendHandler: (paneId: string, handler: (content: string) => Promise<void>) => void; // New prop
   unregisterSendHandler: (paneId: string) => void; // New prop
   registerResetStatesHandler: (paneId: string, handler: () => void) => void; // New prop
   unregisterResetStatesHandler: (paneId: string) => void; // New prop
 }
 
+
 // We're not using the TypewriterText component anymore - simplified approach
 
 // Custom component to parse and display search suggestions in our own styling
 const CustomSearchSuggestions = ({ html, expanded }: { html: string, expanded: boolean }) => {
   // Parse the links from the HTML
-  const [links, setLinks] = useState<{text: string, url: string}[]>([]);
-  
+  const [links, setLinks] = useState<{ text: string, url: string }[]>([]);
+
   useEffect(() => {
     if (!html) return;
-    
+
     try {
       // Create a temporary element to parse the HTML
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = html;
-      
+
       // Extract all links
       const anchorElements = tempDiv.querySelectorAll('a');
       const extractedLinks = Array.from(anchorElements).map(anchor => ({
         text: anchor.textContent || 'Link',
         url: anchor.getAttribute('href') || '#'
       }));
-      
+
       setLinks(extractedLinks.slice(0, 5)); // Limit to 5 links for simplicity
     } catch (error) {
       console.error('Error parsing search suggestions HTML:', error);
     }
   }, [html]);
-  
+
   if (!expanded || links.length === 0) return null;
-  
+
   return (
     <div className="search-links-container ml-2 flex-shrink-0 flex items-center space-x-2 animate-fadeIn">
       {links.map((link, index) => (
@@ -188,11 +190,10 @@ const ChatMessage = ({ message, currentPhaseToShow }: { message: MessageDoc, cur
       className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}
     >
       <div
-        className={`max-w-[85%] sm:max-w-[80%] p-3 rounded-xl shadow-sm ${
-          message.role === "user"
-            ? "bg-blue-500 text-white"
-            : `bg-slate-100 text-slate-800 prose ${message.isStreaming ? "streaming-text-container" : ""}`.trim()
-        }`}
+        className={`max-w-[85%] sm:max-w-[80%] p-3 rounded-xl shadow-sm ${message.role === "user"
+          ? "bg-blue-500 text-white"
+          : `bg-slate-100 text-slate-800 prose ${message.isStreaming ? "streaming-text-container" : ""}`.trim()
+          }`}
       >
         {message.role === "assistant" && message.isStreaming && message.content === "" && phaseToDisplay ? (
           <div className="processing-phase">
@@ -207,30 +208,30 @@ const ChatMessage = ({ message, currentPhaseToShow }: { message: MessageDoc, cur
           <ReactMarkdown>{message.content}</ReactMarkdown>
         )}
       </div>
-      
+
       {/* Render horizontally expanding search suggestions if available */}
       {message.role === "assistant" && message.metadata && (message.metadata as any).searchSuggestionsHtml && (
         <div className="mt-2 flex items-center">
-          <button 
+          <button
             onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
             className="text-sm px-3 py-1 rounded-md bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors focus:outline-none flex items-center justify-center flex-shrink-0"
             style={{ width: '129px' }} /* Fixed width to prevent layout shifts */
           >
             <span className="mr-1">{suggestionsExpanded ? 'Hide' : 'Show'} sources</span>
-            <svg 
-              className={`w-4 h-4 transition-transform ${suggestionsExpanded ? 'transform rotate-90' : ''}`} 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24" 
+            <svg
+              className={`w-4 h-4 transition-transform ${suggestionsExpanded ? 'transform rotate-90' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
               xmlns="http://www.w3.org/2000/svg"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
-          
-          <CustomSearchSuggestions 
-            html={(message.metadata as any).searchSuggestionsHtml} 
-            expanded={suggestionsExpanded} 
+
+          <CustomSearchSuggestions
+            html={(message.metadata as any).searchSuggestionsHtml}
+            expanded={suggestionsExpanded}
           />
         </div>
       )}
@@ -238,22 +239,23 @@ const ChatMessage = ({ message, currentPhaseToShow }: { message: MessageDoc, cur
   );
 };
 
-export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, onSendMessage, onClearChat, onStreamingStatusChange, registerSendHandler, unregisterSendHandler, registerResetStatesHandler, unregisterResetStatesHandler }: ChatPaneProps) {
+
+export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, onSendMessage, onClearChat, onStreamingStatusChange, onMessagesStatusChange, registerSendHandler, unregisterSendHandler, registerResetStatesHandler, unregisterResetStatesHandler }: ChatPaneProps) {
   const messages = useQuery(
     api.chat.getMessages,
     userId ? { userId, paneId } : "skip"
   ) || [] as MessageDoc[];
 
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-05-20"); // Default model for this pane
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash"); // Default model for this pane
   const [disableSystemPrompt, setDisableSystemPrompt] = useState(false); // New state for disabling system prompt - off by default
   const [disableToolUse, setDisableToolUse] = useState(false); // New state for disabling tool use - off by default
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Current processing phase for the assistant
-  const [currentProcessingPhase, setCurrentProcessingPhase] = useState<string>("Thinking"); 
+  const [currentProcessingPhase, setCurrentProcessingPhase] = useState<string>("Thinking");
   const [showLocalPendingIndicator, setShowLocalPendingIndicator] = useState<boolean>(false);
-  
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -263,6 +265,11 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
     setCurrentProcessingPhase("Thinking");
     setShowLocalPendingIndicator(false);
   };
+
+  // Report message status to parent
+  useEffect(() => {
+    onMessagesStatusChange(paneId, messages.length > 0);
+  }, [messages.length, paneId, onMessagesStatusChange]);
 
   useEffect(() => {
     console.log("[ChatPane] useEffect triggered. Messages updated."); // Log when messages update
@@ -288,13 +295,14 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
     };
   }, [messages]);
 
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   // This is the global "isStreaming" used to disable UI elements
   const isStreaming = messages.some((msg: MessageDoc) => msg.isStreaming) || showLocalPendingIndicator;
-  
+
   useEffect(() => {
     onStreamingStatusChange(paneId, isStreaming);
   }, [isStreaming, paneId, onStreamingStatusChange]);
@@ -356,22 +364,20 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
         <div className="flex items-center gap-2">
           <button
             onClick={() => setDisableSystemPrompt(prev => !prev)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              disableSystemPrompt
-                ? "bg-red-100 text-red-700 hover:bg-red-200"
-                : "bg-green-100 text-green-700 hover:bg-green-200"
-            }`}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${disableSystemPrompt
+              ? "bg-red-100 text-red-700 hover:bg-red-200"
+              : "bg-green-100 text-green-700 hover:bg-green-200"
+              }`}
             disabled={isStreaming}
           >
             {disableSystemPrompt ? "System Prompt Disabled" : "System Prompt Enabled"}
           </button>
           <button
             onClick={() => setDisableToolUse(prev => !prev)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              disableToolUse
-                ? "bg-red-100 text-red-700 hover:bg-red-200"
-                : "bg-purple-100 text-purple-700 hover:bg-purple-200"
-            }`}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${disableToolUse
+              ? "bg-red-100 text-red-700 hover:bg-red-200"
+              : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+              }`}
             disabled={isStreaming}
           >
             {disableToolUse ? "Agent Disabled" : "Agent Enabled"}
@@ -382,13 +388,13 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             className="p-1.5 border border-slate-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 outline-none"
             disabled={isStreaming}
           >
-            <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
-            <option value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash lite</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash lite</option>
             <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
             {/* Add other models here */}
           </select>
           <button
-            onClick={onClearChat}   
+            onClick={onClearChat}
             className="p-2 rounded-md bg-red-500 hover:bg-red-600 transition-colors duration-150 shadow-sm"
             title="Clear Chat History"
             disabled={isStreaming}
@@ -408,14 +414,14 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
         ))}
         {showLocalPendingIndicator &&
           !messages.some((msg: MessageDoc) => msg.role === 'assistant' && msg.isStreaming) && (
-          <div className="flex justify-start" key="local-pending-jsx-indicator">
-            <div className="max-w-[80%] p-3 rounded-lg bg-slate-100 text-slate-800 prose">
-              <div className="processing-phase">
-                <ProcessingPhase phase={currentProcessingPhase} />
+            <div className="flex justify-start" key="local-pending-jsx-indicator">
+              <div className="max-w-[80%] p-3 rounded-lg bg-slate-100 text-slate-800 prose">
+                <div className="processing-phase">
+                  <ProcessingPhase phase={currentProcessingPhase} />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
         <div ref={messagesEndRef} />
       </div>
     </div>

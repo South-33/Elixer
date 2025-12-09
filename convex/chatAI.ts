@@ -5,10 +5,10 @@ import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from "@google/generative-ai";
 import { Id } from "./_generated/dataModel";
-import { 
-    rankInformationSources, 
-    executeToolsByGroup, 
-    estimateTokenCount, 
+import {
+    rankInformationSources,
+    executeToolsByGroup,
+    estimateTokenCount,
     combineSystemPrompts,
     SystemPrompts, // Assuming this interface is exported from agentTools
     // ToolExecutionResult // Assuming this interface is exported from agentTools or defined locally if needed
@@ -19,7 +19,7 @@ import {
 import { toolExecutors } from "./agentTools";
 
 // --- CONSTANTS ---
-const DEFAULT_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; // Or import from agentTools
+const DEFAULT_MODEL_NAME = "gemini-2.5-flash"; // Or import from agentTools
 const STYLING_PROMPT = `Use standard Markdown for formatting your responses.
 
 For document structure:
@@ -54,49 +54,49 @@ const CHECK_NEXT_SOURCE_MARKER = "[CHECK_NEXT_SOURCE]";
 
 // Define the structure of the law database for type safety (if not imported)
 export interface LawArticle {
-  article_number: string;
-  article_title?: string;
-  content: string | string[];
-  source_page_number?: number;
-  points?: string[];
-  definitions?: { [key: string]: string };
-  sub_types?: { type: string; description: string }[];
-  prohibitions?: string[];
-  business_types?: string[];
-  priority_order?: string[];
-  conditions?: string[];
-  punishments?: string[];
-  punishment_natural_person?: string;
-  punishment_legal_person?: string;
+    article_number: string;
+    article_title?: string;
+    content: string | string[];
+    source_page_number?: number;
+    points?: string[];
+    definitions?: { [key: string]: string };
+    sub_types?: { type: string; description: string }[];
+    prohibitions?: string[];
+    business_types?: string[];
+    priority_order?: string[];
+    conditions?: string[];
+    punishments?: string[];
+    punishment_natural_person?: string;
+    punishment_legal_person?: string;
 }
 export interface LawSection {
-  section_number: string;
-  section_title: string;
-  articles: LawArticle[];
+    section_number: string;
+    section_title: string;
+    articles: LawArticle[];
 }
 export interface LawChapter {
-  chapter_number: string;
-  chapter_title: string;
-  articles?: LawArticle[];
-  sections?: LawSection[];
+    chapter_number: string;
+    chapter_title: string;
+    articles?: LawArticle[];
+    sections?: LawSection[];
 }
 export interface LawDatabase {
-  metadata: any;
-  preamble: string[];
-  chapters: LawChapter[];
+    metadata: any;
+    preamble: string[];
+    chapters: LawChapter[];
 }
 
 // Type for result from agentTools.executeToolsByGroup
 // If agentTools.ts doesn't export ToolExecutionResult, define it here or import.
 // For simplicity, I'll redefine a compatible subset here.
 interface ToolExecutionResult {
-  source: string;
-  content: string;
-  result: string; // Often same as content
-  isFullyFormatted: boolean;
-  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
-  error?: string;
-  contextToAdd?: string;
+    source: string;
+    content: string;
+    result: string; // Often same as content
+    isFullyFormatted: boolean;
+    responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
+    error?: string;
+    contextToAdd?: string;
 }
 
 
@@ -176,20 +176,20 @@ async function handleNoToolResponseFlow(
     const executor = toolExecutors["agent_mode_off"];
     if (!executor) {
         console.error(`[handleNoToolResponseFlow] AgentModeOffExecutor not found. Falling back to direct response.`);
-        
+
         const model = genAI.getGenerativeModel({ model: selectedModel || DEFAULT_MODEL_NAME });
         const systemPromptsText = systemPrompts ? combineSystemPrompts(systemPrompts) : "";
-        
+
         let conversationContext = '';
         if (conversationHistory.length > 0) {
-          conversationContext = 'Conversation History:\n' + 
-            conversationHistory
-              .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
-              .join('\n') + '\n\n';
+            conversationContext = 'Conversation History:\n' +
+                conversationHistory
+                    .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
+                    .join('\n') + '\n\n';
         }
 
         const directPrompt = `${systemPromptsText}\n\n${conversationContext}User asks: "${userMessage}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
-        
+
         try {
             // Stream the response
             const streamResult = await model.generateContentStream(directPrompt);
@@ -214,7 +214,7 @@ async function handleNoToolResponseFlow(
             return "I'm Elixer, your friendly AI assistant. I'm having trouble processing your request right now. How else can I help you?";
         }
     }
-    
+
     // Use the executor with proper params
     try {
         const result = await executor.execute({
@@ -228,7 +228,7 @@ async function handleNoToolResponseFlow(
             messageId: messageId,
             accumulatedContext: undefined
         });
-        
+
         console.log(`[handleNoToolResponseFlow] AgentModeOffExecutor result: ${result.content.length} chars.`);
         return result.content;
     } catch (error) {
@@ -254,7 +254,7 @@ async function callFinalLLMSynthesis(
     // Extract search suggestions HTML if present in the tool content
     let searchSuggestionsHtml: string | undefined;
     let cleanedToolContent = toolContent;
-    
+
     // Look for search suggestions in the standardized HTML comment format
     const searchMatch = toolContent.match(/<!-- SEARCH_SUGGESTIONS_HTML:([\s\S]*?) -->/i);
     if (searchMatch) {
@@ -389,7 +389,7 @@ async function processQueryWithTools(
         console.log(`[processQueryWithTools] Using pre-formatted response from ${toolExecutionResult.source}.`);
         return extractSearchSuggestions(toolExecutionResult.content);
     }
-    
+
     // 5. Handle TRY_NEXT_TOOL_AND_ADD_CONTEXT response type
     let accumulatedContext = "";
     if (toolExecutionResult.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && toolExecutionResult.contextToAdd) {
@@ -398,10 +398,10 @@ async function processQueryWithTools(
 
         // Determine next group of tools to try
         const remainingGroups = rankingResult.rankedToolGroups.slice(1);
-        
+
         if (remainingGroups.length > 0) {
             console.log(`[processQueryWithTools] Trying next tool group with context: ${JSON.stringify(remainingGroups[0])}`);
-            
+
             // Execute the next tool group with the accumulated context
             toolExecutionResult = await executeToolsByGroup(
                 remainingGroups,
@@ -414,7 +414,7 @@ async function processQueryWithTools(
                 messageId,
                 accumulatedContext
             );
-            
+
             console.log(`[processQueryWithTools] Next tool execution completed with context. Source: ${toolExecutionResult.source}, ResponseType: ${toolExecutionResult.responseType}`);
         }
     }
@@ -439,7 +439,7 @@ async function processQueryWithTools(
     if (currentResponseContent.includes(CHECK_NEXT_SOURCE_MARKER)) {
         console.log(`[processQueryWithTools] AI indicated CHECK_NEXT_SOURCE.`);
         currentResponseContent = currentResponseContent.replace(CHECK_NEXT_SOURCE_MARKER, "").trim();
-        
+
         // The previous call to callFinalLLMSynthesis would have already streamed its content.
         // If CHECK_NEXT_SOURCE implies adding more content, this needs careful handling.
         // For now, we assume currentResponseContent is the final result of the *first* synthesis.
@@ -481,7 +481,7 @@ async function processQueryWithTools(
 
             currentResponseContent = await callFinalLLMSynthesis(
                 args.userMessage,
-                combinedToolContent, 
+                combinedToolContent,
                 combinedToolSource,
                 formattedHistory,
                 genAI,
@@ -503,14 +503,14 @@ async function processQueryWithTools(
             // However, if no new tools were run, currentResponseContent is simply the initially synthesized text minus the marker.
         }
     }
-    
+
     return extractSearchSuggestions(currentResponseContent);
 }
 
 
 // --- MAIN ACTION ---
 export const getAIResponse = action({
-  // Return type annotation for the action
+    // Return type annotation for the action
     args: {
         userMessage: v.string(),
         userId: v.id("users"),
@@ -524,8 +524,8 @@ export const getAIResponse = action({
     },
     handler: async (ctx, args): Promise<Id<"messages">> => {
         const { userMessage, userId, selectedModel, paneId, disableSystemPrompt, disableTools } = args;
-        console.log(`[getAIResponse] START User: ${userId}, Pane: ${paneId}, DisableSysPrompt: ${!!disableSystemPrompt}, DisableTools: ${!!disableTools}, Model: ${selectedModel || DEFAULT_MODEL_NAME}, Msg: "${userMessage.substring(0,50)}..."`);
-        
+        console.log(`[getAIResponse] START User: ${userId}, Pane: ${paneId}, DisableSysPrompt: ${!!disableSystemPrompt}, DisableTools: ${!!disableTools}, Model: ${selectedModel || DEFAULT_MODEL_NAME}, Msg: "${userMessage.substring(0, 50)}..."`);
+
         let messageId: Id<"messages"> | null = null;
 
         try {
@@ -560,13 +560,13 @@ export const getAIResponse = action({
             }
 
             // 4. Finalize message in database
-        // The streaming functions (handleNoToolResponseFlow/callFinalLLMSynthesis) already updated the content iteratively.
-        // This final update might be redundant if responseData.finalContent is the same as the last streamed content.
-        // However, it ensures the content is set to the definitive final version from responseData.
-        await ctx.runMutation(api.chat.updateMessageContentStream, {
-            messageId,
-            content: responseData.finalContent,
-        });
+            // The streaming functions (handleNoToolResponseFlow/callFinalLLMSynthesis) already updated the content iteratively.
+            // This final update might be redundant if responseData.finalContent is the same as the last streamed content.
+            // However, it ensures the content is set to the definitive final version from responseData.
+            await ctx.runMutation(api.chat.updateMessageContentStream, {
+                messageId,
+                content: responseData.finalContent,
+            });
 
             if (responseData.searchSuggestionsHtml) {
                 await ctx.runMutation(api.chat.updateMessageMetadata, {
@@ -605,18 +605,18 @@ export const getAIResponse = action({
                         paneId,
                     });
                 } catch (createError) {
-                     console.error("[getAIResponse] Error creating error message:", createError);
-                     // If we can't even save an error message, we might just have to let Convex handle the action failure.
-                     // Or throw a new ConvexError to ensure client gets some feedback.
-                     throw new ConvexError("Failed to process request and failed to save error message.");
+                    console.error("[getAIResponse] Error creating error message:", createError);
+                    // If we can't even save an error message, we might just have to let Convex handle the action failure.
+                    // Or throw a new ConvexError to ensure client gets some feedback.
+                    throw new ConvexError("Failed to process request and failed to save error message.");
                 }
             }
             // Depending on how you want to handle errors client-side,
             // you might return the messageId of the error message, or re-throw.
             // Returning messageId allows client to see the error message in chat.
             if (!messageId) {
-                 // This case should be rare if the above logic is correct
-                 throw new ConvexError("Critical error: No message ID available after failure.");
+                // This case should be rare if the above logic is correct
+                throw new ConvexError("Critical error: No message ID available after failure.");
             }
             return messageId;
         }
