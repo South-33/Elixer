@@ -511,8 +511,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
               value={currentInputMessage}
               onChange={(e) => setCurrentInputMessage(e.target.value)}
               placeholder="Type your message..."
-              className="flex-1 p-3 bg-transparent border-none focus:ring-0 text-slate-800 placeholder-slate-400 font-mono text-sm"
-              disabled={isAnyPaneStreaming}
+              className="flex-1 p-3 bg-transparent border-none focus:ring-0 focus:outline-none text-slate-800 placeholder-slate-400 font-mono text-sm"
             />
             <button
               type="submit"
