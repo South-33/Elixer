@@ -340,6 +340,20 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
     }
   };
 
+  // Handler to clear input and reset all panes (force stop)
+  const handleClearInput = () => {
+    setCurrentInputMessage("");
+    // Reset all pane streaming states
+    for (const paneId of chatPanes.map(pane => pane.id)) {
+      const resetHandler = chatPaneResetStatesHandlers.current[paneId];
+      if (resetHandler) {
+        resetHandler();
+      }
+    }
+    // Reset streaming status
+    setPaneStreamingStatus({});
+  };
+
   // Handler for when user clicks an example message
   const handleExampleClick = async (exampleText: string) => {
     // Check if already streaming
@@ -513,6 +527,19 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
               placeholder="Type your message..."
               className="flex-1 p-3 bg-transparent border-none focus:ring-0 focus:outline-none text-slate-800 placeholder-slate-400 font-mono text-sm"
             />
+            {/* Clear button - always enabled when there's text */}
+            {currentInputMessage && (
+              <button
+                type="button"
+                onClick={handleClearInput}
+                className="px-3 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors border-l border-gray-400"
+                title="Clear input and reset states"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            )}
             <button
               type="submit"
               disabled={isAnyPaneStreaming || !currentInputMessage.trim()}
