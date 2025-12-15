@@ -20,18 +20,25 @@ A powerful multi-pane AI chat application with advanced system prompts and tool 
 
 ### Message Input Controls
 
-**Clear/Reset Button (✕)**
-- **Location**: Appears next to the Send button when you have text in the input field
-- **Purpose**: Allows you to clear the message input and reset streaming states
+**Clear/Cancel Button (✕)**
+- **Location**: Appears next to the Send button when:
+  - You have text in the input field, OR
+  - The AI is currently streaming a response
+- **Purpose**: Immediately clear the input and reset all streaming states across all panes
+- **Visual Indicator**: 
+  - Orange color when streaming is active (showing it's actively canceling)
+  - Gray color when just clearing text
 - **When to Use**:
-  - When a message send fails or crashes
-  - When you want to cancel a message that's being sent
-  - When the UI gets stuck in a streaming state
-  - To quickly clear and start over
+  - **Error Recovery**: When a message send fails or crashes (e.g., "Failed to parse stream" errors)
+  - **Stuck State**: When the UI is stuck showing "Sending..." indefinitely
+  - **Cancel Request**: When you want to cancel an in-progress AI response
+  - **Quick Reset**: To quickly clear everything and start fresh
 - **How it Works**: 
   - Clears the input field immediately
   - Resets all pane streaming states
+  - Resets the global streaming status
   - Allows you to send a new message right away
+- **Always Available**: This button works even when other controls are disabled, making it your emergency "reset" button
 
 **Send Button**
 - Sends your message to all active chat panes
