@@ -430,6 +430,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
         if (resetHandler) {
           resetHandler();
         }
+        toast.success("Chat history cleared successfully!");
       } catch (error) {
         console.error("Failed to clear chat for pane:", paneId, error);
         toast.error("Failed to clear chat history for this panel.");
@@ -533,8 +534,8 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
                 type="button"
                 onClick={handleClearInput}
                 className={`px-3 py-2 transition-colors border-l border-gray-400 ${isAnyPaneStreaming
-                    ? "text-orange-600 hover:text-red-600 hover:bg-red-50"
-                    : "text-slate-500 hover:text-red-600 hover:bg-red-50"
+                  ? "text-orange-600 hover:text-red-600 hover:bg-red-50"
+                  : "text-slate-500 hover:text-red-600 hover:bg-red-50"
                   }`}
                 title={isAnyPaneStreaming ? "Cancel and reset" : "Clear input and reset states"}
               >

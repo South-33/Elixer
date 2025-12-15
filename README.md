@@ -61,16 +61,40 @@ When no messages exist, click on example prompts to quickly start a conversation
 
 ## Error Recovery
 
-If something goes wrong during message sending:
-1. Click the **X (Clear) button** next to the Send button
-2. This will reset all streaming states and clear the input
-3. You can immediately type and send a new message
+If something goes wrong during message sending, **you now have an always-available recovery button**:
 
-This is especially useful when:
-- The AI takes too long to respond
-- You hit an API quota limit
-- The connection drops mid-stream
-- You want to cancel and start over
+### How to Recover from Errors
+
+1. **Look for the X button** - It appears next to the Send button when streaming is active
+2. **Click the X (Clear/Cancel) button** - It turns orange when streaming is stuck
+3. **Everything resets immediately** - All streaming states clear, input field clears
+4. **Type and send a new message** - You're ready to go again!
+
+### Common Error Scenarios
+
+**"Failed to parse stream" Error**
+- **Symptom**: Error message in console, AI shows error message, but UI stuck on "Sending..."
+- **Solution**: Click the orange X button to force reset
+
+**API Quota Exceeded**
+- **Symptom**: Error toast notification, UI stuck in sending state
+- **Solution**: Click the X button, wait a moment, then try again
+
+**Connection Timeout**
+- **Symptom**: AI takes too long, no response appears
+- **Solution**: Click the X button to cancel and reset
+
+**Stuck "Sending..." State**
+- **Symptom**: Send button shows "Sending..." indefinitely with no activity
+- **Solution**: Click the X button - it's designed exactly for this!
+
+### Why This Works
+
+The Clear/Cancel button:
+- **Bypasses normal controls** - Works even when everything else is disabled
+- **Resets all states** - Clears both frontend and backend streaming flags
+- **Works across all panes** - Resets all chat panes simultaneously
+- **No data loss** - Only clears the current unsent message, not your chat history
 
 ## Technology Stack
 

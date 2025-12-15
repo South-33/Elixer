@@ -397,8 +397,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             onClick={onClearChat}
             className="p-2 bg-white border border-gray-300 text-slate-600 hover:text-red-600 hover:border-red-300 transition-colors shadow-sm"
             style={{ borderRadius: '2px' }}
-            title="Purge Data"
-            disabled={isStreaming}
+            title="Clear Chat History"
           >
             <TrashIcon className="h-4 w-4" />
             <span className="sr-only">Clear Chat History</span>
