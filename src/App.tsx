@@ -4,7 +4,7 @@ import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
-import { Toaster, toast } from "sonner";
+
 import { Sidebar, DEFAULT_LAW_PROMPT, DEFAULT_TONE_PROMPT, DEFAULT_POLICY_PROMPT } from "./Sidebar";
 import { ChatPane } from "./ChatPane"; // Import ChatPane
 import ReactMarkdown from 'react-markdown';
@@ -64,7 +64,7 @@ export default function App() {
       setChatPanes(prevPanes => [...prevPanes, { id: `pane-${Date.now()}` }]);
       // setMessageToSend(""); // This will be handled by AuthenticatedContent
     } else {
-      toast.info("Maximum of 4 comparison panes reached.");
+      console.log("Maximum of 4 comparison panes reached.");
     }
   };
 
@@ -81,13 +81,13 @@ export default function App() {
           console.log(`Successfully cleared chat history for pane ${paneToRemove.id} on backend.`);
         } catch (error) {
           console.error(`Failed to clear chat for pane ${paneToRemove.id} on backend:`, error);
-          toast.error(`Failed to clear chat history for pane ${paneToRemove.id} on backend. You may need to clear it manually.`);
+          console.error(`Failed to clear chat history for pane ${paneToRemove.id} on backend.`);
           // Optionally, you could re-add the pane here if the backend operation is critical
           // setChatPanes(prevPanes => [...prevPanes, paneToRemove]);
         }
       }
     } else {
-      toast.info("Cannot remove the last chat pane.");
+      console.log("Cannot remove the last chat pane.");
     }
   };
 
@@ -174,7 +174,7 @@ export default function App() {
           />
         </Authenticated>
       </div>
-      <Toaster position="bottom-left" richColors />
+
     </div>
   );
 }
@@ -298,7 +298,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
   const handleSendMessage = async (content: string, model: string, paneId: string, disableSystemPrompt: boolean, disableTools: boolean) => {
     if (!user?._id) {
       console.error("User not loaded, cannot send message.");
-      toast.error("User not loaded. Please wait a moment.");
+      console.error("User not loaded. Please wait a moment.");
       // ... rest of your code remains the same ...
     }
 
@@ -389,7 +389,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
         }
       } catch (error) {
         console.error("Failed to clear chat:", error);
-        toast.error("Failed to clear chat history.");
+        console.error("Failed to clear chat history.");
       }
     }
   };
@@ -430,10 +430,10 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes, addC
         if (resetHandler) {
           resetHandler();
         }
-        toast.success("Chat history cleared successfully!");
+        console.log("Chat history cleared successfully.");
       } catch (error) {
         console.error("Failed to clear chat for pane:", paneId, error);
-        toast.error("Failed to clear chat history for this panel.");
+        console.error("Failed to clear chat history for this panel.");
       }
     }
   };

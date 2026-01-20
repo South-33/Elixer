@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import ReactMarkdown from 'react-markdown';
-import { toast } from "sonner";
+
 import { TrashIcon } from '@heroicons/react/20/solid';
 
 // Type for Convex message document
@@ -151,27 +151,55 @@ const customStyles = `
   }
 })();
 
+// Monotone SVG icons for processing phases (Severance theme)
+const PhaseIcons = {
+  database: (
+    <svg className="w-4 h-4 inline-block mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+    </svg>
+  ),
+  search: (
+    <svg className="w-4 h-4 inline-block mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+    </svg>
+  ),
+  thinking: (
+    <svg className="w-4 h-4 inline-block mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+    </svg>
+  ),
+  writing: (
+    <svg className="w-4 h-4 inline-block mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+    </svg>
+  ),
+  ranking: (
+    <svg className="w-4 h-4 inline-block mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" />
+    </svg>
+  ),
+};
+
 // Processing phase component to show different AI states with a pulsing animation
 const ProcessingPhase = ({ phase }: { phase: string }) => {
   // Icon mapping for different phases
   const getPhaseIcon = (phaseText: string) => {
-
     if (phaseText.includes("Database") || phaseText.includes("Query")) {
-      return "🗃️ ";
+      return PhaseIcons.database;
     } else if (phaseText.includes("Searching") || phaseText.includes("search_web")) {
-      return "🔍 ";
+      return PhaseIcons.search;
     } else if (phaseText.includes("Thinking") || phaseText.includes("Analyzing")) {
-      return "💭 ";
+      return PhaseIcons.thinking;
     } else if (phaseText.includes("Generating") || phaseText.includes("Writing")) {
-      return "✏️ ";
+      return PhaseIcons.writing;
     } else if (phaseText.includes("Ranking") || phaseText.includes("Prioritizing")) {
-      return "🔢 ";
+      return PhaseIcons.ranking;
     }
-    return "";
+    return null;
   };
 
   return (
-    <span className="processing-phase-content">
+    <span className="processing-phase-content flex items-center text-teal-700 font-mono text-sm tracking-wide">
       {getPhaseIcon(phase)}{phase}
     </span>
   );
@@ -325,7 +353,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
     try {
       if (!userId) {
         console.error("User not loaded, cannot send message.");
-        toast.error("User not loaded. Please wait a moment.");
+        console.error("User not loaded. Please wait a moment.");
         setShowLocalPendingIndicator(false);
         return;
       }
@@ -335,9 +363,9 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
       setShowLocalPendingIndicator(false); // Hide pending indicator on send error
 
       if (error.data && error.data.code === "TOO_MANY_REQUESTS") {
-        toast.error("You've exceeded your API quota. Please try again later.");
+        console.error("You've exceeded your API quota. Please try again later.");
       } else {
-        toast.error("Failed to send message. Please try again.");
+        console.error("Failed to send message. Please try again.");
       }
     }
   };
@@ -391,7 +419,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
           >
             <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
-            <option value="gemini-2.5-flash">Gemini 2.0 Flash</option>
+            <option value="gemini-3-flash">Gemini 3 Flash</option>
           </select>
           <button
             onClick={onClearChat}

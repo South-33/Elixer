@@ -1,7 +1,7 @@
 "use client";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
-import { toast } from "sonner";
+
 
 export function SignInForm() {
   const { signIn } = useAuthActions();
@@ -18,11 +18,9 @@ export function SignInForm() {
           const formData = new FormData(e.target as HTMLFormElement);
           formData.set("flow", flow);
           void signIn("password", formData).catch((_error) => {
-            const toastTitle =
-              flow === "signIn"
-                ? "Could not sign in. Please check your credentials."
-                : "Could not sign up. That email may already be in use.";
-            toast.error(toastTitle);
+            console.error(flow === "signIn"
+              ? "Could not sign in. Please check your credentials."
+              : "Could not sign up. That email may already be in use.");
             setSubmitting(false);
           }).finally(() => {
             // setSubmitting(false) 

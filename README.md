@@ -7,7 +7,7 @@ A powerful multi-pane AI chat application with advanced system prompts and tool 
 - **Multi-Pane Chat**: Compare responses from different AI configurations side-by-side (up to 4 panes)
 - **Customizable System Prompts**: Configure law, tone, and policy prompts to guide AI behavior
 - **Agent Mode**: Enable/disable tool usage (web search, database queries, etc.)
-- **Model Selection**: Choose from various Gemini models (2.5 Flash, 2.5 Flash Lite, 2.0 Flash)
+- **Model Selection**: Choose from various Gemini models (2.5 Flash, 2.5 Flash Lite)
 - **Real-time Streaming**: Watch AI responses stream in real-time with processing phase indicators
 - **Search Sources**: View and explore web sources used by the AI for each response
 
