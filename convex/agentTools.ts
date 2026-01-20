@@ -5,7 +5,7 @@ import { api } from "./_generated/api";
 import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other related types are defined
 
 // --- CONSTANTS ---
-const DEFAULT_MODEL_NAME = "gemini-2.5-flash";
+const DEFAULT_MODEL_NAME = "gemini-3-flash-preview";
 const RANKING_MODEL_NAME = "gemini-2.5-flash-lite"; // Use a fast model for ranking
 
 // --- TYPE DEFINITIONS (Refactored and New) ---

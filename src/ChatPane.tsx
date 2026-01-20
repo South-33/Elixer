@@ -199,8 +199,9 @@ const ProcessingPhase = ({ phase }: { phase: string }) => {
   };
 
   return (
-    <span className="processing-phase-content flex items-center text-teal-700 font-mono text-sm tracking-wide">
-      {getPhaseIcon(phase)}{phase}
+    <span className="processing-phase-content flex items-center text-teal-700 font-mono text-sm tracking-wider uppercase leading-none">
+      {getPhaseIcon(phase)}
+      <span className="inline-block mt-[1px]">{phase}</span>
     </span>
   );
 };
@@ -222,7 +223,7 @@ const ChatMessage = ({ message, currentPhaseToShow }: { message: MessageDoc, cur
         style={{ borderRadius: '2px' }}
       >
         {message.role === "assistant" && message.isStreaming && message.content === "" && phaseToDisplay ? (
-          <div className="processing-phase">
+          <div className="processing-phase flex items-center justify-center">
             <ProcessingPhase phase={phaseToDisplay} />
           </div>
         ) : message.role === "assistant" && message.isStreaming && message.content ? (
@@ -269,7 +270,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
     userId ? { userId, paneId } : "skip"
   ) || [] as MessageDoc[];
 
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash"); // Default model for this pane
+  const [selectedModel, setSelectedModel] = useState("gemini-3-flash-preview"); // Default model for this pane
   const [disableSystemPrompt, setDisableSystemPrompt] = useState(false); // New state for disabling system prompt - off by default
   const [disableToolUse, setDisableToolUse] = useState(false); // New state for disabling tool use - off by default
 
@@ -417,6 +418,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
             style={{ borderRadius: '2px' }}
             disabled={isStreaming}
           >
+            <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
             <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
           </select>
@@ -443,7 +445,7 @@ export function ChatPane({ userId, paneId, lawPrompt, tonePrompt, policyPrompt, 
           !messages.some((msg: MessageDoc) => msg.role === 'assistant' && msg.isStreaming) && (
             <div className="flex justify-start" key="local-pending-jsx-indicator">
               <div className="max-w-[80%] p-4 bg-white border border-gray-300 text-slate-800" style={{ borderRadius: '2px' }}>
-                <div className="processing-phase">
+                <div className="processing-phase flex items-center justify-center">
                   <ProcessingPhase phase={currentProcessingPhase} />
                 </div>
               </div>
