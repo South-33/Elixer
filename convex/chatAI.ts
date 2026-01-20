@@ -19,7 +19,7 @@ import {
 import { toolExecutors } from "./agentTools";
 
 // --- CONSTANTS ---
-const DEFAULT_MODEL_NAME = "gemini-2.5-flash"; // Or import from agentTools
+const DEFAULT_MODEL_NAME = "gemini-2.5-flash";
 const STYLING_PROMPT = `Use standard Markdown for formatting your responses.
 
 For document structure:
