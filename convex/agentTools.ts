@@ -1,6 +1,6 @@
 "use node";
 
-import { GoogleGenerativeAI, GenerationConfig } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { api } from "./_generated/api";
 import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other related types are defined
 
@@ -19,18 +19,7 @@ interface SearchEntryPoint {
 
 // Define the interface for Google's generative AI tools
 interface GoogleSearchTool {
-  googleSearch: Record<string, unknown>; // Can be {} for default params
-}
-
-// This type is for Google's generative AI library tools
-type GenAITool = GoogleSearchTool | any; // Allow other tool types if necessary
-
-// This interface is for model configuration when using tools
-interface ModelConfig {
-  model: string;
-  tools?: GenAITool[];
-  generationConfig?: Record<string, any>;
-  systemInstruction?: string;
+  googleSearch: Record<string, unknown>;
 }
 
 export interface Tool {
@@ -54,9 +43,9 @@ export interface SystemPrompts {
  * Represents context accumulated from previous tool executions.
  */
 interface AccumulatedContext {
-  sources: string[];                            // Which tools contributed to this context
-  content: string;                              // The actual context content
-  searchSuggestionsHtmlToPreserve?: string;     // Preserved search suggestions HTML from a web search tool
+  sources: string[]; // Which tools contributed to this context
+  content: string; // The actual context content
+  searchSuggestionsHtmlToPreserve?: string; // Preserved search suggestions HTML from a web search tool
 }
 
 /**
@@ -65,28 +54,31 @@ interface AccumulatedContext {
 interface ToolExecutionParams {
   query: string;
   conversationHistory: { role: string; parts: { text: string }[] }[];
-  genAI: GoogleGenerativeAI;
+  genAI: GoogleGenAI;
   selectedModel: string | undefined;
   systemPrompts?: SystemPrompts;
   ctx: ConvexActionCtx;
   remainingTools: string[];
   messageId?: string;
-  accumulatedContext?: AccumulatedContext;    // Context from previous tools
-  nextToolGroup?: string[];                  // Information about the next group of tools to be executed
+  accumulatedContext?: AccumulatedContext; // Context from previous tools
+  nextToolGroup?: string[]; // Information about the next group of tools to be executed
 }
 
 /**
  * Standardized result from a tool execution.
  */
 interface ToolExecutionResult {
-  source: string;                               // Name of the tool that produced this result
-  content: string;                              // The primary content/answer from the tool
-  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
-  error?: string;                                // Error if the tool execution failed
-  contextToAdd?: string;                        // Context to preserve for next tools (if TRY_NEXT_TOOL_AND_ADD_CONTEXT)
-  searchSuggestionsHtml?: string;              // HTML to add at the end of the response if FINAL_ANSWER
-  isFullyFormatted?: boolean;                  // Whether the content is already fully formatted and can be used directly
-  synthesisData?: string;                      // Data explicitly for synthesis during parallel tool execution
+  source: string; // Name of the tool that produced this result
+  content: string; // The primary content/answer from the tool
+  responseType:
+    | "FINAL_ANSWER"
+    | "TRY_NEXT_TOOL"
+    | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
+  error?: string; // Error if the tool execution failed
+  contextToAdd?: string; // Context to preserve for next tools (if TRY_NEXT_TOOL_AND_ADD_CONTEXT)
+  searchSuggestionsHtml?: string; // HTML to add at the end of the response if FINAL_ANSWER
+  isFullyFormatted?: boolean; // Whether the content is already fully formatted and can be used directly
+  synthesisData?: string; // Data explicitly for synthesis during parallel tool execution
 }
 
 export interface IToolExecutor {
@@ -98,9 +90,12 @@ export interface IToolExecutor {
  * Expected JSON structure for LLM response when deciding tool execution flow.
  */
 interface LLMToolExecutionDecision {
-  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
-  content: string;       // Full answer for FINAL_ANSWER, or a note for others.
-  reasoning: string;     // Explanation for the decision.
+  responseType:
+    | "FINAL_ANSWER"
+    | "TRY_NEXT_TOOL"
+    | "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
+  content: string; // Full answer for FINAL_ANSWER, or a note for others.
+  reasoning: string; // Explanation for the decision.
   contextToPreserve?: string | null; // Content for TRY_NEXT_TOOL_AND_ADD_CONTEXT, can be null.
 }
 
@@ -110,7 +105,7 @@ interface LLMToolExecutionDecision {
 interface LLMRankingDecision {
   toolGroups: { rank: number; toolNames: string[] }[];
   directResponse?: string; // Optional direct response if no_tool is ranked first.
-  reasoning?: string;      // Optional reasoning for the ranking.
+  reasoning?: string; // Optional reasoning for the ranking.
 }
 
 /**
@@ -121,7 +116,6 @@ interface LLMParallelSynthesisResponse {
   reasoning?: string; // Optional reasoning for the synthesis.
 }
 
-
 interface RankingResult {
   rankedToolGroups: string[][];
   directResponse?: string;
@@ -131,33 +125,95 @@ interface RankingResult {
 export const AVAILABLE_TOOLS: Tool[] = [
   {
     name: "no_tool",
-    description: "Answer directly without using any specialized database or search. Use if the query is simple or to synthesize accumulated context.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The user's query to answer directly, considering accumulated context" } }, required: ["query"] },
+    description:
+      "Answer directly without using any specialized database or search. Use if the query is simple or to synthesize accumulated context.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "The user's query to answer directly, considering accumulated context",
+        },
+      },
+      required: ["query"],
+    },
   },
   {
     name: "query_law_on_insurance",
-    description: "Query Cambodia's Law on Insurance database for legal information. Provides structured legal text.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the insurance law database" } }, required: ["query"] },
+    description:
+      "Query Cambodia's Law on Insurance database for legal information. Provides structured legal text.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "The specific query to search for in the insurance law database",
+        },
+      },
+      required: ["query"],
+    },
   },
   {
     name: "query_law_on_consumer_protection",
-    description: "Query Cambodia's Law on Consumer Protection database for legal information. Provides structured legal text.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query to search for in the consumer protection law database" } }, required: ["query"] },
+    description:
+      "Query Cambodia's Law on Consumer Protection database for legal information. Provides structured legal text.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "The specific query to search for in the consumer protection law database",
+        },
+      },
+      required: ["query"],
+    },
   },
   {
     name: "query_insurance_qna",
-    description: "Query Cambodia's Insurance Q&A database for common questions and answers. Good for specific insurance-related questions.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The specific question to search for in the Q&A database" } }, required: ["query"] },
+    description:
+      "Query Cambodia's Insurance Q&A database for common questions and answers. Good for specific insurance-related questions.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "The specific question to search for in the Q&A database",
+        },
+      },
+      required: ["query"],
+    },
   },
   {
     name: "search_web",
-    description: "Search the web for general information, current events, or topics not found in specialized databases. Can provide search suggestion links.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The search query for the web" } }, required: ["query"] },
+    description:
+      "Search the web for general information, current events, or topics not found in specialized databases. Can provide search suggestion links.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "The search query for the web" },
+      },
+      required: ["query"],
+    },
   },
   {
     name: "get_elixer_whitepaper",
-    description: "Queries the Elixer WhitePaper for specific information about the ELIXIR project. Use this for details on ELIXIR's mission to simplify insurance in Cambodia, its solutions for buying/claiming processes, knowledge gaps, its gamification features, tokenomics ($ELIXIR token), or project advisors.",
-    parameters: { type: "object", properties: { query: { type: "string", description: "The specific query or topic to get details about from the Elixer WhitePaper" } }, required: ["query"] }
+    description:
+      "Queries the Elixer WhitePaper for specific information about the ELIXIR project. Use this for details on ELIXIR's mission to simplify insurance in Cambodia, its solutions for buying/claiming processes, knowledge gaps, its gamification features, tokenomics ($ELIXIR token), or project advisors.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "The specific query or topic to get details about from the Elixer WhitePaper",
+        },
+      },
+      required: ["query"],
+    },
   },
 ];
 
@@ -184,10 +240,14 @@ const ensureString = (value: any): string => {
 export const combineSystemPrompts = (systemPrompts?: SystemPrompts): string => {
   if (!systemPrompts) return "";
   let combined = "SYSTEM GUIDELINES:\n";
-  if (systemPrompts.tonePrompt) combined += `TONE AND PERSONALITY:\n${systemPrompts.tonePrompt}\n\n`;
-  if (systemPrompts.policyPrompt) combined += `COMPANY POLICY:\n${systemPrompts.policyPrompt}\n\n`;
-  if (systemPrompts.lawPrompt) combined += `LAWS AND REGULATIONS:\n${systemPrompts.lawPrompt}\n\n`;
-  if (systemPrompts.stylingPrompt) combined += `RESPONSE FORMATTING:\n${systemPrompts.stylingPrompt}\n\n`;
+  if (systemPrompts.tonePrompt)
+    combined += `TONE AND PERSONALITY:\n${systemPrompts.tonePrompt}\n\n`;
+  if (systemPrompts.policyPrompt)
+    combined += `COMPANY POLICY:\n${systemPrompts.policyPrompt}\n\n`;
+  if (systemPrompts.lawPrompt)
+    combined += `LAWS AND REGULATIONS:\n${systemPrompts.lawPrompt}\n\n`;
+  if (systemPrompts.stylingPrompt)
+    combined += `RESPONSE FORMATTING:\n${systemPrompts.stylingPrompt}\n\n`;
   return combined;
 };
 
@@ -195,8 +255,14 @@ export const combineSystemPrompts = (systemPrompts?: SystemPrompts): string => {
  * Appends search suggestions HTML to content if provided and not already present.
  * Uses the specific HTML comment format expected by the frontend.
  */
-const finalizeContentWithSuggestions = (mainContent: string, suggestionsHtml?: string): string => {
-  if (suggestionsHtml && !mainContent.includes("<!-- SEARCH_SUGGESTIONS_HTML:")) {
+const finalizeContentWithSuggestions = (
+  mainContent: string,
+  suggestionsHtml?: string,
+): string => {
+  if (
+    suggestionsHtml &&
+    !mainContent.includes("<!-- SEARCH_SUGGESTIONS_HTML:")
+  ) {
     return `${mainContent}\n\n<!-- SEARCH_SUGGESTIONS_HTML:${suggestionsHtml} -->`;
   }
   return mainContent;
@@ -208,18 +274,25 @@ const finalizeContentWithSuggestions = (mainContent: string, suggestionsHtml?: s
 function createToolResult(
   source: string,
   content: string,
-  responseType: "FINAL_ANSWER" | "TRY_NEXT_TOOL" | "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
+  responseType:
+    | "FINAL_ANSWER"
+    | "TRY_NEXT_TOOL"
+    | "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
   contextToAdd?: string | null,
   error?: string,
   searchSuggestionsHtml?: string,
-  finalSuggestionsHtmlToPreserve?: string // Used if this is a FINAL_ANSWER and we need to pull from accumulated
+  finalSuggestionsHtmlToPreserve?: string, // Used if this is a FINAL_ANSWER and we need to pull from accumulated
 ): ToolExecutionResult {
-
   let finalContent = content;
   if (responseType === "FINAL_ANSWER" && finalSuggestionsHtmlToPreserve) {
-    finalContent = finalizeContentWithSuggestions(finalContent, finalSuggestionsHtmlToPreserve);
+    finalContent = finalizeContentWithSuggestions(
+      finalContent,
+      finalSuggestionsHtmlToPreserve,
+    );
     if (finalContent !== content) {
-      console.log(`[createToolResult] Added preserved search suggestions to final answer from ${source}.`);
+      console.log(
+        `[createToolResult] Added preserved search suggestions to final answer from ${source}.`,
+      );
     }
   }
 
@@ -229,7 +302,7 @@ function createToolResult(
     responseType,
   };
 
-  const finalContextToAdd = (contextToAdd === null) ? undefined : contextToAdd;
+  const finalContextToAdd = contextToAdd === null ? undefined : contextToAdd;
   if (finalContextToAdd && responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT") {
     res.contextToAdd = finalContextToAdd;
   }
@@ -243,23 +316,37 @@ function createToolResult(
   return res;
 }
 
-
 /**
  * Parses the AI's JSON response for tool execution decision.
  */
-const parseToolExecutionDecision = (responseText: string): LLMToolExecutionDecision | { error: string } => {
-  const result = parseLLMJson<LLMToolExecutionDecision>(responseText, "ToolExecutionDecision", isLLMToolExecutionDecision);
+const parseToolExecutionDecision = (
+  responseText: string,
+): LLMToolExecutionDecision | { error: string } => {
+  const result = parseLLMJson<LLMToolExecutionDecision>(
+    responseText,
+    "ToolExecutionDecision",
+    isLLMToolExecutionDecision,
+  );
 
-  if (!('error' in result)) {
-    console.log(`[parseToolExecutionDecision] Parsed: responseType='${result.responseType}', contentLen=${result.content.length}, reasoningLen=${result.reasoning.length}, contextToPreserveLen=${result.contextToPreserve?.length || 0}`);
+  if (!("error" in result)) {
+    console.log(
+      `[parseToolExecutionDecision] Parsed: responseType='${result.responseType}', contentLen=${result.content.length}, reasoningLen=${result.reasoning.length}, contextToPreserveLen=${result.contextToPreserve?.length || 0}`,
+    );
 
     // Additional warning for TRY_NEXT_TOOL_AND_ADD_CONTEXT without context
-    if (result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && !result.contextToPreserve) {
-      console.warn(`[parseToolExecutionDecision] responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT, but contextToPreserve is missing.`);
+    if (
+      result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" &&
+      !result.contextToPreserve
+    ) {
+      console.warn(
+        `[parseToolExecutionDecision] responseType is TRY_NEXT_TOOL_AND_ADD_CONTEXT, but contextToPreserve is missing.`,
+      );
     }
   } else {
     // Log the raw responseText if parsing failed, to help debug LLM output
-    console.error(`[parseToolExecutionDecision] Error during ToolExecutionDecision parsing. Raw LLM responseText (up to 1000 chars): "${responseText.substring(0, 1000)}..."`);
+    console.error(
+      `[parseToolExecutionDecision] Error during ToolExecutionDecision parsing. Raw LLM responseText (up to 1000 chars): "${responseText.substring(0, 1000)}..."`,
+    );
   }
 
   return result;
@@ -268,16 +355,23 @@ const parseToolExecutionDecision = (responseText: string): LLMToolExecutionDecis
 /**
  * Parses the AI's JSON response for parallel synthesis.
  */
-const parseParallelSynthesisResponse = (responseText: string): LLMParallelSynthesisResponse | { error: string } => {
-  const result = parseLLMJson<LLMParallelSynthesisResponse>(responseText, "ParallelSynthesisResponse", isLLMParallelSynthesisResponse);
+const parseParallelSynthesisResponse = (
+  responseText: string,
+): LLMParallelSynthesisResponse | { error: string } => {
+  const result = parseLLMJson<LLMParallelSynthesisResponse>(
+    responseText,
+    "ParallelSynthesisResponse",
+    isLLMParallelSynthesisResponse,
+  );
 
-  if (!('error' in result)) {
-    console.log(`[parseParallelSynthesisResponse] Parsed synthesis. Answer length: ${result.synthesizedAnswer.length}`);
+  if (!("error" in result)) {
+    console.log(
+      `[parseParallelSynthesisResponse] Parsed synthesis. Answer length: ${result.synthesizedAnswer.length}`,
+    );
   }
 
   return result;
 };
-
 
 /**
  * Updates the processing phase of a message (e.g., in a database).
@@ -286,30 +380,41 @@ async function updateProcessingPhase(
   ctx: ConvexActionCtx,
   messageId: string | undefined,
   phase: string,
-  toolName: string
+  toolName: string,
 ): Promise<void> {
   if (ctx && messageId) {
     try {
-      await ctx.runMutation(api.chat.updateProcessingPhase, { messageId, phase });
+      await ctx.runMutation(api.chat.updateProcessingPhase, {
+        messageId,
+        phase,
+      });
       console.log(`[${toolName}] Updated phase: ${phase}`);
     } catch (error) {
-      console.error(`[${toolName}] Phase update error for phase '${phase}': ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `[${toolName}] Phase update error for phase '${phase}': ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }
 
 // --- GEMINI API HELPERS ---
-const getGenerationConfigForJson = (): GenerationConfig => ({
+const getGenerationConfigForJson = () => ({
   responseMimeType: "application/json",
 });
 
 /**
  * Type-safe JSON parser for LLM responses
  */
-function parseLLMJson<T>(responseText: string, context: string, typeGuard: (obj: any) => obj is T): T | { error: string } {
+function parseLLMJson<T>(
+  responseText: string,
+  context: string,
+  typeGuard: (obj: any) => obj is T,
+): T | { error: string } {
   try {
     // Clean up code blocks if present
-    const cleanedText = responseText.replace(/^```(?:json)?\s*|```\s*$/g, '').trim();
+    const cleanedText = responseText
+      .replace(/^```(?:json)?\s*|```\s*$/g, "")
+      .trim();
 
     // Parse JSON
     const parsed = JSON.parse(cleanedText);
@@ -318,11 +423,15 @@ function parseLLMJson<T>(responseText: string, context: string, typeGuard: (obj:
     if (typeGuard(parsed)) {
       return parsed;
     } else {
-      console.error(`[parseLLMJson] ${context}: Parsed JSON doesn't match expected structure`);
+      console.error(
+        `[parseLLMJson] ${context}: Parsed JSON doesn't match expected structure`,
+      );
       return { error: `Invalid ${context} structure` };
     }
   } catch (error: any) {
-    console.error(`[parseLLMJson] ${context}: ${error.message}. Text: "${responseText.substring(0, 300)}..."`);
+    console.error(
+      `[parseLLMJson] ${context}: ${error.message}. Text: "${responseText.substring(0, 300)}..."`,
+    );
     return { error: `Error parsing ${context}: ${error.message}` };
   }
 }
@@ -331,27 +440,35 @@ function parseLLMJson<T>(responseText: string, context: string, typeGuard: (obj:
  * Type guard for LLMToolExecutionDecision
  */
 function isLLMToolExecutionDecision(obj: any): obj is LLMToolExecutionDecision {
-  const validResponseTypes = ["FINAL_ANSWER", "TRY_NEXT_TOOL", "TRY_NEXT_TOOL_AND_ADD_CONTEXT"];
+  const validResponseTypes = [
+    "FINAL_ANSWER",
+    "TRY_NEXT_TOOL",
+    "TRY_NEXT_TOOL_AND_ADD_CONTEXT",
+  ];
   return (
     obj &&
-    typeof obj === 'object' &&
-    typeof obj.responseType === 'string' &&
+    typeof obj === "object" &&
+    typeof obj.responseType === "string" &&
     validResponseTypes.includes(obj.responseType) &&
-    typeof obj.content === 'string' &&
-    typeof obj.reasoning === 'string' &&
-    (obj.contextToPreserve === undefined || obj.contextToPreserve === null || typeof obj.contextToPreserve === 'string')
+    typeof obj.content === "string" &&
+    typeof obj.reasoning === "string" &&
+    (obj.contextToPreserve === undefined ||
+      obj.contextToPreserve === null ||
+      typeof obj.contextToPreserve === "string")
   );
 }
 
 /**
  * Type guard for LLMParallelSynthesisResponse
  */
-function isLLMParallelSynthesisResponse(obj: any): obj is LLMParallelSynthesisResponse {
+function isLLMParallelSynthesisResponse(
+  obj: any,
+): obj is LLMParallelSynthesisResponse {
   return (
     obj &&
-    typeof obj === 'object' &&
-    typeof obj.synthesizedAnswer === 'string' &&
-    (obj.reasoning === undefined || typeof obj.reasoning === 'string')
+    typeof obj === "object" &&
+    typeof obj.synthesizedAnswer === "string" &&
+    (obj.reasoning === undefined || typeof obj.reasoning === "string")
   );
 }
 
@@ -361,16 +478,18 @@ function isLLMParallelSynthesisResponse(obj: any): obj is LLMParallelSynthesisRe
 function isLLMRankingDecision(obj: any): obj is LLMRankingDecision {
   return (
     obj &&
-    typeof obj === 'object' &&
+    typeof obj === "object" &&
     Array.isArray(obj.toolGroups) &&
-    obj.toolGroups.every((group: any) =>
-      typeof group === 'object' &&
-      typeof group.rank === 'number' &&
-      Array.isArray(group.toolNames) &&
-      group.toolNames.every((tool: any) => typeof tool === 'string')
+    obj.toolGroups.every(
+      (group: any) =>
+        typeof group === "object" &&
+        typeof group.rank === "number" &&
+        Array.isArray(group.toolNames) &&
+        group.toolNames.every((tool: any) => typeof tool === "string"),
     ) &&
-    (obj.directResponse === undefined || typeof obj.directResponse === 'string') &&
-    (obj.reasoning === undefined || typeof obj.reasoning === 'string')
+    (obj.directResponse === undefined ||
+      typeof obj.directResponse === "string") &&
+    (obj.reasoning === undefined || typeof obj.reasoning === "string")
   );
 }
 
@@ -383,9 +502,10 @@ class PromptFactory {
     conversationHistory: { role: string; parts: { text: string }[] }[],
     systemPromptsText: string,
     accumulatedContext?: AccumulatedContext,
-    nextToolGroup?: string[]
+    nextToolGroup?: string[],
   ): string {
-    const contentInstruction = "If responseType is FINAL_ANSWER, provide the core answer from the tool's context here. Crucially, the 'content' field must be a single string; if the tool's context is JSON, escape it and place it inside the string rather than creating a nested JSON object. This content will be used to generate the final, user-facing response. For TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT, this can be a brief note or empty. Ensure this string is properly escaped for JSON (e.g., \\n for newlines, \\\" for quotes).";
+    const contentInstruction =
+      "If responseType is FINAL_ANSWER, provide the core answer from the tool's context here. Crucially, the 'content' field must be a single string; if the tool's context is JSON, escape it and place it inside the string rather than creating a nested JSON object. This content will be used to generate the final, user-facing response. For TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT, this can be a brief note or empty. Ensure this string is properly escaped for JSON (e.g., \\n for newlines, \\\" for quotes).";
 
     let prompt = `${systemPromptsText}
 TASK INSTRUCTIONS FOR AI AGENT:
@@ -394,21 +514,25 @@ You are the 'Decider' part of a multi-step AI system. Your goal is to analyze th
 USER QUERY: "${query}"
 
 CURRENT TOOL: ${currentTool}
-${toolDescriptionOrData ? `
+${
+  toolDescriptionOrData
+    ? `
 CONTEXT FOR ${currentTool}:
 ${toolDescriptionOrData}
-` : `No specific data loaded for ${currentTool}. Rely on its function ('${AVAILABLE_TOOLS.find(t => t.name === currentTool)?.description}') or your general knowledge if it's 'no_tool'.
-`}
+`
+    : `No specific data loaded for ${currentTool}. Rely on its function ('${AVAILABLE_TOOLS.find((t) => t.name === currentTool)?.description}') or your general knowledge if it's 'no_tool'.
+`
+}
 REMAINING TOOLS TO TRY IF NEEDED (ranked in likely order of utility): ${remainingTools.length > 0 ? remainingTools.join(", ") : "None. This is the last chance."}
 
 TOOL SEQUENCE INFORMATION:
 - CURRENT TOOL: ${currentTool}
-${nextToolGroup && nextToolGroup.length > 0 ? `- NEXT TOOL(S) IF YOU SELECT TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT: ${nextToolGroup.join(', ')}` : `- NEXT TOOL(S): None (this is the last tool in the planned sequence)`}
+${nextToolGroup && nextToolGroup.length > 0 ? `- NEXT TOOL(S) IF YOU SELECT TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT: ${nextToolGroup.join(", ")}` : `- NEXT TOOL(S): None (this is the last tool in the planned sequence)`}
 `;
 
     if (accumulatedContext && accumulatedContext.content) {
       prompt += `
-IMPORTANT ACCUMULATED CONTEXT FROM PREVIOUS TOOLS (Use this to build a comprehensive understanding and avoid redundant work. Total ${accumulatedContext.sources.length} sources: [${accumulatedContext.sources.join(', ')}]):
+IMPORTANT ACCUMULATED CONTEXT FROM PREVIOUS TOOLS (Use this to build a comprehensive understanding and avoid redundant work. Total ${accumulatedContext.sources.length} sources: [${accumulatedContext.sources.join(", ")}]):
 ${accumulatedContext.content}
 `;
       if (accumulatedContext.searchSuggestionsHtmlToPreserve) {
@@ -439,20 +563,20 @@ YOUR TASK:
 DECISION GUIDELINES:
 - FINAL_ANSWER: Choose this ONLY IF:
     1. The current tool AND any accumulated context provide a DEFINITIVE and COMPLETE answer to ALL parts of the user's query: "${query}".
-    2. AND there are NO PENDING tools in 'NEXT TOOL(S)' (i.e., '${nextToolGroup && nextToolGroup.length > 0 ? nextToolGroup.join(', ') : 'None'}') that are specifically designed for a distinct part of the user's query which the current tool might only partially or generally address. For example, if the query is about 'stock price and insurance law article X', and 'search_web' is current, but 'query_law_on_insurance' is next, 'search_web' should NOT aim to answer the law article part if 'query_law_on_insurance' can do it better.
+    2. AND there are NO PENDING tools in 'NEXT TOOL(S)' (i.e., '${nextToolGroup && nextToolGroup.length > 0 ? nextToolGroup.join(", ") : "None"}') that are specifically designed for a distinct part of the user's query which the current tool might only partially or generally address. For example, if the query is about 'stock price and insurance law article X', and 'search_web' is current, but 'query_law_on_insurance' is next, 'search_web' should NOT aim to answer the law article part if 'query_law_on_insurance' can do it better.
 - TRY_NEXT_TOOL_AND_ADD_CONTEXT: PREFERRED if the current tool provided useful, relevant information for ITS PART of the query, OR if it provided some general context but a more specialized tool is pending in 'NEXT TOOL(S)' for another part of the query. Use this to pass on what the current tool found.
 - TRY_NEXT_TOOL: Choose this if the current tool yielded ABSOLUTELY NOTHING relevant for the part of the query it was intended for, OR if its output is unusable/error, AND it provides no useful context for upcoming tools.
 
 CONVERSATION HISTORY (for context):
 `;
     if (conversationHistory.length > 0) {
-      conversationHistory.forEach(msg => {
-        prompt += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0].text}\n`;
+      conversationHistory.forEach((msg) => {
+        prompt += `${msg.role === "user" ? "User" : "Assistant"}: ${msg.parts[0].text}\n`;
       });
     } else {
       prompt += "No prior conversation history.\n";
     }
-    prompt += "\nEnsure your entire response is a single, valid JSON object."
+    prompt += "\nEnsure your entire response is a single, valid JSON object.";
     return prompt;
   }
 
@@ -460,7 +584,7 @@ CONVERSATION HISTORY (for context):
     userMessage: string,
     history: { role: string; parts: { text: string }[] }[],
     tools: Tool[],
-    systemPromptsText: string // Combined system prompts
+    systemPromptsText: string, // Combined system prompts
   ): string {
     let prompt = `${systemPromptsText}
 TASK INSTRUCTIONS FOR AI AGENT:
@@ -477,7 +601,7 @@ User message: "${userMessage}"
     }
 
     prompt += `\nAvailable tools and descriptions:\n`;
-    tools.forEach(tool => {
+    tools.forEach((tool) => {
       prompt += `- ${tool.name}: ${tool.description}\n`;
     });
 
@@ -499,7 +623,7 @@ IMPORTANT GUIDELINES FOR RANKING:
 
 VERY IMPORTANT INSTRUCTIONS:
 - GROUP TOOLS BY PRIORITY LEVEL (e.g., [1], [2]). Tools in the same group are tried together.
-- List all tools provided: ${tools.map(t => t.name).join(', ')}
+- List all tools provided: ${tools.map((t) => t.name).join(", ")}
 - ALWAYS follow Output format, example:
 "thinking step" 
 [1] tool_name1, tool_name2
@@ -520,7 +644,7 @@ Your helpful response to the user (without reference to tools/ranking).
     collectedData: Array<{ toolName: string; data: string; error?: string }>,
     conversationHistory: { role: string; parts: { text: string }[] }[],
     systemPromptsText: string,
-    accumulatedContext?: AccumulatedContext
+    accumulatedContext?: AccumulatedContext,
   ): string {
     let prompt = `${systemPromptsText}
 TASK INSTRUCTIONS FOR AI AGENT:
@@ -529,14 +653,14 @@ You are the 'Synthesizer' part of a multi-step AI system. Your goal is to create
 USER QUERY: "${query}"`;
 
     if (accumulatedContext && accumulatedContext.content) {
-      prompt += `\n\nACCUMULATED CONTEXT FROM PREVIOUS TOOLS (use for broader understanding and to connect information. From sources: [${accumulatedContext.sources.join(', ')}]):\n${accumulatedContext.content}\n`;
+      prompt += `\n\nACCUMULATED CONTEXT FROM PREVIOUS TOOLS (use for broader understanding and to connect information. From sources: [${accumulatedContext.sources.join(", ")}]):\n${accumulatedContext.content}\n`;
       if (accumulatedContext.searchSuggestionsHtmlToPreserve) {
         prompt += `\nNOTE: Search suggestions from a previous web search are being preserved and will be added to your synthesized answer automatically if appropriate. Do not duplicate them in your 'synthesizedAnswer' output.\n`;
       }
     }
 
     prompt += `\nYou have received data from multiple sources executed in parallel for the current query stage:\n`;
-    collectedData.forEach(item => {
+    collectedData.forEach((item) => {
       prompt += `\n### Data from ${item.toolName}:\n`;
       if (item.error) {
         prompt += `Error reported by ${item.toolName}: ${item.error}\n`;
@@ -549,8 +673,8 @@ USER QUERY: "${query}"`;
 
     prompt += `\nCONVERSATION HISTORY (for context):\n`;
     if (conversationHistory.length > 0) {
-      conversationHistory.forEach(msg => {
-        prompt += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0].text}\n`;
+      conversationHistory.forEach((msg) => {
+        prompt += `${msg.role === "user" ? "User" : "Assistant"}: ${msg.parts[0].text}\n`;
       });
     } else {
       prompt += "No prior conversation history.\n";
@@ -572,7 +696,8 @@ YOUR TASK:
    \`\`\`
 Ensure your entire response is a single, valid JSON object.
 `;
-    prompt += "\nIMPORTANT: Remember, your entire output must be ONLY the JSON object described above. No other text, no pleasantries, just the JSON.";
+    prompt +=
+      "\nIMPORTANT: Remember, your entire output must be ONLY the JSON object described above. No other text, no pleasantries, just the JSON.";
     return prompt;
   }
 }
@@ -581,24 +706,34 @@ class NoToolExecutor implements IToolExecutor {
   public name = "no_tool";
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-    console.log(`[NoToolExecutor] Executing direct response. Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
+    console.log(
+      `[NoToolExecutor] Executing direct response. Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`,
+    );
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
 
     // Check for preserved search sources in accumulated context and extract them
-    let searchSources = params.accumulatedContext?.searchSuggestionsHtmlToPreserve;
+    let searchSources =
+      params.accumulatedContext?.searchSuggestionsHtmlToPreserve;
     let cleanedContext = params.accumulatedContext?.content;
 
     if (cleanedContext) {
-      const sourceMatch = cleanedContext.match(/<!-- PRESERVED_SEARCH_SOURCES:([\s\S]*?) -->/i);
+      const sourceMatch = cleanedContext.match(
+        /<!-- PRESERVED_SEARCH_SOURCES:([\s\S]*?) -->/i,
+      );
       if (sourceMatch) {
         // If we find sources in the content and don't already have them, use them
         if (!searchSources) {
           searchSources = sourceMatch[1];
-          console.log(`[NoToolExecutor] Found preserved search sources in accumulated context.`);
+          console.log(
+            `[NoToolExecutor] Found preserved search sources in accumulated context.`,
+          );
         }
 
         // Remove the preserved sources comment from the context for the prompt
-        cleanedContext = cleanedContext.replace(/<!-- PRESERVED_SEARCH_SOURCES:[\s\S]*? -->/gi, '');
+        cleanedContext = cleanedContext.replace(
+          /<!-- PRESERVED_SEARCH_SOURCES:[\s\S]*? -->/gi,
+          "",
+        );
         if (params.accumulatedContext) {
           params.accumulatedContext.content = cleanedContext;
         }
@@ -613,20 +748,25 @@ class NoToolExecutor implements IToolExecutor {
       params.conversationHistory,
       systemPromptsText,
       params.accumulatedContext,
-      params.nextToolGroup
+      params.nextToolGroup,
     );
 
     try {
-      const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
-      const response = await model.generateContent(directPrompt);
-      const responseText = response.response.text();
+      const response = await params.genAI.models.generateContent({
+        model: params.selectedModel || DEFAULT_MODEL_NAME,
+        contents: directPrompt,
+        config: getGenerationConfigForJson(),
+      });
+      const responseText = response.text || "";
       const parsedDecision = parseToolExecutionDecision(responseText);
 
-      if ('error' in parsedDecision) {
+      if ("error" in parsedDecision) {
         throw new Error(parsedDecision.error);
       }
 
-      console.log(`[NoToolExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0, 100)}..."`);
+      console.log(
+        `[NoToolExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0, 100)}..."`,
+      );
 
       // Create result with all standard fields
       const result = createToolResult(
@@ -636,7 +776,7 @@ class NoToolExecutor implements IToolExecutor {
         parsedDecision.contextToPreserve,
         undefined,
         undefined, // NoToolExecutor doesn't generate its own search suggestions
-        searchSources // Use the extracted search sources
+        searchSources, // Use the extracted search sources
       );
 
       // For synthesis in parallel execution, provide the direct answer content
@@ -650,7 +790,9 @@ class NoToolExecutor implements IToolExecutor {
 
       return result;
     } catch (error: any) {
-      console.error(`[NoToolExecutor] LLM Error or Parsing Error: ${error.message || String(error)}`);
+      console.error(
+        `[NoToolExecutor] LLM Error or Parsing Error: ${error.message || String(error)}`,
+      );
       return createToolResult(
         this.name,
         "I'm sorry, I encountered an error in processing your request.",
@@ -658,7 +800,7 @@ class NoToolExecutor implements IToolExecutor {
         undefined,
         error.message || String(error),
         undefined,
-        searchSources // Use the extracted search sources
+        searchSources, // Use the extracted search sources
       );
     }
   }
@@ -668,34 +810,37 @@ class WebSearchExecutor implements IToolExecutor {
   public name = "search_web";
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-    console.log(`[WebSearchExecutor] Executing for query: "${params.query.substring(0, 50)}..." Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
-    await updateProcessingPhase(params.ctx, params.messageId, "Searching web", this.name);
+    console.log(
+      `[WebSearchExecutor] Executing for query: "${params.query.substring(0, 50)}..." Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`,
+    );
+    await updateProcessingPhase(
+      params.ctx,
+      params.messageId,
+      "Searching web",
+      this.name,
+    );
 
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
     const googleSearchTool: GoogleSearchTool = { googleSearch: {} };
 
-    // as the LLM's response will be natural language possibly augmented by tool output.
-    // The subsequent call in this executor *to decide what to do with the search results* WILL use JSON mode.
-    const modelConfig: ModelConfig = {
-      model: params.selectedModel || DEFAULT_MODEL_NAME,
-      tools: [googleSearchTool],
-      // systemInstruction: systemPromptsText, // Some models prefer system instruction here
-    };
-    const searchModel = params.genAI.getGenerativeModel(modelConfig);
-    const chat = searchModel.startChat({ tools: [googleSearchTool] as GenAITool[], history: params.conversationHistory.slice(0, -1) });
-
     // This first prompt is to GET search results
-    let focusedQuery = params.query; // Start with the original query
     const nextTools = params.nextToolGroup || [];
 
     // Check if a specialized law/insurance tool is coming up
-    const hasPendingLawInsuranceTool = nextTools.includes("query_law_on_insurance") ||
+    const hasPendingLawInsuranceTool =
+      nextTools.includes("query_law_on_insurance") ||
       nextTools.includes("query_insurance_qna") ||
       nextTools.includes("query_law_on_consumer_protection");
 
-    let searchDirectives = "Prioritize concise and directly relevant information for all parts of the query.";
+    let searchDirectives =
+      "Prioritize concise and directly relevant information for all parts of the query.";
 
-    if (hasPendingLawInsuranceTool && (params.query.toLowerCase().includes("law") || params.query.toLowerCase().includes("insurance") || params.query.toLowerCase().includes("article"))) {
+    if (
+      hasPendingLawInsuranceTool &&
+      (params.query.toLowerCase().includes("law") ||
+        params.query.toLowerCase().includes("insurance") ||
+        params.query.toLowerCase().includes("article"))
+    ) {
       searchDirectives = `
 The user's query has multiple parts. Some parts relate to legal or insurance matters that will likely be handled by a specialized database tool later (e.g., tools like 'query_law_on_insurance', 'query_insurance_qna'). 
 For THIS web search, please FOCUS PRIMARILY on the non-legal/non-insurance aspects of the query. 
@@ -705,9 +850,20 @@ Perform a web search based on these refined instructions.
     `.trim();
     }
 
+    const conversationHistoryText =
+      params.conversationHistory.length > 0
+        ? `\nConversation history:\n${params.conversationHistory
+            .map(
+              (msg) =>
+                `${msg.role === "user" ? "User" : "Assistant"}: ${msg.parts[0]?.text || ""}`,
+            )
+            .join("\n")}`
+        : "";
+
     const searchInvocationPrompt = `Based on the user query "${params.query}" and conversation history, perform a web search.
 ${searchDirectives}
-  ${params.accumulatedContext?.content ? `\nConsider this accumulated context: ${params.accumulatedContext.content.substring(0, 500)}...\n` : ''}
+  ${conversationHistoryText}
+  ${params.accumulatedContext?.content ? `\nConsider this accumulated context: ${params.accumulatedContext.content.substring(0, 500)}...\n` : ""}
   ${systemPromptsText}
   Please provide the search results.`;
 
@@ -715,19 +871,32 @@ ${searchDirectives}
     let searchSuggestionsHtml: string | undefined;
 
     try {
-      console.log(`[WebSearchExecutor] Sending search invocation prompt to LLM.`);
-      const searchResponse = await chat.sendMessage(searchInvocationPrompt);
-      searchResultsText = searchResponse.response.text();
-      console.log(`[WebSearchExecutor] Received search results text (len: ${searchResultsText.length}).`);
+      console.log(
+        `[WebSearchExecutor] Sending search invocation prompt to LLM.`,
+      );
+      const searchResponse = await params.genAI.models.generateContent({
+        model: params.selectedModel || DEFAULT_MODEL_NAME,
+        contents: searchInvocationPrompt,
+        config: {
+          tools: [googleSearchTool],
+        },
+      });
+      searchResultsText = searchResponse.text || "";
+      console.log(
+        `[WebSearchExecutor] Received search results text (len: ${searchResultsText.length}).`,
+      );
 
       // Extract search suggestions if available (this part remains similar)
-      const responseAny = searchResponse as any; // To access groundingMetadata
-      const groundingMeta = responseAny.response.candidates?.[0]?.groundingMetadata;
+      const groundingMeta = searchResponse.candidates?.[0]?.groundingMetadata;
 
       if (groundingMeta) {
         const groundingChunks = groundingMeta.groundingChunks;
 
-        if (groundingChunks && Array.isArray(groundingChunks) && groundingChunks.length > 0) {
+        if (
+          groundingChunks &&
+          Array.isArray(groundingChunks) &&
+          groundingChunks.length > 0
+        ) {
           let html = "<strong>Sources:</strong><ul>";
           for (const chunk of groundingChunks) {
             if (chunk.web && chunk.web.uri) {
@@ -738,19 +907,30 @@ ${searchDirectives}
           }
           html += "</ul>";
           searchSuggestionsHtml = html;
-          console.log(`[WebSearchExecutor] Extracted search suggestions HTML from groundingChunks (len: ${searchSuggestionsHtml?.length}).`);
+          console.log(
+            `[WebSearchExecutor] Extracted search suggestions HTML from groundingChunks (len: ${searchSuggestionsHtml?.length}).`,
+          );
         } else if (groundingMeta.searchEntryPoint?.renderedContent) {
           // Fallback to the general rendered content if no specific groundingChunks are found
-          searchSuggestionsHtml = groundingMeta.searchEntryPoint.renderedContent;
-          console.log(`[WebSearchExecutor] Extracted search suggestions HTML from renderedContent (fallback) (len: ${searchSuggestionsHtml?.length}).`);
+          searchSuggestionsHtml =
+            groundingMeta.searchEntryPoint.renderedContent;
+          console.log(
+            `[WebSearchExecutor] Extracted search suggestions HTML from renderedContent (fallback) (len: ${searchSuggestionsHtml?.length}).`,
+          );
         } else {
-          console.log('[WebSearchExecutor] No groundingChunks or renderedContent found in groundingMetadata for suggestions.');
+          console.log(
+            "[WebSearchExecutor] No groundingChunks or renderedContent found in groundingMetadata for suggestions.",
+          );
         }
       } else {
-        console.log('[WebSearchExecutor] No groundingMetadata found in search response.');
+        console.log(
+          "[WebSearchExecutor] No groundingMetadata found in search response.",
+        );
       }
     } catch (error: any) {
-      console.error(`[WebSearchExecutor] Error during web search LLM call: ${error.message || String(error)}`);
+      console.error(
+        `[WebSearchExecutor] Error during web search LLM call: ${error.message || String(error)}`,
+      );
       return createToolResult(
         this.name,
         "Sorry, I encountered an issue during web search.",
@@ -758,7 +938,7 @@ ${searchDirectives}
         undefined,
         `Search LLM Error: ${error.message || String(error)}`,
         undefined,
-        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve,
       );
     }
 
@@ -771,34 +951,46 @@ ${searchDirectives}
       params.conversationHistory,
       systemPromptsText,
       params.accumulatedContext,
-      params.nextToolGroup
+      params.nextToolGroup,
     );
 
     try {
-      console.log(`[WebSearchExecutor] Sending search results analysis prompt to LLM for decision.`);
-      const decisionModel = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
-      const decisionResponse = await decisionModel.generateContent(decisionPrompt);
-      const decisionResponseText = decisionResponse.response.text();
+      console.log(
+        `[WebSearchExecutor] Sending search results analysis prompt to LLM for decision.`,
+      );
+      const decisionResponse = await params.genAI.models.generateContent({
+        model: params.selectedModel || DEFAULT_MODEL_NAME,
+        contents: decisionPrompt,
+        config: getGenerationConfigForJson(),
+      });
+      const decisionResponseText = decisionResponse.text || "";
       const parsedDecision = parseToolExecutionDecision(decisionResponseText);
 
-      if ('error' in parsedDecision) {
+      if ("error" in parsedDecision) {
         throw new Error(parsedDecision.error);
       }
 
-      console.log(`[WebSearchExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0, 100)}..."`);
+      console.log(
+        `[WebSearchExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0, 100)}..."`,
+      );
 
       // Auto-extract context if TRY_NEXT_TOOL but useful info exists (heuristic)
       let finalContextToPreserve = parsedDecision.contextToPreserve;
       let finalResponseType = parsedDecision.responseType;
 
       if (
-        (parsedDecision.responseType === "TRY_NEXT_TOOL" || (parsedDecision.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && !parsedDecision.contextToPreserve)) &&
+        (parsedDecision.responseType === "TRY_NEXT_TOOL" ||
+          (parsedDecision.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" &&
+            !parsedDecision.contextToPreserve)) &&
         searchResultsText.trim().length > 20 // If we got some search results
       ) {
-        console.log(`[WebSearchExecutor] Heuristic: Has search results but LLM chose TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT without context. Auto-adding search summary.`);
+        console.log(
+          `[WebSearchExecutor] Heuristic: Has search results but LLM chose TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT without context. Auto-adding search summary.`,
+        );
         finalResponseType = "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
-        finalContextToPreserve = (finalContextToPreserve ? finalContextToPreserve + "\n\n" : "") +
-          `Summary from web search for "${params.query}":\n${searchResultsText.substring(0, Math.min(searchResultsText.length, 1500))}${searchResultsText.length > 1500 ? '... (truncated)' : ''}`;
+        finalContextToPreserve =
+          (finalContextToPreserve ? finalContextToPreserve + "\n\n" : "") +
+          `Summary from web search for "${params.query}":\n${searchResultsText.substring(0, Math.min(searchResultsText.length, 1500))}${searchResultsText.length > 1500 ? "... (truncated)" : ""}`;
       }
 
       const result = createToolResult(
@@ -808,7 +1000,7 @@ ${searchDirectives}
         finalContextToPreserve,
         undefined,
         searchSuggestionsHtml, // Pass along the extracted HTML
-        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve,
       );
 
       // For synthesis in parallel execution, provide the complete search results
@@ -817,7 +1009,9 @@ ${searchDirectives}
 
       return result;
     } catch (error: any) {
-      console.error(`[WebSearchExecutor] LLM Error or Parsing Error on decision: ${error.message || String(error)}`);
+      console.error(
+        `[WebSearchExecutor] LLM Error or Parsing Error on decision: ${error.message || String(error)}`,
+      );
       return createToolResult(
         this.name,
         "Sorry, I encountered an issue processing the web search results.",
@@ -825,7 +1019,7 @@ ${searchDirectives}
         undefined,
         `Decision LLM Error: ${error.message || String(error)}`,
         searchSuggestionsHtml, // Still pass if we got them
-        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve,
       );
     }
   }
@@ -836,31 +1030,73 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
   protected databaseInternalName: string;
   protected readableName: string;
 
-  constructor(toolName: string, databaseInternalName: string, readableName: string) {
+  constructor(
+    toolName: string,
+    databaseInternalName: string,
+    readableName: string,
+  ) {
     this.name = toolName;
     this.databaseInternalName = databaseInternalName;
     this.readableName = readableName;
   }
 
-  protected abstract fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: any | null; error?: string }>;
+  protected abstract fetchDatabaseContent(
+    ctx: ConvexActionCtx,
+  ): Promise<{ content: any | null; error?: string }>;
 
-  async fetchRawData(ctx: ConvexActionCtx): Promise<{ toolName: string; data: string; error?: string; dbSize?: number }> {
-    await updateProcessingPhase(ctx, undefined, `Fetching ${this.readableName} content`, this.name);
+  async fetchRawData(ctx: ConvexActionCtx): Promise<{
+    toolName: string;
+    data: string;
+    error?: string;
+    dbSize?: number;
+  }> {
+    await updateProcessingPhase(
+      ctx,
+      undefined,
+      `Fetching ${this.readableName} content`,
+      this.name,
+    );
     const dbFetchResult = await this.fetchDatabaseContent(ctx);
     if (dbFetchResult.content) {
       const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
       const MAX_DATA_SIZE_FOR_PROMPT = 50000000000;
-      const truncatedJsonData = jsonData.length > MAX_DATA_SIZE_FOR_PROMPT ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) + "\n... (data truncated)" : jsonData;
-      console.log(`[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`);
-      return { toolName: this.name, data: truncatedJsonData, dbSize: jsonData.length };
+      const truncatedJsonData =
+        jsonData.length > MAX_DATA_SIZE_FOR_PROMPT
+          ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) +
+            "\n... (data truncated)"
+          : jsonData;
+      console.log(
+        `[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`,
+      );
+      return {
+        toolName: this.name,
+        data: truncatedJsonData,
+        dbSize: jsonData.length,
+      };
     }
-    console.warn(`[${this.name}] Failed to fetch raw data. Error: ${dbFetchResult.error}`);
-    return { toolName: this.name, data: "", error: dbFetchResult.error || `No content found or error fetching from ${this.readableName}.`, dbSize: 0 };
+    console.warn(
+      `[${this.name}] Failed to fetch raw data. Error: ${dbFetchResult.error}`,
+    );
+    return {
+      toolName: this.name,
+      data: "",
+      error:
+        dbFetchResult.error ||
+        `No content found or error fetching from ${this.readableName}.`,
+      dbSize: 0,
+    };
   }
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-    console.log(`[${this.name}] Executing for query: \"${params.query.substring(0, 50)}...\" Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`);
-    await updateProcessingPhase(params.ctx, params.messageId, `Searching ${this.readableName}`, this.name);
+    console.log(
+      `[${this.name}] Executing for query: \"${params.query.substring(0, 50)}...\" Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`,
+    );
+    await updateProcessingPhase(
+      params.ctx,
+      params.messageId,
+      `Searching ${this.readableName}`,
+      this.name,
+    );
 
     const dbFetchResult = await this.fetchDatabaseContent(params.ctx);
     let toolDataForPrompt: string;
@@ -868,7 +1104,9 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
     if (dbFetchResult.content) {
       const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
       toolDataForPrompt = `Contents of ${this.readableName} (JSON format) related to the query:\n\`\`\`json\n${jsonData}\n\`\`\``;
-      console.log(`[${this.name}] Database content loaded for LLM analysis (${toolDataForPrompt.length} chars, full content).`);
+      console.log(
+        `[${this.name}] Database content loaded for LLM analysis (${toolDataForPrompt.length} chars, full content).`,
+      );
     } else {
       toolDataForPrompt = `Error accessing or processing data from ${this.readableName}: ${dbFetchResult.error}. Inform the user if this prevents answering the query or try another tool.`;
       console.warn(`[${this.name}] ${toolDataForPrompt}`);
@@ -883,20 +1121,25 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
       params.conversationHistory,
       systemPromptsText,
       params.accumulatedContext,
-      params.nextToolGroup
+      params.nextToolGroup,
     );
 
     try {
-      const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
-      const response = await model.generateContent(llmPrompt);
-      const responseText = response.response.text();
+      const response = await params.genAI.models.generateContent({
+        model: params.selectedModel || DEFAULT_MODEL_NAME,
+        contents: llmPrompt,
+        config: getGenerationConfigForJson(),
+      });
+      const responseText = response.text || "";
       const parsedDecision = parseToolExecutionDecision(responseText);
 
-      if ('error' in parsedDecision) {
+      if ("error" in parsedDecision) {
         throw new Error(parsedDecision.error);
       }
 
-      console.log(`[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: \"${parsedDecision.reasoning.substring(0, 100)}...\"`);
+      console.log(
+        `[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: \"${parsedDecision.reasoning.substring(0, 100)}...\"`,
+      );
 
       return createToolResult(
         this.name,
@@ -905,12 +1148,18 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
         parsedDecision.contextToPreserve,
         undefined,
         undefined,
-        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve,
       );
     } catch (error: any) {
-      console.error(`[${this.name}] LLM processing error: ${error.message}. Prompt start:\n${llmPrompt.substring(0, 300)}...`);
+      console.error(
+        `[${this.name}] LLM processing error: ${error.message}. Prompt start:\n${llmPrompt.substring(0, 300)}...`,
+      );
       if (dbFetchResult.content) {
-        const fullContentString = JSON.stringify(dbFetchResult.content, null, 2);
+        const fullContentString = JSON.stringify(
+          dbFetchResult.content,
+          null,
+          2,
+        );
         return createToolResult(
           this.name,
           `LLM processing failed. Full content of ${this.readableName} provided as fallback. Consider if this is enough or if another tool should be tried. Original query: \"${params.query}\"`,
@@ -918,7 +1167,7 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
           fullContentString,
           error.message,
           undefined,
-          params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+          params.accumulatedContext?.searchSuggestionsHtmlToPreserve,
         );
       }
       return createToolResult(
@@ -928,64 +1177,105 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
         undefined,
         error.message,
         undefined,
-        params.accumulatedContext?.searchSuggestionsHtmlToPreserve
+        params.accumulatedContext?.searchSuggestionsHtmlToPreserve,
       );
     }
   }
 }
 
-
 class DatabaseQueryExecutor extends AbstractDatabaseExecutor {
-  constructor(toolName: string, databaseInternalName: string, readableName: string) {
+  constructor(
+    toolName: string,
+    databaseInternalName: string,
+    readableName: string,
+  ) {
     super(toolName, databaseInternalName, readableName);
   }
 
-  protected async fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: LawDatabase | null; error?: string }> {
+  protected async fetchDatabaseContent(
+    ctx: ConvexActionCtx,
+  ): Promise<{ content: LawDatabase | null; error?: string }> {
     try {
-      const dbResult = await ctx.runQuery(api.Databases.getLawDatabaseContentByName, {
-        name: this.databaseInternalName,
-      });
+      const dbResult = await ctx.runQuery(
+        api.Databases.getLawDatabaseContentByName,
+        {
+          name: this.databaseInternalName,
+        },
+      );
 
       if (dbResult.success && dbResult.database?.content) {
-        if (typeof dbResult.database.content !== 'object' || dbResult.database.content === null) {
-          return { content: null, error: `The ${this.readableName} database content is not in the expected object format.` };
+        if (
+          typeof dbResult.database.content !== "object" ||
+          dbResult.database.content === null
+        ) {
+          return {
+            content: null,
+            error: `The ${this.readableName} database content is not in the expected object format.`,
+          };
         }
         return { content: dbResult.database.content as LawDatabase };
       } else {
         // Use dbResult.error if available, otherwise a generic message
-        const errorMessage = dbResult.error || `Failed to retrieve or parse content from ${this.readableName} database.`;
+        const errorMessage =
+          dbResult.error ||
+          `Failed to retrieve or parse content from ${this.readableName} database.`;
         console.warn(`[${this.name}] Database fetch warning: ${errorMessage}`);
         return { content: null, error: errorMessage };
       }
     } catch (error: any) {
-      console.error(`[${this.name}] Error fetching database ${this.readableName}: ${error.message || String(error)}`);
-      return { content: null, error: error.message || `An error occurred while accessing the ${this.readableName} database.` };
+      console.error(
+        `[${this.name}] Error fetching database ${this.readableName}: ${error.message || String(error)}`,
+      );
+      return {
+        content: null,
+        error:
+          error.message ||
+          `An error occurred while accessing the ${this.readableName} database.`,
+      };
     }
   }
 }
 
 class ElixerWhitepaperContentExecutor extends AbstractDatabaseExecutor {
-  constructor(toolName: string, databaseInternalName: string, readableName: string) {
+  constructor(
+    toolName: string,
+    databaseInternalName: string,
+    readableName: string,
+  ) {
     super(toolName, databaseInternalName, readableName);
   }
 
-  protected async fetchDatabaseContent(ctx: ConvexActionCtx): Promise<{ content: any | null; error?: string }> {
+  protected async fetchDatabaseContent(
+    ctx: ConvexActionCtx,
+  ): Promise<{ content: any | null; error?: string }> {
     try {
-      const dbResult = await ctx.runQuery(api.Databases.getLawDatabaseContentByName, {
-        name: this.databaseInternalName,
-      });
+      const dbResult = await ctx.runQuery(
+        api.Databases.getLawDatabaseContentByName,
+        {
+          name: this.databaseInternalName,
+        },
+      );
 
       if (dbResult.success && dbResult.database?.content) {
         return { content: dbResult.database.content }; // Content is 'any' here
       } else {
         // Use dbResult.message if available (as per original ElixerWhitepaperContentExecutor), otherwise a generic message
-        const errorMessage = (dbResult as any).message || `Failed to retrieve content from ${this.readableName} database.`;
+        const errorMessage =
+          (dbResult as any).message ||
+          `Failed to retrieve content from ${this.readableName} database.`;
         console.warn(`[${this.name}] Database fetch warning: ${errorMessage}`);
         return { content: null, error: errorMessage };
       }
     } catch (error: any) {
-      console.error(`[${this.name}] Error fetching database ${this.readableName}: ${error.message || String(error)}`);
-      return { content: null, error: error.message || `An error occurred while accessing the ${this.readableName} database.` };
+      console.error(
+        `[${this.name}] Error fetching database ${this.readableName}: ${error.message || String(error)}`,
+      );
+      return {
+        content: null,
+        error:
+          error.message ||
+          `An error occurred while accessing the ${this.readableName} database.`,
+      };
     }
   }
 }
@@ -995,28 +1285,39 @@ class AgentModeOffExecutor implements IToolExecutor {
   public name = "agent_mode_off";
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-    console.log(`[AgentModeOffExecutor] Executing direct response with agent mode off.`);
+    console.log(
+      `[AgentModeOffExecutor] Executing direct response with agent mode off.`,
+    );
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
 
     // Create a simplified prompt that doesn't mention tools since agent mode is off
     const directPrompt = `${systemPromptsText}\n\n`;
 
     // Add conversation history if available
-    const conversationContext = params.conversationHistory.length > 0 ?
-      'Conversation History:\n' +
-      params.conversationHistory
-        .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.parts[0]?.text}`)
-        .join('\n') + '\n\n' :
-      '';
+    const conversationContext =
+      params.conversationHistory.length > 0
+        ? "Conversation History:\n" +
+          params.conversationHistory
+            .map(
+              (msg) =>
+                `${msg.role === "user" ? "User" : "Assistant"}: ${msg.parts[0]?.text}`,
+            )
+            .join("\n") +
+          "\n\n"
+        : "";
 
     const fullPrompt = `${directPrompt}${conversationContext}User asks: "${params.query}"\n\nPlease provide a helpful response that answers the question directly, taking into account the conversation history.`;
 
     try {
-      const model = params.genAI.getGenerativeModel({ model: params.selectedModel || DEFAULT_MODEL_NAME });
-      const response = await model.generateContent(fullPrompt);
-      const responseText = response.response.text();
+      const response = await params.genAI.models.generateContent({
+        model: params.selectedModel || DEFAULT_MODEL_NAME,
+        contents: fullPrompt,
+      });
+      const responseText = response.text || "";
 
-      console.log(`[AgentModeOffExecutor] Generated response (${responseText.length} chars).`);
+      console.log(
+        `[AgentModeOffExecutor] Generated response (${responseText.length} chars).`,
+      );
 
       // Create a simplified result - always treat it as a final answer
       const result = createToolResult(
@@ -1026,7 +1327,7 @@ class AgentModeOffExecutor implements IToolExecutor {
         undefined,
         undefined,
         undefined,
-        undefined // No search sources in agent mode off
+        undefined, // No search sources in agent mode off
       );
 
       // For synthesis in parallel execution
@@ -1034,7 +1335,9 @@ class AgentModeOffExecutor implements IToolExecutor {
 
       return result;
     } catch (error: any) {
-      console.error(`[AgentModeOffExecutor] LLM Error: ${error.message || String(error)}`);
+      console.error(
+        `[AgentModeOffExecutor] LLM Error: ${error.message || String(error)}`,
+      );
       return createToolResult(
         this.name,
         "I'm sorry, I encountered an error in processing your request.",
@@ -1042,7 +1345,7 @@ class AgentModeOffExecutor implements IToolExecutor {
         undefined,
         error.message || String(error),
         undefined,
-        undefined // No search sources in agent mode off
+        undefined, // No search sources in agent mode off
       );
     }
   }
@@ -1050,13 +1353,29 @@ class AgentModeOffExecutor implements IToolExecutor {
 
 // --- TOOL EXECUTOR REGISTRY ---
 export const toolExecutors: Record<string, IToolExecutor> = {
-  "no_tool": new NoToolExecutor(),
-  "agent_mode_off": new AgentModeOffExecutor(),
-  "search_web": new WebSearchExecutor(),
-  "query_law_on_insurance": new DatabaseQueryExecutor("query_law_on_insurance", "Law_on_Insurance", "Law on Insurance"),
-  "query_law_on_consumer_protection": new DatabaseQueryExecutor("query_law_on_consumer_protection", "Law_on_Consumer_Protection", "Law on Consumer Protection"),
-  "query_insurance_qna": new DatabaseQueryExecutor("query_insurance_qna", "Insurance_and_reinsurance_in_Cambodia_QnA_format", "Insurance Q&A"),
-  "get_elixer_whitepaper": new ElixerWhitepaperContentExecutor("get_elixer_whitepaper", "Elixer_WhitePaper", "Elixer White Paper"),
+  no_tool: new NoToolExecutor(),
+  agent_mode_off: new AgentModeOffExecutor(),
+  search_web: new WebSearchExecutor(),
+  query_law_on_insurance: new DatabaseQueryExecutor(
+    "query_law_on_insurance",
+    "Law_on_Insurance",
+    "Law on Insurance",
+  ),
+  query_law_on_consumer_protection: new DatabaseQueryExecutor(
+    "query_law_on_consumer_protection",
+    "Law_on_Consumer_Protection",
+    "Law on Consumer Protection",
+  ),
+  query_insurance_qna: new DatabaseQueryExecutor(
+    "query_insurance_qna",
+    "Insurance_and_reinsurance_in_Cambodia_QnA_format",
+    "Insurance Q&A",
+  ),
+  get_elixer_whitepaper: new ElixerWhitepaperContentExecutor(
+    "get_elixer_whitepaper",
+    "Elixer_WhitePaper",
+    "Elixer White Paper",
+  ),
 };
 
 // --- CORE LOGIC FUNCTIONS ---
@@ -1065,9 +1384,14 @@ export const toolExecutors: Record<string, IToolExecutor> = {
  * Parses the AI's ranking response from natural language format.
  * This is optimized for speed and flexibility, not requiring strict JSON format.
  */
-const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: string[]): RankingResult => {
+const parseToolGroupsFromNaturalLanguage = (
+  responseText: string,
+  allToolNames: string[],
+): RankingResult => {
   try {
-    console.log(`[parseToolGroupsFromNaturalLanguage] Parsing response with length ${responseText.length}`);
+    console.log(
+      `[parseToolGroupsFromNaturalLanguage] Parsing response with length ${responseText.length}`,
+    );
     const rankedToolGroups: string[][] = [];
     const rankedToolsSet = new Set<string>();
     let directResponse: string | undefined;
@@ -1075,7 +1399,7 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
     // Extract groups using regex patterns
     // Look for patterns like "[1] search_web, query_law_on_insurance" or "1. search_web"
     const groupPatterns = [
-      /\[(\d+)\]\s*([^\n]+)/gm,  // Matches [1] tool1, tool2
+      /\[(\d+)\]\s*([^\n]+)/gm, // Matches [1] tool1, tool2
       /(?:Group|Group Priority|Priority|Rank)\s*(\d+)\s*[:\-]\s*([^\n]+)/gi,
       /(?:Tools|Tool Group|Tools Group)\s*(\d+)\s*[:\-]\s*([^\n]+)/gi,
       /(?:\b|^)(\d+)[.\)]\s*([^\n]+)/gm,
@@ -1093,7 +1417,9 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
       const match = responseText.match(pattern);
       if (match && match[1]) {
         directResponse = match[1].trim();
-        console.log(`[parseToolGroupsFromNaturalLanguage] Found direct response: "${directResponse.substring(0, 100)}..."`);
+        console.log(
+          `[parseToolGroupsFromNaturalLanguage] Found direct response: "${directResponse.substring(0, 100)}..."`,
+        );
         break;
       }
     }
@@ -1137,8 +1463,10 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
               for (const toolName of allToolNames) {
                 // Check if the tool name contains the clean part or vice versa
                 // But only for substantial matches (4+ chars)
-                if (toolName.toLowerCase().includes(cleanPart) ||
-                  cleanPart.includes(toolName.toLowerCase())) {
+                if (
+                  toolName.toLowerCase().includes(cleanPart) ||
+                  cleanPart.includes(toolName.toLowerCase())
+                ) {
                   if (!rankedToolsSet.has(toolName)) {
                     extractedTools.push(toolName);
                     rankedToolsSet.add(toolName);
@@ -1166,20 +1494,26 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
     }
 
     // Add any unranked tools to the end, 'no_tool' last among them
-    const unrankedTools = allToolNames.filter(tool => !rankedToolsSet.has(tool));
+    const unrankedTools = allToolNames.filter(
+      (tool) => !rankedToolsSet.has(tool),
+    );
     if (unrankedTools.length > 0) {
-      console.log(`[parseToolGroupsFromNaturalLanguage] Tools not ranked by AI: ${unrankedTools.join(', ')}. Adding them as individual trailing groups.`);
+      console.log(
+        `[parseToolGroupsFromNaturalLanguage] Tools not ranked by AI: ${unrankedTools.join(", ")}. Adding them as individual trailing groups.`,
+      );
       const noToolIndex = unrankedTools.indexOf("no_tool");
       if (noToolIndex > -1) {
         unrankedTools.splice(noToolIndex, 1); // Remove no_tool
-        unrankedTools.push("no_tool");      // Add it to the very end of unranked
+        unrankedTools.push("no_tool"); // Add it to the very end of unranked
       }
-      unrankedTools.forEach(tool => rankedToolGroups.push([tool]));
+      unrankedTools.forEach((tool) => rankedToolGroups.push([tool]));
     }
 
     // If there's a direct response, ensure no_tool is prioritized at the beginning
     if (directResponse) {
-      console.log(`[parseToolGroupsFromNaturalLanguage] Direct response found, prioritizing no_tool`);
+      console.log(
+        `[parseToolGroupsFromNaturalLanguage] Direct response found, prioritizing no_tool`,
+      );
 
       // First, remove no_tool from wherever it is in the groups
       let noToolRemoved = false;
@@ -1203,24 +1537,47 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
         rankedToolGroups.unshift(["no_tool"]);
       }
 
-      console.log(`[parseToolGroupsFromNaturalLanguage] Prioritized no_tool for direct response.`);
+      console.log(
+        `[parseToolGroupsFromNaturalLanguage] Prioritized no_tool for direct response.`,
+      );
     }
 
-    if (rankedToolGroups.length === 0) { // Should not happen if unranked tools are added
-      console.warn('[parseToolGroupsFromNaturalLanguage] No valid tool groups parsed. This is unexpected.');
-      return { rankedToolGroups: [allToolNames.includes("search_web") ? ["search_web"] : [allToolNames[0]]] }; // Basic fallback
+    if (rankedToolGroups.length === 0) {
+      // Should not happen if unranked tools are added
+      console.warn(
+        "[parseToolGroupsFromNaturalLanguage] No valid tool groups parsed. This is unexpected.",
+      );
+      return {
+        rankedToolGroups: [
+          allToolNames.includes("search_web")
+            ? ["search_web"]
+            : [allToolNames[0]],
+        ],
+      }; // Basic fallback
     }
 
-    console.log(`[parseToolGroupsFromNaturalLanguage] Final tool groups: ${JSON.stringify(rankedToolGroups)}`);
+    console.log(
+      `[parseToolGroupsFromNaturalLanguage] Final tool groups: ${JSON.stringify(rankedToolGroups)}`,
+    );
     return {
       rankedToolGroups,
       directResponse: directResponse,
     };
   } catch (e: any) {
-    console.error(`[parseToolGroupsFromNaturalLanguage] Error parsing LLM ranking: ${e.message}. Response: "${responseText.substring(0, 300)}..."`);
+    console.error(
+      `[parseToolGroupsFromNaturalLanguage] Error parsing LLM ranking: ${e.message}. Response: "${responseText.substring(0, 300)}..."`,
+    );
     // Fallback to a default ranking on error
     return {
-      rankedToolGroups: [["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"], ["search_web"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
+      rankedToolGroups: [
+        [
+          "query_law_on_insurance",
+          "query_law_on_consumer_protection",
+          "query_insurance_qna",
+        ],
+        ["search_web"],
+        ["no_tool"],
+      ].filter((group) => group.every((tool) => allToolNames.includes(tool))), // Ensure tools exist
     };
   }
 };
@@ -1229,11 +1586,18 @@ const parseToolGroupsFromNaturalLanguage = (responseText: string, allToolNames: 
  * Parses the AI's JSON ranking response.
  * This is the original JSON-based parser, kept for compatibility.
  */
-const parseToolGroupsFromLLMJson = (responseText: string, allToolNames: string[]): RankingResult => {
+const parseToolGroupsFromLLMJson = (
+  responseText: string,
+  allToolNames: string[],
+): RankingResult => {
   try {
-    const parsed = parseLLMJson<LLMRankingDecision>(responseText, "RankingDecision", isLLMRankingDecision);
+    const parsed = parseLLMJson<LLMRankingDecision>(
+      responseText,
+      "RankingDecision",
+      isLLMRankingDecision,
+    );
 
-    if ('error' in parsed) {
+    if ("error" in parsed) {
       throw new Error(parsed.error);
     }
 
@@ -1241,126 +1605,205 @@ const parseToolGroupsFromLLMJson = (responseText: string, allToolNames: string[]
     const rankedToolsSet = new Set<string>();
 
     // Sort groups by rank just in case LLM doesn't order them
-    parsed.toolGroups.sort((a, b) => (a.rank || Infinity) - (b.rank || Infinity));
+    parsed.toolGroups.sort(
+      (a, b) => (a.rank || Infinity) - (b.rank || Infinity),
+    );
 
     for (const group of parsed.toolGroups) {
-      if (!group || !Array.isArray(group.toolNames) || typeof group.rank !== 'number') {
-        console.warn("[parseToolGroupsFromLLMJson] Skipping invalid group in LLM response:", group);
+      if (
+        !group ||
+        !Array.isArray(group.toolNames) ||
+        typeof group.rank !== "number"
+      ) {
+        console.warn(
+          "[parseToolGroupsFromLLMJson] Skipping invalid group in LLM response:",
+          group,
+        );
         continue;
       }
-      const validToolNamesInGroup = group.toolNames.filter(name => {
+      const validToolNamesInGroup = group.toolNames.filter((name) => {
         if (allToolNames.includes(name)) {
           if (rankedToolsSet.has(name)) {
-            console.warn(`[parseToolGroupsFromLLMJson] Tool '${name}' ranked multiple times. Using first occurrence.`);
+            console.warn(
+              `[parseToolGroupsFromLLMJson] Tool '${name}' ranked multiple times. Using first occurrence.`,
+            );
             return false;
           }
           return true;
         }
-        console.warn(`[parseToolGroupsFromLLMJson] Invalid or unknown tool name in ranking: '${name}'`);
+        console.warn(
+          `[parseToolGroupsFromLLMJson] Invalid or unknown tool name in ranking: '${name}'`,
+        );
         return false;
       });
 
       if (validToolNamesInGroup.length > 0) {
         rankedToolGroups.push(validToolNamesInGroup);
-        validToolNamesInGroup.forEach(name => rankedToolsSet.add(name));
+        validToolNamesInGroup.forEach((name) => rankedToolsSet.add(name));
       }
     }
 
     // Add any unranked tools to the end, 'no_tool' last among them
-    const unrankedTools = allToolNames.filter(tool => !rankedToolsSet.has(tool));
+    const unrankedTools = allToolNames.filter(
+      (tool) => !rankedToolsSet.has(tool),
+    );
     if (unrankedTools.length > 0) {
-      console.log(`[parseToolGroupsFromLLMJson] Tools not ranked by AI: ${unrankedTools.join(', ')}. Adding them as individual trailing groups.`);
+      console.log(
+        `[parseToolGroupsFromLLMJson] Tools not ranked by AI: ${unrankedTools.join(", ")}. Adding them as individual trailing groups.`,
+      );
       const noToolIndex = unrankedTools.indexOf("no_tool");
       if (noToolIndex > -1) {
         unrankedTools.splice(noToolIndex, 1); // Remove no_tool
-        unrankedTools.push("no_tool");      // Add it to the very end of unranked
+        unrankedTools.push("no_tool"); // Add it to the very end of unranked
       }
-      unrankedTools.forEach(tool => rankedToolGroups.push([tool]));
+      unrankedTools.forEach((tool) => rankedToolGroups.push([tool]));
     }
 
-    if (rankedToolGroups.length === 0) { // Should not happen if unranked tools are added
-      console.warn('[parseToolGroupsFromLLMJson] No valid tool groups parsed. This is unexpected.');
-      return { rankedToolGroups: [allToolNames.includes("search_web") ? ["search_web"] : [allToolNames[0]]] }; // Basic fallback
+    if (rankedToolGroups.length === 0) {
+      // Should not happen if unranked tools are added
+      console.warn(
+        "[parseToolGroupsFromLLMJson] No valid tool groups parsed. This is unexpected.",
+      );
+      return {
+        rankedToolGroups: [
+          allToolNames.includes("search_web")
+            ? ["search_web"]
+            : [allToolNames[0]],
+        ],
+      }; // Basic fallback
     }
 
-    console.log(`[parseToolGroupsFromLLMJson] Final tool groups: ${JSON.stringify(rankedToolGroups)}`);
+    console.log(
+      `[parseToolGroupsFromLLMJson] Final tool groups: ${JSON.stringify(rankedToolGroups)}`,
+    );
     return {
       rankedToolGroups,
       directResponse: parsed.directResponse?.trim() || undefined,
     };
-
   } catch (e: any) {
-    console.error(`[parseToolGroupsFromLLMJson] Error parsing LLM JSON ranking: ${e.message}. Response: "${responseText.substring(0, 10000)}..."`);
+    console.error(
+      `[parseToolGroupsFromLLMJson] Error parsing LLM JSON ranking: ${e.message}. Response: "${responseText.substring(0, 10000)}..."`,
+    );
     // Fallback to a default ranking on error
     return {
-      rankedToolGroups: [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna"], ["no_tool"]].filter(group => group.every(tool => allToolNames.includes(tool))) // Ensure tools exist
+      rankedToolGroups: [
+        ["search_web"],
+        [
+          "query_law_on_insurance",
+          "query_law_on_consumer_protection",
+          "query_insurance_qna",
+        ],
+        ["no_tool"],
+      ].filter((group) => group.every((tool) => allToolNames.includes(tool))), // Ensure tools exist
     };
   }
 };
-
 
 export const rankInformationSources = async (
   userMessage: string,
   history: { role: string; parts: { text: string }[] }[],
   selectedModel: string | undefined, // This param is kept, but RANKING_MODEL_NAME is used
-  genAI: GoogleGenerativeAI,
-  systemPrompts?: SystemPrompts
+  genAI: GoogleGenAI,
+  systemPrompts?: SystemPrompts,
 ): Promise<RankingResult> => {
-  console.log(`[rankInformationSources] Ranking tools for query: '${userMessage.substring(0, 100)}...'`);
+  console.log(
+    `[rankInformationSources] Ranking tools for query: '${userMessage.substring(0, 100)}...'`,
+  );
 
-  // Use the fast model with natural language output (no JSON config) for better performance
-  const model = genAI.getGenerativeModel({ model: RANKING_MODEL_NAME });
   const systemPromptsText = combineSystemPrompts(systemPrompts);
 
   // Generate a natural language ranking prompt instead of asking for JSON
-  const rankingPrompt = PromptFactory.generateNaturalLanguageRankingPrompt(userMessage, history, AVAILABLE_TOOLS, systemPromptsText);
+  const rankingPrompt = PromptFactory.generateNaturalLanguageRankingPrompt(
+    userMessage,
+    history,
+    AVAILABLE_TOOLS,
+    systemPromptsText,
+  );
   // console.log(`[rankInformationSources] Generated ranking prompt (length: ${rankingPrompt.length}). First 300 chars: ${rankingPrompt.substring(0,300)}`);
 
   // Move this outside the try block so it's available in the catch block too
-  const allToolNames = AVAILABLE_TOOLS.map(t => t.name);
+  const allToolNames = AVAILABLE_TOOLS.map((t) => t.name);
 
   try {
     const startTime = Date.now();
-    const response = await model.generateContent(rankingPrompt);
-    const responseText = response.response.text();
-    console.log(`[rankInformationSources] AI ranking response received in ${Date.now() - startTime}ms. Response text (first 5000 chars): \n${responseText.substring(0, 5000)}`);
+    const response = await genAI.models.generateContent({
+      model: RANKING_MODEL_NAME,
+      contents: rankingPrompt,
+    });
+    const responseText = response.text || "";
+    console.log(
+      `[rankInformationSources] AI ranking response received in ${Date.now() - startTime}ms. Response text (first 5000 chars): \n${responseText.substring(0, 5000)}`,
+    );
 
     // Use the natural language parser for faster processing
-    const parsedRanking = parseToolGroupsFromNaturalLanguage(responseText, allToolNames);
+    const parsedRanking = parseToolGroupsFromNaturalLanguage(
+      responseText,
+      allToolNames,
+    );
 
     // Special handling: if directResponse is provided and no_tool is first, it might be the final answer.
-    if (parsedRanking.directResponse &&
+    if (
+      parsedRanking.directResponse &&
       parsedRanking.rankedToolGroups.length > 0 &&
       parsedRanking.rankedToolGroups[0].length === 1 &&
-      parsedRanking.rankedToolGroups[0][0] === "no_tool") {
-      console.log(`[rankInformationSources] Extracted direct response (${parsedRanking.directResponse.length} chars).`);
+      parsedRanking.rankedToolGroups[0][0] === "no_tool"
+    ) {
+      console.log(
+        `[rankInformationSources] Extracted direct response (${parsedRanking.directResponse.length} chars).`,
+      );
       // This directResponse will be handled by the calling function if it wants to use it immediately.
     }
     return parsedRanking;
   } catch (error: any) {
-    console.error(`[rankInformationSources] Error: ${error.message}. Prompt: \n${rankingPrompt.substring(0, 300)}...`);
+    console.error(
+      `[rankInformationSources] Error: ${error.message}. Prompt: \n${rankingPrompt.substring(0, 300)}...`,
+    );
     console.log("[rankInformationSources] Falling back to default ranking.");
-    const defaultGroups = [["search_web"], ["query_law_on_insurance", "query_law_on_consumer_protection", "query_insurance_qna", "get_elixer_whitepaper"], ["no_tool"]];
+    const defaultGroups = [
+      ["search_web"],
+      [
+        "query_law_on_insurance",
+        "query_law_on_consumer_protection",
+        "query_insurance_qna",
+        "get_elixer_whitepaper",
+      ],
+      ["no_tool"],
+    ];
     return {
-      rankedToolGroups: defaultGroups.filter(group => group.every(tool => allToolNames.includes(tool) && toolExecutors[tool]))
+      rankedToolGroups: defaultGroups.filter((group) =>
+        group.every(
+          (tool) => allToolNames.includes(tool) && toolExecutors[tool],
+        ),
+      ),
     };
   }
 };
 
 export const executeToolsByGroup = async (
-  toolGroups: string[][], query: string, ctx: ConvexActionCtx, genAI: GoogleGenerativeAI,
-  selectedModel: string | undefined, conversationHistory: { role: string; parts: { text: string }[] }[] = [],
-  systemPrompts?: SystemPrompts, messageId?: string, initialContext?: string
+  toolGroups: string[][],
+  query: string,
+  ctx: ConvexActionCtx,
+  genAI: GoogleGenAI,
+  selectedModel: string | undefined,
+  conversationHistory: { role: string; parts: { text: string }[] }[] = [],
+  systemPrompts?: SystemPrompts,
+  messageId?: string,
+  initialContext?: string,
 ): Promise<ToolExecutionResult> => {
-  console.log(`[executeToolsByGroup] Start: ${toolGroups.length} groups for query: "${query.substring(0, 100)}..."`);
+  console.log(
+    `[executeToolsByGroup] Start: ${toolGroups.length} groups for query: "${query.substring(0, 100)}..."`,
+  );
 
   const accumulatedContext: AccumulatedContext = {
-    sources: initialContext ? ['initial_context'] : [],
+    sources: initialContext ? ["initial_context"] : [],
     content: initialContext || "",
-    searchSuggestionsHtmlToPreserve: undefined // Initialize
+    searchSuggestionsHtmlToPreserve: undefined, // Initialize
   };
 
-  if (initialContext) console.log(`[executeToolsByGroup] Initial context: ${initialContext.length} chars.`);
+  if (initialContext)
+    console.log(
+      `[executeToolsByGroup] Initial context: ${initialContext.length} chars.`,
+    );
 
   for (let groupIndex = 0; groupIndex < toolGroups.length; groupIndex++) {
     const toolGroup = toolGroups[groupIndex];
@@ -1368,17 +1811,31 @@ export const executeToolsByGroup = async (
     const remainingToolsForPrompt = remainingToolGroups.flat();
     const nextToolGroup = remainingToolGroups[0] || [];
 
-    console.log(`[executeToolsByGroup] Group ${groupIndex + 1}/${toolGroups.length}: [${toolGroup.join(', ')}]. Accumulated context: ${accumulatedContext.content.length} chars from [${accumulatedContext.sources.join(', ')}]. Preserved suggestions: ${!!accumulatedContext.searchSuggestionsHtmlToPreserve}`);
+    console.log(
+      `[executeToolsByGroup] Group ${groupIndex + 1}/${toolGroups.length}: [${toolGroup.join(", ")}]. Accumulated context: ${accumulatedContext.content.length} chars from [${accumulatedContext.sources.join(", ")}]. Preserved suggestions: ${!!accumulatedContext.searchSuggestionsHtmlToPreserve}`,
+    );
 
-    const executionParamsBase: Omit<ToolExecutionParams, 'remainingTools' | 'nextToolGroup' | 'accumulatedContext'> = {
-      query, ctx, genAI, selectedModel, conversationHistory, systemPrompts, messageId
+    const executionParamsBase: Omit<
+      ToolExecutionParams,
+      "remainingTools" | "nextToolGroup" | "accumulatedContext"
+    > = {
+      query,
+      ctx,
+      genAI,
+      selectedModel,
+      conversationHistory,
+      systemPrompts,
+      messageId,
     };
 
-    if (toolGroup.length === 1) { // Single tool execution
+    if (toolGroup.length === 1) {
+      // Single tool execution
       const toolName = toolGroup[0];
       const executor = toolExecutors[toolName];
       if (!executor) {
-        console.warn(`[executeToolsByGroup] Unknown tool '${toolName}' in single group. Skipping.`);
+        console.warn(
+          `[executeToolsByGroup] Unknown tool '${toolName}' in single group. Skipping.`,
+        );
         continue;
       }
 
@@ -1387,60 +1844,102 @@ export const executeToolsByGroup = async (
         ...executionParamsBase,
         remainingTools: remainingToolsForPrompt,
         nextToolGroup: nextToolGroup,
-        accumulatedContext: { ...accumulatedContext } // Pass a copy
+        accumulatedContext: { ...accumulatedContext }, // Pass a copy
       });
 
-      console.log(`[executeToolsByGroup] Result from ${toolName}: type='${result.responseType}', contentLen=${result.content.length}, contextToAddLen=${result.contextToAdd?.length || 0}, suggestions: ${!!result.searchSuggestionsHtml}`);
+      console.log(
+        `[executeToolsByGroup] Result from ${toolName}: type='${result.responseType}', contentLen=${result.content.length}, contextToAddLen=${result.contextToAdd?.length || 0}, suggestions: ${!!result.searchSuggestionsHtml}`,
+      );
 
       if (result.searchSuggestionsHtml) {
-        accumulatedContext.searchSuggestionsHtmlToPreserve = result.searchSuggestionsHtml;
+        accumulatedContext.searchSuggestionsHtmlToPreserve =
+          result.searchSuggestionsHtml;
         accumulatedContext.content += `\n\n<!-- PRESERVED_SEARCH_SOURCES:${result.searchSuggestionsHtml} -->`;
-        console.log(`[executeToolsByGroup] Preserved search suggestions from ${toolName}.`);
+        console.log(
+          `[executeToolsByGroup] Preserved search suggestions from ${toolName}.`,
+        );
       }
 
       if (result.responseType === "FINAL_ANSWER") {
-        console.log(`[executeToolsByGroup] FINAL_ANSWER from ${toolName}. Returning.`);
-        return createToolResult(
-          result.source, result.content, "FINAL_ANSWER", undefined, result.error,
-          undefined, // searchSuggestionsHtml already in result.content or handled by finalSuggestionsHtmlToPreserve
-          accumulatedContext.searchSuggestionsHtmlToPreserve // This ensures it's added if not already
+        console.log(
+          `[executeToolsByGroup] FINAL_ANSWER from ${toolName}. Returning.`,
         );
-      } else if (result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" && result.contextToAdd?.trim()) {
+        return createToolResult(
+          result.source,
+          result.content,
+          "FINAL_ANSWER",
+          undefined,
+          result.error,
+          undefined, // searchSuggestionsHtml already in result.content or handled by finalSuggestionsHtmlToPreserve
+          accumulatedContext.searchSuggestionsHtmlToPreserve, // This ensures it's added if not already
+        );
+      } else if (
+        result.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" &&
+        result.contextToAdd?.trim()
+      ) {
         accumulatedContext.sources.push(toolName);
-        accumulatedContext.content += (accumulatedContext.content ? "\n\n" : "") +
+        accumulatedContext.content +=
+          (accumulatedContext.content ? "\n\n" : "") +
           `--- Context from ${toolName} ---\n${result.contextToAdd.trim()}`;
-        console.log(`[executeToolsByGroup] Added context from ${toolName}. Total: ${accumulatedContext.content.length} chars.`);
+        console.log(
+          `[executeToolsByGroup] Added context from ${toolName}. Total: ${accumulatedContext.content.length} chars.`,
+        );
       }
+    } else {
+      // Parallel tool execution
+      console.log(
+        `[executeToolsByGroup] Parallel tools: [${toolGroup.join(", ")}]`,
+      );
+      await updateProcessingPhase(
+        ctx,
+        messageId,
+        `Searching multiple sources`,
+        "executeToolsByGroup-parallel",
+      );
 
-    } else { // Parallel tool execution
-      console.log(`[executeToolsByGroup] Parallel tools: [${toolGroup.join(', ')}]`);
-      await updateProcessingPhase(ctx, messageId, `Searching multiple sources`, "executeToolsByGroup-parallel");
-
-      const dataCollectionPromises = toolGroup
-        .map(toolName => {
-          const executor = toolExecutors[toolName];
-          if (!executor) {
-            console.warn(`[executeToolsByGroup] Unknown tool '${toolName}' in parallel. Skipping.`);
-            return Promise.resolve({ toolName, data: "", error: `Unknown tool: ${toolName}` });
-          }
-          if (executor instanceof DatabaseQueryExecutor || executor instanceof ElixerWhitepaperContentExecutor) {
-            return executor.fetchRawData(ctx);
-          } else if (executor instanceof WebSearchExecutor || executor instanceof NoToolExecutor) {
-            console.log(`[executeToolsByGroup] Executing ${executor.name} in parallel (will synthesize its output).`);
-            // For parallel, we want the raw output that can be synthesized, not its decision to continue.
-            // So, we treat its direct output as "data" for synthesis.
-            return executor.execute({
+      const dataCollectionPromises = toolGroup.map((toolName) => {
+        const executor = toolExecutors[toolName];
+        if (!executor) {
+          console.warn(
+            `[executeToolsByGroup] Unknown tool '${toolName}' in parallel. Skipping.`,
+          );
+          return Promise.resolve({
+            toolName,
+            data: "",
+            error: `Unknown tool: ${toolName}`,
+          });
+        }
+        if (
+          executor instanceof DatabaseQueryExecutor ||
+          executor instanceof ElixerWhitepaperContentExecutor
+        ) {
+          return executor.fetchRawData(ctx);
+        } else if (
+          executor instanceof WebSearchExecutor ||
+          executor instanceof NoToolExecutor
+        ) {
+          console.log(
+            `[executeToolsByGroup] Executing ${executor.name} in parallel (will synthesize its output).`,
+          );
+          // For parallel, we want the raw output that can be synthesized, not its decision to continue.
+          // So, we treat its direct output as "data" for synthesis.
+          return executor
+            .execute({
               ...executionParamsBase,
               remainingTools: [], // No "remaining" in this sub-execution context
-              nextToolGroup: [],  // No "next group" in this sub-execution
-              accumulatedContext: { ...accumulatedContext } // Pass current accumulated context
-            }).then(res => {
+              nextToolGroup: [], // No "next group" in this sub-execution
+              accumulatedContext: { ...accumulatedContext }, // Pass current accumulated context
+            })
+            .then((res) => {
               // If WebSearch in parallel produced suggestions, capture them.
               // The last one from a parallel group will win.
               if (res.searchSuggestionsHtml) {
-                accumulatedContext.searchSuggestionsHtmlToPreserve = res.searchSuggestionsHtml;
+                accumulatedContext.searchSuggestionsHtmlToPreserve =
+                  res.searchSuggestionsHtml;
                 accumulatedContext.content += `\n\n<!-- PRESERVED_SEARCH_SOURCES:${res.searchSuggestionsHtml} -->`;
-                console.log(`[executeToolsByGroup] Parallel ${executor.name} produced search suggestions, will preserve.`);
+                console.log(
+                  `[executeToolsByGroup] Parallel ${executor.name} produced search suggestions, will preserve.`,
+                );
               }
               // For synthesis, prioritize the dedicated synthesisData field if available
               // Otherwise fall back to content, and include contextToAdd if present
@@ -1448,70 +1947,134 @@ export const executeToolsByGroup = async (
               if (res.contextToAdd) {
                 synthesisData += `\n\n${res.contextToAdd}`;
               }
-              return { toolName: executor.name, data: synthesisData, error: res.error };
+              return {
+                toolName: executor.name,
+                data: synthesisData,
+                error: res.error,
+              };
             });
-          }
-          console.warn(`[executeToolsByGroup] Tool ${toolName} not configured for parallel. Placeholder.`);
-          return Promise.resolve({ toolName, data: "", error: `Tool ${toolName} not supported in parallel.` });
+        }
+        console.warn(
+          `[executeToolsByGroup] Tool ${toolName} not configured for parallel. Placeholder.`,
+        );
+        return Promise.resolve({
+          toolName,
+          data: "",
+          error: `Tool ${toolName} not supported in parallel.`,
         });
+      });
 
       const collectedData = await Promise.all(dataCollectionPromises);
-      console.log(`[executeToolsByGroup] Parallel data collection complete. Results: ${JSON.stringify(collectedData.map(r => ({ tool: r.toolName, dataLen: r.data.length, err: !!r.error })))}`);
+      console.log(
+        `[executeToolsByGroup] Parallel data collection complete. Results: ${JSON.stringify(collectedData.map((r) => ({ tool: r.toolName, dataLen: r.data.length, err: !!r.error })))}`,
+      );
 
-      const hasMeaningfulResults = collectedData.some(d => (d.data && d.data.trim().length > 10) || (d.error && !d.error.startsWith("Unknown tool")));
+      const hasMeaningfulResults = collectedData.some(
+        (d) =>
+          (d.data && d.data.trim().length > 10) ||
+          (d.error && !d.error.startsWith("Unknown tool")),
+      );
       if (!hasMeaningfulResults) {
-        console.log(`[executeToolsByGroup] No meaningful data/errors from parallel group. Skipping synthesis.`);
+        console.log(
+          `[executeToolsByGroup] No meaningful data/errors from parallel group. Skipping synthesis.`,
+        );
         continue;
       }
 
       const systemPromptsText = combineSystemPrompts(systemPrompts);
       const synthesisPrompt = PromptFactory.generateParallelSynthesisPrompt(
-        query, collectedData, conversationHistory, systemPromptsText, accumulatedContext
+        query,
+        collectedData,
+        conversationHistory,
+        systemPromptsText,
+        accumulatedContext,
       );
 
-      console.log(`[executeToolsByGroup] Sending parallel synthesis prompt (len: ${synthesisPrompt.length}).`);
-      const model = genAI.getGenerativeModel({ model: selectedModel || DEFAULT_MODEL_NAME, generationConfig: getGenerationConfigForJson() });
+      console.log(
+        `[executeToolsByGroup] Sending parallel synthesis prompt (len: ${synthesisPrompt.length}).`,
+      );
       try {
-        const response = await model.generateContent(synthesisPrompt);
-        const parsedSynthesis = parseLLMJson<LLMParallelSynthesisResponse>(response.response.text(), "ParallelSynthesisResponse", isLLMParallelSynthesisResponse);
+        const response = await genAI.models.generateContent({
+          model: selectedModel || DEFAULT_MODEL_NAME,
+          contents: synthesisPrompt,
+          config: getGenerationConfigForJson(),
+        });
+        const parsedSynthesis = parseLLMJson<LLMParallelSynthesisResponse>(
+          response.text || "",
+          "ParallelSynthesisResponse",
+          isLLMParallelSynthesisResponse,
+        );
 
-        if ('error' in parsedSynthesis) throw new Error(parsedSynthesis.error);
+        if ("error" in parsedSynthesis) throw new Error(parsedSynthesis.error);
 
-        console.log(`[executeToolsByGroup] Parallel synthesis successful (${parsedSynthesis.synthesizedAnswer.length} chars). FINAL for this group.`);
-        return createToolResult("parallel_synthesis", parsedSynthesis.synthesizedAnswer, "FINAL_ANSWER",
-          undefined, undefined, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
+        console.log(
+          `[executeToolsByGroup] Parallel synthesis successful (${parsedSynthesis.synthesizedAnswer.length} chars). FINAL for this group.`,
+        );
+        return createToolResult(
+          "parallel_synthesis",
+          parsedSynthesis.synthesizedAnswer,
+          "FINAL_ANSWER",
+          undefined,
+          undefined,
+          undefined,
+          accumulatedContext.searchSuggestionsHtmlToPreserve,
         );
       } catch (error: any) {
-        console.error(`[executeToolsByGroup] Parallel synthesis error: ${error.message}. Prompt start:\n${synthesisPrompt.substring(0, 300)}...`);
-        console.log(`[executeToolsByGroup] Synthesis failed. Proceeding to next group.`);
+        console.error(
+          `[executeToolsByGroup] Parallel synthesis error: ${error.message}. Prompt start:\n${synthesisPrompt.substring(0, 300)}...`,
+        );
+        console.log(
+          `[executeToolsByGroup] Synthesis failed. Proceeding to next group.`,
+        );
         // Error in synthesis, try next group
       }
     }
   }
 
-  console.log(`[executeToolsByGroup] All tool groups exhausted. Accumulated context: ${accumulatedContext.content.length} chars.`);
+  console.log(
+    `[executeToolsByGroup] All tool groups exhausted. Accumulated context: ${accumulatedContext.content.length} chars.`,
+  );
 
-  if (accumulatedContext.content && accumulatedContext.content.trim().length > 10) {
-    console.log("[executeToolsByGroup] Attempting final synthesis with NoToolExecutor using accumulated context.");
+  if (
+    accumulatedContext.content &&
+    accumulatedContext.content.trim().length > 10
+  ) {
+    console.log(
+      "[executeToolsByGroup] Attempting final synthesis with NoToolExecutor using accumulated context.",
+    );
     try {
       const noToolExecutor = toolExecutors["no_tool"] as NoToolExecutor;
       if (noToolExecutor) {
         const finalSynthesisResult = await noToolExecutor.execute({
           query: `Based on all previously gathered information, provide a comprehensive answer or summary for the original query: "${query}"`,
-          conversationHistory, genAI, selectedModel, systemPrompts, ctx,
-          remainingTools: [], messageId,
-          accumulatedContext: { ...accumulatedContext } // Pass copy
+          conversationHistory,
+          genAI,
+          selectedModel,
+          systemPrompts,
+          ctx,
+          remainingTools: [],
+          messageId,
+          accumulatedContext: { ...accumulatedContext }, // Pass copy
         });
 
         // Ensure this fallback is always FINAL_ANSWER
-        console.log(`[executeToolsByGroup] NoToolExecutor (final synthesis) responded type: '${finalSynthesisResult.responseType}'. Forcing FINAL_ANSWER.`);
+        console.log(
+          `[executeToolsByGroup] NoToolExecutor (final synthesis) responded type: '${finalSynthesisResult.responseType}'. Forcing FINAL_ANSWER.`,
+        );
         return createToolResult(
-          "final_synthesis_no_tool", finalSynthesisResult.content, "FINAL_ANSWER",
-          undefined, finalSynthesisResult.error, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
+          "final_synthesis_no_tool",
+          finalSynthesisResult.content,
+          "FINAL_ANSWER",
+          undefined,
+          finalSynthesisResult.error,
+          undefined,
+          accumulatedContext.searchSuggestionsHtmlToPreserve,
         );
       }
     } catch (error: any) {
-      console.error(`[executeToolsByGroup] Final synthesis error: ${error.message}`);
+      console.error(
+        `[executeToolsByGroup] Final synthesis error: ${error.message}`,
+      );
     }
   }
 
@@ -1519,6 +2082,10 @@ export const executeToolsByGroup = async (
   return createToolResult(
     "fallback_standard",
     "I've processed available information but couldn't formulate a specific answer. Please try rephrasing or adding details.",
-    "FINAL_ANSWER", undefined, undefined, undefined, accumulatedContext.searchSuggestionsHtmlToPreserve
+    "FINAL_ANSWER",
+    undefined,
+    undefined,
+    undefined,
+    accumulatedContext.searchSuggestionsHtmlToPreserve,
   );
 };
