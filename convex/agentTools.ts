@@ -4,9 +4,13 @@ import { GoogleGenAI } from "@google/genai";
 import { api } from "./_generated/api";
 import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other related types are defined
 
-// --- CONSTANTS ---
-const DEFAULT_MODEL_NAME = "gemini-3-flash-preview";
-const RANKING_MODEL_NAME = "gemini-2.5-flash-lite"; // Use a fast model for ranking
+const DEFAULT_MODEL_NAME = "gemini-3.1-flash-lite-preview";
+const RANKING_MODEL_NAME = "gemini-3.1-flash-lite-preview";
+const debugLog = (...args: unknown[]) => {
+  if (process.env.CONVEX_DEBUG_LOGS === "true") {
+    console.log(...args);
+  }
+};
 
 // --- TYPE DEFINITIONS (Refactored and New) ---
 
@@ -290,7 +294,7 @@ function createToolResult(
       finalSuggestionsHtmlToPreserve,
     );
     if (finalContent !== content) {
-      console.log(
+      debugLog(
         `[createToolResult] Added preserved search suggestions to final answer from ${source}.`,
       );
     }
@@ -329,7 +333,7 @@ const parseToolExecutionDecision = (
   );
 
   if (!("error" in result)) {
-    console.log(
+    debugLog(
       `[parseToolExecutionDecision] Parsed: responseType='${result.responseType}', contentLen=${result.content.length}, reasoningLen=${result.reasoning.length}, contextToPreserveLen=${result.contextToPreserve?.length || 0}`,
     );
 
@@ -365,7 +369,7 @@ const parseParallelSynthesisResponse = (
   );
 
   if (!("error" in result)) {
-    console.log(
+    debugLog(
       `[parseParallelSynthesisResponse] Parsed synthesis. Answer length: ${result.synthesizedAnswer.length}`,
     );
   }
@@ -388,7 +392,7 @@ async function updateProcessingPhase(
         messageId,
         phase,
       });
-      console.log(`[${toolName}] Updated phase: ${phase}`);
+      debugLog(`[${toolName}] Updated phase: ${phase}`);
     } catch (error) {
       console.error(
         `[${toolName}] Phase update error for phase '${phase}': ${error instanceof Error ? error.message : String(error)}`,
@@ -706,7 +710,7 @@ class NoToolExecutor implements IToolExecutor {
   public name = "no_tool";
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-    console.log(
+    debugLog(
       `[NoToolExecutor] Executing direct response. Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`,
     );
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
@@ -724,7 +728,7 @@ class NoToolExecutor implements IToolExecutor {
         // If we find sources in the content and don't already have them, use them
         if (!searchSources) {
           searchSources = sourceMatch[1];
-          console.log(
+          debugLog(
             `[NoToolExecutor] Found preserved search sources in accumulated context.`,
           );
         }
@@ -764,7 +768,7 @@ class NoToolExecutor implements IToolExecutor {
         throw new Error(parsedDecision.error);
       }
 
-      console.log(
+      debugLog(
         `[NoToolExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0, 100)}..."`,
       );
 
@@ -810,7 +814,7 @@ class WebSearchExecutor implements IToolExecutor {
   public name = "search_web";
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-    console.log(
+    debugLog(
       `[WebSearchExecutor] Executing for query: "${params.query.substring(0, 50)}..." Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`,
     );
     await updateProcessingPhase(
@@ -871,7 +875,7 @@ ${searchDirectives}
     let searchSuggestionsHtml: string | undefined;
 
     try {
-      console.log(
+      debugLog(
         `[WebSearchExecutor] Sending search invocation prompt to LLM.`,
       );
       const searchResponse = await params.genAI.models.generateContent({
@@ -882,7 +886,7 @@ ${searchDirectives}
         },
       });
       searchResultsText = searchResponse.text || "";
-      console.log(
+      debugLog(
         `[WebSearchExecutor] Received search results text (len: ${searchResultsText.length}).`,
       );
 
@@ -907,23 +911,23 @@ ${searchDirectives}
           }
           html += "</ul>";
           searchSuggestionsHtml = html;
-          console.log(
+          debugLog(
             `[WebSearchExecutor] Extracted search suggestions HTML from groundingChunks (len: ${searchSuggestionsHtml?.length}).`,
           );
         } else if (groundingMeta.searchEntryPoint?.renderedContent) {
           // Fallback to the general rendered content if no specific groundingChunks are found
           searchSuggestionsHtml =
             groundingMeta.searchEntryPoint.renderedContent;
-          console.log(
+          debugLog(
             `[WebSearchExecutor] Extracted search suggestions HTML from renderedContent (fallback) (len: ${searchSuggestionsHtml?.length}).`,
           );
         } else {
-          console.log(
+          debugLog(
             "[WebSearchExecutor] No groundingChunks or renderedContent found in groundingMetadata for suggestions.",
           );
         }
       } else {
-        console.log(
+        debugLog(
           "[WebSearchExecutor] No groundingMetadata found in search response.",
         );
       }
@@ -955,7 +959,7 @@ ${searchDirectives}
     );
 
     try {
-      console.log(
+      debugLog(
         `[WebSearchExecutor] Sending search results analysis prompt to LLM for decision.`,
       );
       const decisionResponse = await params.genAI.models.generateContent({
@@ -970,7 +974,7 @@ ${searchDirectives}
         throw new Error(parsedDecision.error);
       }
 
-      console.log(
+      debugLog(
         `[WebSearchExecutor] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: "${parsedDecision.reasoning.substring(0, 100)}..."`,
       );
 
@@ -984,7 +988,7 @@ ${searchDirectives}
             !parsedDecision.contextToPreserve)) &&
         searchResultsText.trim().length > 20 // If we got some search results
       ) {
-        console.log(
+        debugLog(
           `[WebSearchExecutor] Heuristic: Has search results but LLM chose TRY_NEXT_TOOL or TRY_NEXT_TOOL_AND_ADD_CONTEXT without context. Auto-adding search summary.`,
         );
         finalResponseType = "TRY_NEXT_TOOL_AND_ADD_CONTEXT";
@@ -1065,7 +1069,7 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
           ? jsonData.substring(0, MAX_DATA_SIZE_FOR_PROMPT) +
             "\n... (data truncated)"
           : jsonData;
-      console.log(
+      debugLog(
         `[${this.name}] Fetched raw data (${truncatedJsonData.length} chars, original ${jsonData.length}) for parallel processing.`,
       );
       return {
@@ -1088,7 +1092,7 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
   }
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-    console.log(
+    debugLog(
       `[${this.name}] Executing for query: \"${params.query.substring(0, 50)}...\" Accumulated context: ${params.accumulatedContext?.content.length || 0} chars.`,
     );
     await updateProcessingPhase(
@@ -1104,7 +1108,7 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
     if (dbFetchResult.content) {
       const jsonData = JSON.stringify(dbFetchResult.content, null, 2);
       toolDataForPrompt = `Contents of ${this.readableName} (JSON format) related to the query:\n\`\`\`json\n${jsonData}\n\`\`\``;
-      console.log(
+      debugLog(
         `[${this.name}] Database content loaded for LLM analysis (${toolDataForPrompt.length} chars, full content).`,
       );
     } else {
@@ -1137,7 +1141,7 @@ abstract class AbstractDatabaseExecutor implements IToolExecutor {
         throw new Error(parsedDecision.error);
       }
 
-      console.log(
+      debugLog(
         `[${this.name}] LLM Decision: responseType='${parsedDecision.responseType}', contentLen=${parsedDecision.content.length}, contextToAddLen=${parsedDecision.contextToPreserve?.length || 0}. Reasoning: \"${parsedDecision.reasoning.substring(0, 100)}...\"`,
       );
 
@@ -1285,7 +1289,7 @@ class AgentModeOffExecutor implements IToolExecutor {
   public name = "agent_mode_off";
 
   async execute(params: ToolExecutionParams): Promise<ToolExecutionResult> {
-    console.log(
+    debugLog(
       `[AgentModeOffExecutor] Executing direct response with agent mode off.`,
     );
     const systemPromptsText = combineSystemPrompts(params.systemPrompts);
@@ -1315,7 +1319,7 @@ class AgentModeOffExecutor implements IToolExecutor {
       });
       const responseText = response.text || "";
 
-      console.log(
+      debugLog(
         `[AgentModeOffExecutor] Generated response (${responseText.length} chars).`,
       );
 
@@ -1389,7 +1393,7 @@ const parseToolGroupsFromNaturalLanguage = (
   allToolNames: string[],
 ): RankingResult => {
   try {
-    console.log(
+    debugLog(
       `[parseToolGroupsFromNaturalLanguage] Parsing response with length ${responseText.length}`,
     );
     const rankedToolGroups: string[][] = [];
@@ -1417,7 +1421,7 @@ const parseToolGroupsFromNaturalLanguage = (
       const match = responseText.match(pattern);
       if (match && match[1]) {
         directResponse = match[1].trim();
-        console.log(
+        debugLog(
           `[parseToolGroupsFromNaturalLanguage] Found direct response: "${directResponse.substring(0, 100)}..."`,
         );
         break;
@@ -1498,7 +1502,7 @@ const parseToolGroupsFromNaturalLanguage = (
       (tool) => !rankedToolsSet.has(tool),
     );
     if (unrankedTools.length > 0) {
-      console.log(
+      debugLog(
         `[parseToolGroupsFromNaturalLanguage] Tools not ranked by AI: ${unrankedTools.join(", ")}. Adding them as individual trailing groups.`,
       );
       const noToolIndex = unrankedTools.indexOf("no_tool");
@@ -1511,7 +1515,7 @@ const parseToolGroupsFromNaturalLanguage = (
 
     // If there's a direct response, ensure no_tool is prioritized at the beginning
     if (directResponse) {
-      console.log(
+      debugLog(
         `[parseToolGroupsFromNaturalLanguage] Direct response found, prioritizing no_tool`,
       );
 
@@ -1537,7 +1541,7 @@ const parseToolGroupsFromNaturalLanguage = (
         rankedToolGroups.unshift(["no_tool"]);
       }
 
-      console.log(
+      debugLog(
         `[parseToolGroupsFromNaturalLanguage] Prioritized no_tool for direct response.`,
       );
     }
@@ -1556,7 +1560,7 @@ const parseToolGroupsFromNaturalLanguage = (
       }; // Basic fallback
     }
 
-    console.log(
+    debugLog(
       `[parseToolGroupsFromNaturalLanguage] Final tool groups: ${JSON.stringify(rankedToolGroups)}`,
     );
     return {
@@ -1648,7 +1652,7 @@ const parseToolGroupsFromLLMJson = (
       (tool) => !rankedToolsSet.has(tool),
     );
     if (unrankedTools.length > 0) {
-      console.log(
+      debugLog(
         `[parseToolGroupsFromLLMJson] Tools not ranked by AI: ${unrankedTools.join(", ")}. Adding them as individual trailing groups.`,
       );
       const noToolIndex = unrankedTools.indexOf("no_tool");
@@ -1673,7 +1677,7 @@ const parseToolGroupsFromLLMJson = (
       }; // Basic fallback
     }
 
-    console.log(
+    debugLog(
       `[parseToolGroupsFromLLMJson] Final tool groups: ${JSON.stringify(rankedToolGroups)}`,
     );
     return {
@@ -1706,7 +1710,7 @@ export const rankInformationSources = async (
   genAI: GoogleGenAI,
   systemPrompts?: SystemPrompts,
 ): Promise<RankingResult> => {
-  console.log(
+  debugLog(
     `[rankInformationSources] Ranking tools for query: '${userMessage.substring(0, 100)}...'`,
   );
 
@@ -1719,8 +1723,6 @@ export const rankInformationSources = async (
     AVAILABLE_TOOLS,
     systemPromptsText,
   );
-  // console.log(`[rankInformationSources] Generated ranking prompt (length: ${rankingPrompt.length}). First 300 chars: ${rankingPrompt.substring(0,300)}`);
-
   // Move this outside the try block so it's available in the catch block too
   const allToolNames = AVAILABLE_TOOLS.map((t) => t.name);
 
@@ -1731,7 +1733,7 @@ export const rankInformationSources = async (
       contents: rankingPrompt,
     });
     const responseText = response.text || "";
-    console.log(
+    debugLog(
       `[rankInformationSources] AI ranking response received in ${Date.now() - startTime}ms. Response text (first 5000 chars): \n${responseText.substring(0, 5000)}`,
     );
 
@@ -1748,7 +1750,7 @@ export const rankInformationSources = async (
       parsedRanking.rankedToolGroups[0].length === 1 &&
       parsedRanking.rankedToolGroups[0][0] === "no_tool"
     ) {
-      console.log(
+      debugLog(
         `[rankInformationSources] Extracted direct response (${parsedRanking.directResponse.length} chars).`,
       );
       // This directResponse will be handled by the calling function if it wants to use it immediately.
@@ -1758,7 +1760,7 @@ export const rankInformationSources = async (
     console.error(
       `[rankInformationSources] Error: ${error.message}. Prompt: \n${rankingPrompt.substring(0, 300)}...`,
     );
-    console.log("[rankInformationSources] Falling back to default ranking.");
+    debugLog("[rankInformationSources] Falling back to default ranking.");
     const defaultGroups = [
       ["search_web"],
       [
@@ -1790,7 +1792,7 @@ export const executeToolsByGroup = async (
   messageId?: string,
   initialContext?: string,
 ): Promise<ToolExecutionResult> => {
-  console.log(
+  debugLog(
     `[executeToolsByGroup] Start: ${toolGroups.length} groups for query: "${query.substring(0, 100)}..."`,
   );
 
@@ -1801,7 +1803,7 @@ export const executeToolsByGroup = async (
   };
 
   if (initialContext)
-    console.log(
+    debugLog(
       `[executeToolsByGroup] Initial context: ${initialContext.length} chars.`,
     );
 
@@ -1811,7 +1813,7 @@ export const executeToolsByGroup = async (
     const remainingToolsForPrompt = remainingToolGroups.flat();
     const nextToolGroup = remainingToolGroups[0] || [];
 
-    console.log(
+    debugLog(
       `[executeToolsByGroup] Group ${groupIndex + 1}/${toolGroups.length}: [${toolGroup.join(", ")}]. Accumulated context: ${accumulatedContext.content.length} chars from [${accumulatedContext.sources.join(", ")}]. Preserved suggestions: ${!!accumulatedContext.searchSuggestionsHtmlToPreserve}`,
     );
 
@@ -1839,7 +1841,7 @@ export const executeToolsByGroup = async (
         continue;
       }
 
-      console.log(`[executeToolsByGroup] Executing single tool: ${toolName}`);
+      debugLog(`[executeToolsByGroup] Executing single tool: ${toolName}`);
       const result = await executor.execute({
         ...executionParamsBase,
         remainingTools: remainingToolsForPrompt,
@@ -1847,7 +1849,7 @@ export const executeToolsByGroup = async (
         accumulatedContext: { ...accumulatedContext }, // Pass a copy
       });
 
-      console.log(
+      debugLog(
         `[executeToolsByGroup] Result from ${toolName}: type='${result.responseType}', contentLen=${result.content.length}, contextToAddLen=${result.contextToAdd?.length || 0}, suggestions: ${!!result.searchSuggestionsHtml}`,
       );
 
@@ -1855,13 +1857,13 @@ export const executeToolsByGroup = async (
         accumulatedContext.searchSuggestionsHtmlToPreserve =
           result.searchSuggestionsHtml;
         accumulatedContext.content += `\n\n<!-- PRESERVED_SEARCH_SOURCES:${result.searchSuggestionsHtml} -->`;
-        console.log(
+        debugLog(
           `[executeToolsByGroup] Preserved search suggestions from ${toolName}.`,
         );
       }
 
       if (result.responseType === "FINAL_ANSWER") {
-        console.log(
+        debugLog(
           `[executeToolsByGroup] FINAL_ANSWER from ${toolName}. Returning.`,
         );
         return createToolResult(
@@ -1881,13 +1883,13 @@ export const executeToolsByGroup = async (
         accumulatedContext.content +=
           (accumulatedContext.content ? "\n\n" : "") +
           `--- Context from ${toolName} ---\n${result.contextToAdd.trim()}`;
-        console.log(
+        debugLog(
           `[executeToolsByGroup] Added context from ${toolName}. Total: ${accumulatedContext.content.length} chars.`,
         );
       }
     } else {
       // Parallel tool execution
-      console.log(
+      debugLog(
         `[executeToolsByGroup] Parallel tools: [${toolGroup.join(", ")}]`,
       );
       await updateProcessingPhase(
@@ -1918,7 +1920,7 @@ export const executeToolsByGroup = async (
           executor instanceof WebSearchExecutor ||
           executor instanceof NoToolExecutor
         ) {
-          console.log(
+          debugLog(
             `[executeToolsByGroup] Executing ${executor.name} in parallel (will synthesize its output).`,
           );
           // For parallel, we want the raw output that can be synthesized, not its decision to continue.
@@ -1937,7 +1939,7 @@ export const executeToolsByGroup = async (
                 accumulatedContext.searchSuggestionsHtmlToPreserve =
                   res.searchSuggestionsHtml;
                 accumulatedContext.content += `\n\n<!-- PRESERVED_SEARCH_SOURCES:${res.searchSuggestionsHtml} -->`;
-                console.log(
+                debugLog(
                   `[executeToolsByGroup] Parallel ${executor.name} produced search suggestions, will preserve.`,
                 );
               }
@@ -1965,7 +1967,7 @@ export const executeToolsByGroup = async (
       });
 
       const collectedData = await Promise.all(dataCollectionPromises);
-      console.log(
+      debugLog(
         `[executeToolsByGroup] Parallel data collection complete. Results: ${JSON.stringify(collectedData.map((r) => ({ tool: r.toolName, dataLen: r.data.length, err: !!r.error })))}`,
       );
 
@@ -1975,7 +1977,7 @@ export const executeToolsByGroup = async (
           (d.error && !d.error.startsWith("Unknown tool")),
       );
       if (!hasMeaningfulResults) {
-        console.log(
+        debugLog(
           `[executeToolsByGroup] No meaningful data/errors from parallel group. Skipping synthesis.`,
         );
         continue;
@@ -1990,7 +1992,7 @@ export const executeToolsByGroup = async (
         accumulatedContext,
       );
 
-      console.log(
+      debugLog(
         `[executeToolsByGroup] Sending parallel synthesis prompt (len: ${synthesisPrompt.length}).`,
       );
       try {
@@ -2007,7 +2009,7 @@ export const executeToolsByGroup = async (
 
         if ("error" in parsedSynthesis) throw new Error(parsedSynthesis.error);
 
-        console.log(
+        debugLog(
           `[executeToolsByGroup] Parallel synthesis successful (${parsedSynthesis.synthesizedAnswer.length} chars). FINAL for this group.`,
         );
         return createToolResult(
@@ -2023,7 +2025,7 @@ export const executeToolsByGroup = async (
         console.error(
           `[executeToolsByGroup] Parallel synthesis error: ${error.message}. Prompt start:\n${synthesisPrompt.substring(0, 300)}...`,
         );
-        console.log(
+        debugLog(
           `[executeToolsByGroup] Synthesis failed. Proceeding to next group.`,
         );
         // Error in synthesis, try next group
@@ -2031,7 +2033,7 @@ export const executeToolsByGroup = async (
     }
   }
 
-  console.log(
+  debugLog(
     `[executeToolsByGroup] All tool groups exhausted. Accumulated context: ${accumulatedContext.content.length} chars.`,
   );
 
@@ -2039,7 +2041,7 @@ export const executeToolsByGroup = async (
     accumulatedContext.content &&
     accumulatedContext.content.trim().length > 10
   ) {
-    console.log(
+    debugLog(
       "[executeToolsByGroup] Attempting final synthesis with NoToolExecutor using accumulated context.",
     );
     try {
@@ -2058,7 +2060,7 @@ export const executeToolsByGroup = async (
         });
 
         // Ensure this fallback is always FINAL_ANSWER
-        console.log(
+        debugLog(
           `[executeToolsByGroup] NoToolExecutor (final synthesis) responded type: '${finalSynthesisResult.responseType}'. Forcing FINAL_ANSWER.`,
         );
         return createToolResult(
@@ -2078,7 +2080,7 @@ export const executeToolsByGroup = async (
     }
   }
 
-  console.log("[executeToolsByGroup] Returning standard fallback.");
+  debugLog("[executeToolsByGroup] Returning standard fallback.");
   return createToolResult(
     "fallback_standard",
     "I've processed available information but couldn't formulate a specific answer. Please try rephrasing or adding details.",

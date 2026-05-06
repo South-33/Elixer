@@ -3,7 +3,11 @@ import { mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
-// Database loading and querying logic is now fully self-contained and does not rely on integrateDatabases.ts or enhancedSearch.ts.
+const debugLog = (...args: unknown[]) => {
+  if (process.env.CONVEX_DEBUG_LOGS === "true") {
+    console.log(...args);
+  }
+};
 
 export const sendMessage = mutation({
   args: {
@@ -215,7 +219,7 @@ export const clearPaneMessages = mutation({
       await Promise.all(messagesToDelete.map(msg => ctx.db.delete(msg._id)));
       messagesDeleted += messagesToDelete.length;
     }
-    console.log(`Deleted ${messagesDeleted} messages for pane ${args.paneId}`);
+    debugLog(`Deleted ${messagesDeleted} messages for pane ${args.paneId}`);
   },
 });
 
@@ -253,7 +257,7 @@ export const updateProcessingPhase = mutation({
   },
   handler: async (ctx, args) => {
     const { messageId, phase } = args;
-    console.log(`[updateProcessingPhase] Updating message ${messageId} phase to: ${phase}`);
+    debugLog(`[updateProcessingPhase] Updating message ${messageId} phase to: ${phase}`);
     await ctx.db.patch(messageId, { processingPhase: phase });
   },
 });
@@ -318,7 +322,7 @@ export const getLawDatabaseContent = query({
                 Object.keys(dbByDisplayName.cachedContent).length === 0;
               
               if (isEmptyContent) {
-                console.log(`Database found but content is empty: ${dbName}. Attempting to load from file storage...`);
+                debugLog(`Database found but content is empty: ${dbName}. Attempting to load from file storage...`);
                 
                 // Try to load content from file storage if file ID exists
                 if (dbByDisplayName.fileId) {
@@ -337,9 +341,9 @@ export const getLawDatabaseContent = query({
                         
                         // Use mutation to update the database - we can't directly update in a query
                         // Instead, just return the parsed content
-                        console.log(`Loaded content from file storage for: ${dbName}`);
+                        debugLog(`Loaded content from file storage for: ${dbName}`);
                         result[dbName] = parsedContent;
-                        console.log(`Successfully loaded content from file storage for: ${dbName}`);
+                        debugLog(`Successfully loaded content from file storage for: ${dbName}`);
                         continue;
                       } catch (parseError) {
                         console.error(`Error parsing file content for ${dbName}:`, parseError);
@@ -359,14 +363,14 @@ export const getLawDatabaseContent = query({
               }
               
               result[dbName] = dbByDisplayName.cachedContent;
-              console.log(`Successfully loaded database by display name from cache: ${dbName}`);
+              debugLog(`Successfully loaded database by display name from cache: ${dbName}`);
               continue;
             } else {
               // No cached content available
               result[dbName] = { 
                 error: `Database content is being loaded. Please try again in a moment: ${dbName}`,
               };
-              console.log(`Database found but content not cached yet: ${dbName}`);
+              debugLog(`Database found but content not cached yet: ${dbName}`);
               continue;
             }
           }
@@ -383,13 +387,13 @@ export const getLawDatabaseContent = query({
           if (dbDoc && dbDoc.cachedContent) {
             // Database exists in Convex database and has cached content
             result[dbName] = dbDoc.cachedContent;
-            console.log(`Successfully loaded database from cache by normalized name: ${normalizedDbName}`);
+            debugLog(`Successfully loaded database from cache by normalized name: ${normalizedDbName}`);
           } else if (dbDoc) {
             // Database exists but no cached content
             result[dbName] = { 
               error: `Database content is being loaded. Please try again in a moment: ${dbName}`,
             };
-            console.log(`Database found by normalized name but content not cached yet: ${normalizedDbName}`);
+            debugLog(`Database found by normalized name but content not cached yet: ${normalizedDbName}`);
           } else {
             // No database found in Convex database
             result[dbName] = { 
@@ -413,7 +417,7 @@ export const getLawDatabaseContent = query({
                 ]
               }
             };
-            console.log(`Database not found in Convex database: ${dbName}`);
+            debugLog(`Database not found in Convex database: ${dbName}`);
           }
         } catch (error) {
           console.error(`Error processing database ${dbName}:`, error);

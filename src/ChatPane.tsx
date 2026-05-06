@@ -2,15 +2,16 @@ import React, {
   useState,
   useRef,
   useEffect,
-  Dispatch,
-  SetStateAction,
 } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import ReactMarkdown from "react-markdown";
 
 import { TrashIcon } from "@heroicons/react/20/solid";
+
+const DEFAULT_MODEL_NAME = "gemini-3.1-flash-lite-preview";
+const DEFAULT_MODEL_LABEL = "Gemini 3.1 Flash-Lite Preview";
 
 const FLAG_EMOJI_REGEX = /[\u{1F1E6}-\u{1F1FF}]{2}/gu;
 const FLAG_EMOJI_EXACT_REGEX = /^[\u{1F1E6}-\u{1F1FF}]{2}$/u;
@@ -75,13 +76,16 @@ type MessageDoc = {
   userId: Id<"users">;
   systemPrompt?: string;
   isStreaming?: boolean;
-  paneId?: string; // Added paneId, now optional
-  metadata?: any; // Added metadata field for search suggestions HTML and other data
-  processingPhase?: string; // Added processingPhase field to track current AI operation
+  paneId?: string;
+  metadata?: {
+    searchSuggestionsHtml?: string;
+    [key: string]: unknown;
+  };
+  processingPhase?: string;
 };
 
 interface ChatPaneProps {
-  userId?: Id<"users">; // Make userId optional
+  userId?: Id<"users">;
   paneId: string;
   lawPrompt: string;
   tonePrompt: string;
@@ -93,21 +97,18 @@ interface ChatPaneProps {
     disableSystemPrompt: boolean,
     disableToolUse: boolean,
   ) => Promise<void>;
-  onClearChat: () => void; // Callback for clearing chat
-  onStreamingStatusChange: (paneId: string, isStreaming: boolean) => void; // New callback
-  onMessagesStatusChange: (paneId: string, hasMessages: boolean) => void; // New callback for message presence
+  onClearChat: () => void;
+  onStreamingStatusChange: (paneId: string, isStreaming: boolean) => void;
+  onMessagesStatusChange: (paneId: string, hasMessages: boolean) => void;
   registerSendHandler: (
     paneId: string,
     handler: (content: string) => Promise<void>,
-  ) => void; // New prop
-  unregisterSendHandler: (paneId: string) => void; // New prop
-  registerResetStatesHandler: (paneId: string, handler: () => void) => void; // New prop
-  unregisterResetStatesHandler: (paneId: string) => void; // New prop
+  ) => void;
+  unregisterSendHandler: (paneId: string) => void;
+  registerResetStatesHandler: (paneId: string, handler: () => void) => void;
+  unregisterResetStatesHandler: (paneId: string) => void;
 }
 
-// We're not using the TypewriterText component anymore - simplified approach
-
-// Custom component to parse and display search suggestions in our own styling
 const CustomSearchSuggestions = ({
   html,
   expanded,
@@ -115,25 +116,22 @@ const CustomSearchSuggestions = ({
   html: string;
   expanded: boolean;
 }) => {
-  // Parse the links from the HTML
   const [links, setLinks] = useState<{ text: string; url: string }[]>([]);
 
   useEffect(() => {
     if (!html) return;
 
     try {
-      // Create a temporary element to parse the HTML
       const tempDiv = document.createElement("div");
       tempDiv.innerHTML = html;
 
-      // Extract all links
       const anchorElements = tempDiv.querySelectorAll("a");
       const extractedLinks = Array.from(anchorElements).map((anchor) => ({
         text: anchor.textContent || "Link",
         url: anchor.getAttribute("href") || "#",
       }));
 
-      setLinks(extractedLinks.slice(0, 5)); // Limit to 5 links for simplicity
+      setLinks(extractedLinks.slice(0, 5));
     } catch (error) {
       console.error("Error parsing search suggestions HTML:", error);
     }
@@ -159,7 +157,6 @@ const CustomSearchSuggestions = ({
   );
 };
 
-// Add CSS styles for the typewriter effect and animations
 const customStyles = `
   .typewriter-container {
     display: inline-block;
@@ -212,7 +209,6 @@ const customStyles = `
   }
 `;
 
-// Add the styles to the document (outside of any component)
 (function addStylesOnce() {
   if (typeof document !== "undefined") {
     const styleId = "elixer-custom-styles";
@@ -225,7 +221,6 @@ const customStyles = `
   }
 })();
 
-// Monotone SVG icons for processing phases (Severance theme)
 const PhaseIcons = {
   database: (
     <svg
@@ -304,9 +299,7 @@ const PhaseIcons = {
   ),
 };
 
-// Processing phase component to show different AI states with a pulsing animation
 const ProcessingPhase = ({ phase }: { phase: string }) => {
-  // Icon mapping for different phases
   const getPhaseIcon = (phaseText: string) => {
     if (phaseText.includes("Database") || phaseText.includes("Query")) {
       return PhaseIcons.database;
@@ -342,7 +335,6 @@ const ProcessingPhase = ({ phase }: { phase: string }) => {
   );
 };
 
-// Chat message component with DOM-based streaming for assistant messages
 const ChatMessage = ({
   message,
   currentPhaseToShow,
@@ -387,8 +379,7 @@ const ChatMessage = ({
 
       {/* Render horizontally expanding search suggestions if available */}
       {message.role === "assistant" &&
-        message.metadata &&
-        (message.metadata as any).searchSuggestionsHtml && (
+        message.metadata?.searchSuggestionsHtml && (
           <div className="mt-2 flex items-center">
             <button
               onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
@@ -415,7 +406,7 @@ const ChatMessage = ({
             </button>
 
             <CustomSearchSuggestions
-              html={(message.metadata as any).searchSuggestionsHtml}
+              html={message.metadata.searchSuggestionsHtml}
               expanded={suggestionsExpanded}
             />
           </div>
@@ -443,7 +434,7 @@ export function ChatPane({
     useQuery(api.chat.getMessages, userId ? { userId, paneId } : "skip") ||
     ([] as MessageDoc[]);
 
-  const [selectedModel, setSelectedModel] = useState("gemini-3-flash-preview"); // Default model for this pane
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_NAME);
   const [disableSystemPrompt, setDisableSystemPrompt] = useState(false); // New state for disabling system prompt - off by default
   const [disableToolUse, setDisableToolUse] = useState(false); // New state for disabling tool use - off by default
 
@@ -471,33 +462,16 @@ export function ChatPane({
   }, [messages.length, paneId, onMessagesStatusChange]);
 
   useEffect(() => {
-    console.log("[ChatPane] useEffect triggered. Messages updated."); // Log when messages update
     const streamingDbMessage = messages.find(
       (msg: MessageDoc) => msg.role === "assistant" && msg.isStreaming,
     );
 
-    // Update processing phase if available from the backend
     if (streamingDbMessage) {
-      setShowLocalPendingIndicator(false); // DB message exists, hide local indicator
+      setShowLocalPendingIndicator(false);
       if (streamingDbMessage.processingPhase) {
-        console.log(
-          `[ChatPane] Setting processing phase from backend: ${streamingDbMessage.processingPhase}`,
-        );
         setCurrentProcessingPhase(streamingDbMessage.processingPhase);
       }
-    } else {
-      // No DB streaming message, but local indicator might be on if we just sent a message
-      // If showLocalPendingIndicator is true, it means we are awaiting the initial message creation by backend.
-      // If it's false, it means either not streaming or backend message hasn't been created yet after a send.
     }
-
-    return () => {
-      if (streamingDbMessage) {
-        console.log(
-          "[ChatPane] Streaming finished or message no longer streaming.",
-        );
-      }
-    };
   }, [messages]);
 
   useEffect(() => {
@@ -513,7 +487,6 @@ export function ChatPane({
     onStreamingStatusChange(paneId, isStreaming);
   }, [isStreaming, paneId, onStreamingStatusChange]);
 
-  // This handleSend is now internal to ChatPane, called by AuthenticatedContent's global handleSend
   const handleInternalSend = async (content: string) => {
     const userMessageContent = content.trim();
     const isCurrentlyStreaming =
@@ -522,25 +495,12 @@ export function ChatPane({
 
     if (!userMessageContent || isCurrentlyStreaming) return;
 
-    // Add detailed logging for each pane when sending a message
-    console.log(`[ChatPane ${paneId}] Sending message with settings:`, {
-      disableSystemPrompt,
-      disableToolUse,
-      selectedModel,
-      contentPreview:
-        userMessageContent.substring(0, 50) +
-        (userMessageContent.length > 50 ? "..." : ""),
-      timestamp: new Date().toISOString(),
-    });
-
-    // Reset the current phase to thinking and ensure it's visible
     setCurrentProcessingPhase("Thinking");
-    setShowLocalPendingIndicator(true); // Show local pending state immediately
+    setShowLocalPendingIndicator(true);
 
     try {
       if (!userId) {
         console.error("User not loaded, cannot send message.");
-        console.error("User not loaded. Please wait a moment.");
         setShowLocalPendingIndicator(false);
         return;
       }
@@ -552,27 +512,23 @@ export function ChatPane({
         disableToolUse,
       );
     } catch (error: any) {
-      // Explicitly type error as any to access properties
-      console.error("Failed to send message:", error);
-      setShowLocalPendingIndicator(false); // Hide pending indicator on send error
-
-      if (error.data && error.data.code === "TOO_MANY_REQUESTS") {
-        console.error(
-          "You've exceeded your API quota. Please try again later.",
-        );
-      } else {
-        console.error("Failed to send message. Please try again.");
-      }
+      setShowLocalPendingIndicator(false);
+      console.error("Failed to send message", {
+        paneId,
+        model: selectedModel,
+        disableSystemPrompt,
+        disableToolUse,
+        error,
+      });
     }
   };
 
-  // Register and unregister the internal send handler
   useEffect(() => {
     registerSendHandler(paneId, handleInternalSend);
-    registerResetStatesHandler(paneId, resetLocalStreamingStates); // Register the reset handler
+    registerResetStatesHandler(paneId, resetLocalStreamingStates);
     return () => {
       unregisterSendHandler(paneId);
-      unregisterResetStatesHandler(paneId); // Unregister the reset handler
+      unregisterResetStatesHandler(paneId);
     };
   }, [
     paneId,
@@ -621,9 +577,7 @@ export function ChatPane({
             style={{ borderRadius: "2px" }}
             disabled={isStreaming}
           >
-            <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+            <option value={DEFAULT_MODEL_NAME}>{DEFAULT_MODEL_LABEL}</option>
           </select>
           <button
             onClick={onClearChat}

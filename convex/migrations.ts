@@ -1,8 +1,14 @@
 import { mutation } from "./_generated/server";
 
+const debugLog = (...args: unknown[]) => {
+  if (process.env.CONVEX_DEBUG_LOGS === "true") {
+    console.log(...args);
+  }
+};
+
 export const migrateDataToDatabasesTable = mutation({
   handler: async (ctx) => {
-    console.log("Starting migration from 'lawDatabases' to 'Databases'...");
+    debugLog("Starting migration from 'lawDatabases' to 'Databases'...");
 
     let oldDataTableName = "lawDatabases"; // The exact name of your old table
 
@@ -12,11 +18,11 @@ export const migrateDataToDatabasesTable = mutation({
     const oldDocuments: any[] = await ctx.db.query(oldDataTableName as any).collect();
 
     if (oldDocuments.length === 0) {
-      console.log(`No documents found in '${oldDataTableName}'. Migration might be complete or table was empty.`);
+      debugLog(`No documents found in '${oldDataTableName}'. Migration might be complete or table was empty.`);
       return `No documents found in '${oldDataTableName}'. Migration not needed or already done.`;
     }
 
-    console.log(`Found ${oldDocuments.length} documents in '${oldDataTableName}'.`);
+    debugLog(`Found ${oldDocuments.length} documents in '${oldDataTableName}'.`);
 
     let migratedCount = 0;
     let errorCount = 0;
@@ -40,7 +46,7 @@ export const migrateDataToDatabasesTable = mutation({
     }
 
     const summary = `Migration from '${oldDataTableName}' to 'Databases' summary: Migrated ${migratedCount} documents. Failed: ${errorCount} documents.`;
-    console.log(summary);
+    debugLog(summary);
     if (errorCount > 0) {
       console.error("Errors encountered:", errors.join("\n"));
       return `${summary} Errors: ${errors.join("; ")}`;

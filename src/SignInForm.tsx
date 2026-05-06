@@ -7,6 +7,7 @@ export function SignInForm() {
   const { signIn } = useAuthActions();
   const [flow, setFlow] = useState<"signIn" | "signUp">("signIn");
   const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   return (
     <div className="w-full">
@@ -15,15 +16,14 @@ export function SignInForm() {
         onSubmit={(e) => {
           e.preventDefault();
           setSubmitting(true);
+          setErrorMessage(null);
           const formData = new FormData(e.target as HTMLFormElement);
           formData.set("flow", flow);
           void signIn("password", formData).catch((_error) => {
-            console.error(flow === "signIn"
+            setErrorMessage(flow === "signIn"
               ? "Could not sign in. Please check your credentials."
               : "Could not sign up. That email may already be in use.");
             setSubmitting(false);
-          }).finally(() => {
-            // setSubmitting(false) 
           });
         }}
       >
@@ -44,7 +44,8 @@ export function SignInForm() {
             className="lumon-input"
             type="password"
             name="password"
-            placeholder="••••••••"
+            placeholder="Password"
+            autoComplete={flow === "signIn" ? "current-password" : "new-password"}
             required
             aria-label="Password"
           />
@@ -52,6 +53,11 @@ export function SignInForm() {
         <button className="auth-button" type="submit" disabled={submitting}>
           {submitting ? "Processing..." : (flow === "signIn" ? "Sign In" : "Create Account")}
         </button>
+        {errorMessage && (
+          <p className="text-xs text-red-700" role="alert">
+            {errorMessage}
+          </p>
+        )}
         <div className="text-center text-xs mt-2">
           <span className="text-slate-500 mr-1">
             {flow === "signIn"

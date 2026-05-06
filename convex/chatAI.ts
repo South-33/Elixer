@@ -10,16 +10,31 @@ import {
   executeToolsByGroup,
   estimateTokenCount,
   combineSystemPrompts,
-  SystemPrompts, // Assuming this interface is exported from agentTools
-  // ToolExecutionResult // Assuming this interface is exported from agentTools or defined locally if needed
-  IToolExecutor,
-} from "./agentTools"; // Adjust path if necessary
+  SystemPrompts,
+} from "./agentTools";
 
-// Import the toolExecutors registry - needs to be exported from agentTools.ts
 import { toolExecutors } from "./agentTools";
 
-// --- CONSTANTS ---
-const DEFAULT_MODEL_NAME = "gemini-3-flash-preview";
+const DEFAULT_MODEL_NAME = "gemini-3.1-flash-lite-preview";
+const SUPPORTED_MODEL_NAMES = new Set([DEFAULT_MODEL_NAME]);
+const debugLog = (...args: unknown[]) => {
+  if (process.env.CONVEX_DEBUG_LOGS === "true") {
+    console.log(...args);
+  }
+};
+
+const getSupportedModelName = (selectedModel?: string | null): string => {
+  if (!selectedModel) return DEFAULT_MODEL_NAME;
+  return SUPPORTED_MODEL_NAMES.has(selectedModel) ? selectedModel : DEFAULT_MODEL_NAME;
+};
+
+const getErrorSummary = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+};
+
 const STYLING_PROMPT = `Use standard Markdown for formatting your responses.
 
 For document structure:
@@ -119,7 +134,7 @@ async function initializeAIResponse(
   formattedHistory: { role: string; parts: { text: string }[] }[];
   messageId: Id<"messages">;
 }> {
-  console.log(
+  debugLog(
     `[initializeAIResponse] Initializing for user ${userId}, pane ${paneId}.`,
   );
   const genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
@@ -134,8 +149,6 @@ async function initializeAIResponse(
       parts: [{ text: msg.content }],
     }),
   );
-  // console.log("[initializeAIResponse] Formatted conversation history:", JSON.stringify(formattedHistory, null, 2));
-
   const messageId = await ctx.runMutation(api.chat.createMessage, {
     userId,
     role: "assistant",
@@ -144,7 +157,7 @@ async function initializeAIResponse(
     paneId,
     processingPhase: "Thinking",
   });
-  console.log(
+  debugLog(
     `[initializeAIResponse] Created placeholder message ${messageId}.`,
   );
   return { genAI, formattedHistory, messageId };
@@ -157,12 +170,12 @@ function determineSystemPrompts(args: {
   disableSystemPrompt?: boolean | null;
 }): SystemPrompts | undefined {
   if (args.disableSystemPrompt) {
-    console.log(
+    debugLog(
       "[determineSystemPrompts] System prompts disabled by user setting.",
     );
     return undefined;
   }
-  console.log("[determineSystemPrompts] System prompts enabled.");
+  debugLog("[determineSystemPrompts] System prompts enabled.");
   return {
     stylingPrompt: STYLING_PROMPT,
     lawPrompt: args.lawPrompt || undefined,
@@ -180,7 +193,7 @@ async function handleNoToolResponseFlow(
   ctx: any, // ctx is already a parameter
   messageId: Id<"messages">, // messageId is already a parameter
 ): Promise<string> {
-  console.log(
+  debugLog(
     `[handleNoToolResponseFlow] Using AgentModeOffExecutor for direct response.`,
   );
   await ctx.runMutation(api.chat.updateProcessingPhase, {
@@ -234,7 +247,7 @@ async function handleNoToolResponseFlow(
           });
         }
       }
-      console.log(
+      debugLog(
         `[handleNoToolResponseFlow] Streamed response complete (${accumulatedResponseText.length} chars).`,
       );
       return accumulatedResponseText;
@@ -258,7 +271,7 @@ async function handleNoToolResponseFlow(
       accumulatedContext: undefined,
     });
 
-    console.log(
+    debugLog(
       `[handleNoToolResponseFlow] AgentModeOffExecutor result: ${result.content.length} chars.`,
     );
     return result.content;
@@ -281,7 +294,7 @@ async function callFinalLLMSynthesis(
   ctx: any, // Added ctx for mutations
   messageId: Id<"messages">, // Added messageId for mutations
 ): Promise<string> {
-  console.log(
+  debugLog(
     `[callFinalLLMSynthesis] Synthesizing final response from source: ${toolSource}`,
   );
   const modelName = selectedModel || DEFAULT_MODEL_NAME;
@@ -300,7 +313,7 @@ async function callFinalLLMSynthesis(
       /<!-- SEARCH_SUGGESTIONS_HTML:[\s\S]*? -->/i,
       "",
     );
-    console.log(
+    debugLog(
       `[callFinalLLMSynthesis] Extracted search suggestions HTML (${searchSuggestionsHtml.length} chars) from tool content.`,
     );
   }
@@ -326,7 +339,7 @@ async function callFinalLLMSynthesis(
   messageToSendToGemini += `\nInformation found from ${toolSource}:\n${cleanedToolContent}\n\nProvide a comprehensive and helpful response.`;
 
   const promptTokens = estimateTokenCount(messageToSendToGemini);
-  console.log(
+  debugLog(
     `[callFinalLLMSynthesis] Sending prompt to Gemini for streaming. Length: ${messageToSendToGemini.length} chars, ~${promptTokens} tokens`,
   );
 
@@ -340,7 +353,7 @@ async function callFinalLLMSynthesis(
 
   for await (const chunk of streamResult) {
     const chunkText = chunk.text ?? "";
-    console.log(
+    debugLog(
       `[callFinalLLMSynthesis] Received LLM chunk. Length: ${chunkText?.length || 0}`,
     ); // DIAGNOSTIC LOG
     if (chunkText) {
@@ -372,13 +385,13 @@ async function callFinalLLMSynthesis(
     !responseText.includes("<!-- SEARCH_SUGGESTIONS_HTML:")
   ) {
     responseText += `\n\n<!-- SEARCH_SUGGESTIONS_HTML:${searchSuggestionsHtml} -->`;
-    console.log(
+    debugLog(
       `[callFinalLLMSynthesis] Re-added search suggestions HTML to final response.`,
     );
   }
 
   const responseTokens = estimateTokenCount(responseText);
-  console.log(
+  debugLog(
     `[callFinalLLMSynthesis] Final response generated. Length: ${responseText.length} chars, ~${responseTokens} tokens`,
   );
   return responseText;
@@ -394,7 +407,7 @@ function extractSearchSuggestions(responseText: string): {
     const cleaned = responseText
       .replace(/<!-- SEARCH_SUGGESTIONS_HTML:.+? -->/s, "")
       .trim();
-    console.log(
+    debugLog(
       `[extractSearchSuggestions] Found search suggestions HTML (${html.length} chars).`,
     );
     return { finalContent: cleaned, searchSuggestionsHtml: html };
@@ -421,7 +434,7 @@ async function processQueryWithTools(
   systemPromptsToUse: SystemPrompts | undefined,
   ctx: any,
 ): Promise<{ finalContent: string; searchSuggestionsHtml?: string }> {
-  console.log("[processQueryWithTools] Starting tool-based processing.");
+  debugLog("[processQueryWithTools] Starting tool-based processing.");
 
   // 1. Rank information sources
   const rankingResult = await rankInformationSources(
@@ -431,7 +444,7 @@ async function processQueryWithTools(
     genAI,
     systemPromptsToUse, // Pass the determined system prompts
   );
-  console.log(
+  debugLog(
     `[processQueryWithTools] Ranked tool groups: ${JSON.stringify(rankingResult.rankedToolGroups)}`,
   );
 
@@ -442,7 +455,7 @@ async function processQueryWithTools(
     rankingResult.rankedToolGroups[0][0] === "no_tool" &&
     rankingResult.directResponse
   ) {
-    console.log(
+    debugLog(
       `[processQueryWithTools] OPTIMIZATION: Using direct response from ranking (${rankingResult.directResponse.length} chars).`,
     );
     await ctx.runMutation(api.chat.updateProcessingPhase, {
@@ -463,7 +476,7 @@ async function processQueryWithTools(
     systemPromptsToUse, // Pass determined system prompts to tool execution
     messageId,
   );
-  console.log(
+  debugLog(
     `[processQueryWithTools] Initial tool execution completed. Source: ${toolExecutionResult.source}, ResponseType: ${toolExecutionResult.responseType}`,
   );
 
@@ -472,7 +485,7 @@ async function processQueryWithTools(
     toolExecutionResult.isFullyFormatted &&
     toolExecutionResult.responseType === "FINAL_ANSWER"
   ) {
-    console.log(
+    debugLog(
       `[processQueryWithTools] Using pre-formatted response from ${toolExecutionResult.source}.`,
     );
     return extractSearchSuggestions(toolExecutionResult.content);
@@ -484,7 +497,7 @@ async function processQueryWithTools(
     toolExecutionResult.responseType === "TRY_NEXT_TOOL_AND_ADD_CONTEXT" &&
     toolExecutionResult.contextToAdd
   ) {
-    console.log(
+    debugLog(
       `[processQueryWithTools] Received TRY_NEXT_TOOL_AND_ADD_CONTEXT with context of ${toolExecutionResult.contextToAdd.length} chars.`,
     );
     accumulatedContext = toolExecutionResult.contextToAdd;
@@ -493,7 +506,7 @@ async function processQueryWithTools(
     const remainingGroups = rankingResult.rankedToolGroups.slice(1);
 
     if (remainingGroups.length > 0) {
-      console.log(
+      debugLog(
         `[processQueryWithTools] Trying next tool group with context: ${JSON.stringify(remainingGroups[0])}`,
       );
 
@@ -510,7 +523,7 @@ async function processQueryWithTools(
         accumulatedContext,
       );
 
-      console.log(
+      debugLog(
         `[processQueryWithTools] Next tool execution completed with context. Source: ${toolExecutionResult.source}, ResponseType: ${toolExecutionResult.responseType}`,
       );
     }
@@ -534,7 +547,7 @@ async function processQueryWithTools(
   // This logic is simplified. If CHECK_NEXT_SOURCE is found, we assume the *next group* in rankingResult.rankedToolGroups.
   // A more robust implementation might need to track which tools were actually in the group that returned CHECK_NEXT_SOURCE.
   if (currentResponseContent.includes(CHECK_NEXT_SOURCE_MARKER)) {
-    console.log(`[processQueryWithTools] AI indicated CHECK_NEXT_SOURCE.`);
+    debugLog(`[processQueryWithTools] AI indicated CHECK_NEXT_SOURCE.`);
     currentResponseContent = currentResponseContent
       .replace(CHECK_NEXT_SOURCE_MARKER, "")
       .trim();
@@ -557,7 +570,7 @@ async function processQueryWithTools(
     const remainingGroups = rankingResult.rankedToolGroups.slice(1);
 
     if (remainingGroups.length > 0) {
-      console.log(
+      debugLog(
         `[processQueryWithTools] Trying next tool group: ${JSON.stringify(remainingGroups[0])}`,
       );
       toolExecutionResult = await executeToolsByGroup(
@@ -594,7 +607,7 @@ async function processQueryWithTools(
       // callFinalLLMSynthesis (called just before this block) has already streamed the content.
       // The 'currentResponseContent' variable holds the full string result of that stream.
     } else {
-      console.log(
+      debugLog(
         "[processQueryWithTools] CHECK_NEXT_SOURCE indicated, but no more tool groups to try.",
       );
       // The currentResponseContent (without marker, but possibly with 'Checking additional sources...') will be used.
@@ -633,8 +646,9 @@ export const getAIResponse = action({
       disableSystemPrompt,
       disableTools,
     } = args;
-    console.log(
-      `[getAIResponse] START User: ${userId}, Pane: ${paneId}, DisableSysPrompt: ${!!disableSystemPrompt}, DisableTools: ${!!disableTools}, Model: ${selectedModel || DEFAULT_MODEL_NAME}, Msg: "${userMessage.substring(0, 50)}..."`,
+    const effectiveModel = getSupportedModelName(selectedModel);
+    debugLog(
+      `[getAIResponse] START User: ${userId}, Pane: ${paneId}, DisableSysPrompt: ${!!disableSystemPrompt}, DisableTools: ${!!disableTools}, Model: ${effectiveModel}, Msg: "${userMessage.substring(0, 50)}..."`,
     );
 
     let messageId: Id<"messages"> | null = null;
@@ -658,7 +672,7 @@ export const getAIResponse = action({
           userMessage,
           initData.formattedHistory,
           initData.genAI,
-          selectedModel || undefined,
+          effectiveModel,
           systemPromptsToUse, // Pass determined prompts
           ctx,
           messageId,
@@ -666,7 +680,7 @@ export const getAIResponse = action({
         responseData = { finalContent: content };
       } else {
         responseData = await processQueryWithTools(
-          args, // Pass all relevant args
+          { ...args, selectedModel: effectiveModel },
           initData,
           systemPromptsToUse, // Pass determined prompts
           ctx,
@@ -696,16 +710,19 @@ export const getAIResponse = action({
         isStreaming: false,
       });
 
-      console.log(`[getAIResponse] SUCCESS Finalized message ${messageId}.`);
+      debugLog(`[getAIResponse] SUCCESS Finalized message ${messageId}.`);
       return messageId;
     } catch (error: any) {
-      console.error(
-        "[getAIResponse] Top-level error:",
-        error.message,
-        error.stack,
-      );
+      const errorSummary = getErrorSummary(error);
+      console.error("[getAIResponse] LLM request failed", {
+        model: effectiveModel,
+        paneId,
+        userId,
+        error: errorSummary,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       const errorMessage =
-        "I'm sorry, I encountered an unexpected error while processing your request. Please try again.";
+        `I'm sorry, I encountered an unexpected error while processing your request.\n\nModel: \`${effectiveModel}\`\nError: ${errorSummary}`;
 
       if (messageId) {
         try {
