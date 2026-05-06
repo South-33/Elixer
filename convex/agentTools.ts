@@ -13,7 +13,7 @@ const ANSWER_THINKING_CONFIG = {
 };
 const RANKING_THINKING_CONFIG = {
   thinkingConfig: {
-    thinkingLevel: ThinkingLevel.MINIMAL,
+    thinkingBudget: 0,
   },
 };
 const debugLog = (...args: unknown[]) => {
