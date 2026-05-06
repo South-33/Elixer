@@ -1,11 +1,21 @@
 "use node";
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { api } from "./_generated/api";
 import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other related types are defined
 
 const DEFAULT_MODEL_NAME = "gemini-3.1-flash-lite-preview";
 const RANKING_MODEL_NAME = "gemini-3.1-flash-lite-preview";
+const ANSWER_THINKING_CONFIG = {
+  thinkingConfig: {
+    thinkingLevel: ThinkingLevel.LOW,
+  },
+};
+const RANKING_THINKING_CONFIG = {
+  thinkingConfig: {
+    thinkingLevel: ThinkingLevel.MINIMAL,
+  },
+};
 const debugLog = (...args: unknown[]) => {
   if (process.env.CONVEX_DEBUG_LOGS === "true") {
     console.log(...args);
@@ -404,6 +414,7 @@ async function updateProcessingPhase(
 // --- GEMINI API HELPERS ---
 const getGenerationConfigForJson = () => ({
   responseMimeType: "application/json",
+  ...ANSWER_THINKING_CONFIG,
 });
 
 /**
@@ -882,6 +893,7 @@ ${searchDirectives}
         model: params.selectedModel || DEFAULT_MODEL_NAME,
         contents: searchInvocationPrompt,
         config: {
+          ...ANSWER_THINKING_CONFIG,
           tools: [googleSearchTool],
         },
       });
@@ -1316,6 +1328,7 @@ class AgentModeOffExecutor implements IToolExecutor {
       const response = await params.genAI.models.generateContent({
         model: params.selectedModel || DEFAULT_MODEL_NAME,
         contents: fullPrompt,
+        config: ANSWER_THINKING_CONFIG,
       });
       const responseText = response.text || "";
 
@@ -1731,6 +1744,7 @@ export const rankInformationSources = async (
     const response = await genAI.models.generateContent({
       model: RANKING_MODEL_NAME,
       contents: rankingPrompt,
+      config: RANKING_THINKING_CONFIG,
     });
     const responseText = response.text || "";
     debugLog(

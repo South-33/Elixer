@@ -3,7 +3,7 @@
 import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { Id } from "./_generated/dataModel";
 import {
   rankInformationSources,
@@ -17,6 +17,11 @@ import { toolExecutors } from "./agentTools";
 
 const DEFAULT_MODEL_NAME = "gemini-3.1-flash-lite-preview";
 const SUPPORTED_MODEL_NAMES = new Set([DEFAULT_MODEL_NAME]);
+const ANSWER_GENERATION_CONFIG = {
+  thinkingConfig: {
+    thinkingLevel: ThinkingLevel.LOW,
+  },
+};
 const debugLog = (...args: unknown[]) => {
   if (process.env.CONVEX_DEBUG_LOGS === "true") {
     console.log(...args);
@@ -232,6 +237,7 @@ async function handleNoToolResponseFlow(
       const streamResult = await genAI.models.generateContentStream({
         model: modelName,
         contents: directPrompt,
+        config: ANSWER_GENERATION_CONFIG,
       });
       let accumulatedResponseText = "";
       // Optional: Initial small update to show something is happening
@@ -346,6 +352,7 @@ async function callFinalLLMSynthesis(
   const streamResult = await genAI.models.generateContentStream({
     model: modelName,
     contents: messageToSendToGemini,
+    config: ANSWER_GENERATION_CONFIG,
   });
   let accumulatedResponseText = "";
   let chunkBuffer = ""; // Buffer for accumulating small chunks

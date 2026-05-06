@@ -437,8 +437,10 @@ export function ChatPane({
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_NAME);
   const [disableSystemPrompt, setDisableSystemPrompt] = useState(false); // New state for disabling system prompt - off by default
   const [disableToolUse, setDisableToolUse] = useState(false); // New state for disabling tool use - off by default
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
 
   // Current processing phase for the assistant
   const [currentProcessingPhase, setCurrentProcessingPhase] =
@@ -477,6 +479,24 @@ export function ChatPane({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (!isModelMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        modelMenuRef.current &&
+        !modelMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsModelMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isModelMenuOpen]);
 
   // This is the global "isStreaming" used to disable UI elements
   const isStreaming =
@@ -546,39 +566,101 @@ export function ChatPane({
           Chat {paneId.replace("pane-", "#")}
         </h3>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setDisableSystemPrompt((prev) => !prev)}
-            className={`px-3 py-1.5 text-xs font-mono font-medium border transition-colors ${
-              disableSystemPrompt
-                ? "bg-white border-gray-300 text-gray-500 hover:text-red-600"
-                : "bg-slate-800 border-slate-800 text-white"
-            }`}
-            style={{ borderRadius: "2px" }}
-            disabled={isStreaming}
-          >
-            {disableSystemPrompt ? "System [Off]" : "System [On]"}
-          </button>
-          <button
-            onClick={() => setDisableToolUse((prev) => !prev)}
-            className={`px-3 py-1.5 text-xs font-mono font-medium border transition-colors ${
-              disableToolUse
-                ? "bg-white border-gray-300 text-gray-500 hover:text-red-600"
-                : "bg-slate-700 border-slate-700 text-white"
-            }`}
-            style={{ borderRadius: "2px" }}
-            disabled={isStreaming}
-          >
-            {disableToolUse ? "AGENT [OFF]" : "AGENT [ON]"}
-          </button>
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="p-1.5 border border-gray-300 bg-white text-xs font-mono focus:ring-1 focus:ring-slate-500 outline-none"
-            style={{ borderRadius: "2px" }}
-            disabled={isStreaming}
-          >
-            <option value={DEFAULT_MODEL_NAME}>{DEFAULT_MODEL_LABEL}</option>
-          </select>
+          <div className="group relative">
+            <button
+              onClick={() => setDisableSystemPrompt((prev) => !prev)}
+              className={`px-3 py-1.5 text-xs font-mono font-medium border transition-colors ${
+                disableSystemPrompt
+                  ? "bg-white border-gray-300 text-gray-500 hover:text-red-600"
+                  : "bg-slate-800 border-slate-800 text-white"
+              }`}
+              style={{ borderRadius: "2px" }}
+              disabled={isStreaming}
+              aria-describedby={`${paneId}-system-tooltip`}
+            >
+              {disableSystemPrompt ? "System [Off]" : "System [On]"}
+            </button>
+            <div
+              id={`${paneId}-system-tooltip`}
+              role="tooltip"
+              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              style={{ borderRadius: "2px" }}
+            >
+              {disableSystemPrompt
+                ? "Press to restore the saved system prompts for tone, policy, and regulations."
+                : "Press to ignore saved system prompts and let the model answer without custom instructions."}
+            </div>
+          </div>
+          <div className="group relative">
+            <button
+              onClick={() => setDisableToolUse((prev) => !prev)}
+              className={`px-3 py-1.5 text-xs font-mono font-medium border transition-colors ${
+                disableToolUse
+                  ? "bg-white border-gray-300 text-gray-500 hover:text-red-600"
+                  : "bg-slate-700 border-slate-700 text-white"
+              }`}
+              style={{ borderRadius: "2px" }}
+              disabled={isStreaming}
+              aria-describedby={`${paneId}-agent-tooltip`}
+            >
+              {disableToolUse ? "AGENT [OFF]" : "AGENT [ON]"}
+            </button>
+            <div
+              id={`${paneId}-agent-tooltip`}
+              role="tooltip"
+              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              style={{ borderRadius: "2px" }}
+            >
+              {disableToolUse
+                ? "Press to let the agent rank and use available tools before answering."
+                : "Press to skip tool ranking and answer directly with the selected model."}
+            </div>
+          </div>
+          <div className="relative" ref={modelMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsModelMenuOpen((open) => !open)}
+              className="flex min-w-[280px] items-center justify-between gap-3 border border-slate-400 bg-white px-3 py-1.5 text-left font-mono text-xs text-slate-900 shadow-sm outline-none transition-colors hover:border-slate-700 focus:border-teal-700 focus:ring-1 focus:ring-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ borderRadius: "2px" }}
+              disabled={isStreaming}
+              aria-haspopup="listbox"
+              aria-expanded={isModelMenuOpen}
+            >
+              <span>{DEFAULT_MODEL_LABEL}</span>
+              <svg
+                className={`h-4 w-4 text-slate-500 transition-transform ${isModelMenuOpen ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            {isModelMenuOpen && (
+              <div
+                className="absolute left-0 right-0 top-full z-50 mt-1 border border-slate-700 bg-white shadow-lg"
+                style={{ borderRadius: "2px" }}
+                role="listbox"
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between bg-slate-800 px-3 py-2 text-left font-mono text-xs text-white transition-colors hover:bg-teal-800"
+                  role="option"
+                  aria-selected={selectedModel === DEFAULT_MODEL_NAME}
+                  onClick={() => {
+                    setSelectedModel(DEFAULT_MODEL_NAME);
+                    setIsModelMenuOpen(false);
+                  }}
+                >
+                  {DEFAULT_MODEL_LABEL}
+                  <span className="text-[10px] uppercase tracking-wider text-teal-200">
+                    Active
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={onClearChat}
             className="p-2 bg-white border border-gray-300 text-slate-600 hover:text-red-600 hover:border-red-300 transition-colors shadow-sm"
