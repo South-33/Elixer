@@ -4,8 +4,8 @@ import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { api } from "./_generated/api";
 import { LawDatabase } from "./chatAI"; // Assuming LawDatabase and other related types are defined
 
-const DEFAULT_MODEL_NAME = "gemini-3.1-flash-lite-preview";
-const RANKING_MODEL_NAME = "gemini-3.1-flash-lite-preview";
+const DEFAULT_MODEL_NAME = "gemini-flash-lite-latest";
+const RANKING_MODEL_NAME = "gemini-flash-lite-latest";
 const ANSWER_THINKING_CONFIG = {
   thinkingConfig: {
     thinkingLevel: ThinkingLevel.LOW,

@@ -10,8 +10,8 @@ import ReactMarkdown from "react-markdown";
 
 import { TrashIcon } from "@heroicons/react/20/solid";
 
-const DEFAULT_MODEL_NAME = "gemini-3.1-flash-lite-preview";
-const DEFAULT_MODEL_LABEL = "Gemini 3.1 Flash-Lite Preview";
+const DEFAULT_MODEL_NAME = "gemini-flash-lite-latest";
+const DEFAULT_MODEL_LABEL = "Gemini Flash-Lite Latest";
 
 const FLAG_EMOJI_REGEX = /[\u{1F1E6}-\u{1F1FF}]{2}/gu;
 const FLAG_EMOJI_EXACT_REGEX = /^[\u{1F1E6}-\u{1F1FF}]{2}$/u;
