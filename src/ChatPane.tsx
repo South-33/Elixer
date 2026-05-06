@@ -1,8 +1,4 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-} from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
@@ -448,15 +444,14 @@ export function ChatPane({
   const [showLocalPendingIndicator, setShowLocalPendingIndicator] =
     useState<boolean>(false);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
-  // Function to reset local streaming states
-  const resetLocalStreamingStates = () => {
+  const resetLocalStreamingStates = useCallback(() => {
     setCurrentProcessingPhase("Thinking");
     setShowLocalPendingIndicator(false);
-  };
+  }, []);
 
   // Report message status to parent
   useEffect(() => {
@@ -507,41 +502,49 @@ export function ChatPane({
     onStreamingStatusChange(paneId, isStreaming);
   }, [isStreaming, paneId, onStreamingStatusChange]);
 
-  const handleInternalSend = async (content: string) => {
-    const userMessageContent = content.trim();
-    const isCurrentlyStreaming =
-      messages.some((msg: MessageDoc) => msg.isStreaming) ||
-      showLocalPendingIndicator;
+  const handleInternalSend = useCallback(
+    async (content: string) => {
+      const userMessageContent = content.trim();
 
-    if (!userMessageContent || isCurrentlyStreaming) return;
+      if (!userMessageContent || isStreaming) return;
 
-    setCurrentProcessingPhase("Thinking");
-    setShowLocalPendingIndicator(true);
+      setCurrentProcessingPhase("Thinking");
+      setShowLocalPendingIndicator(true);
 
-    try {
-      if (!userId) {
-        console.error("User not loaded, cannot send message.");
+      try {
+        if (!userId) {
+          console.error("User not loaded, cannot send message.");
+          setShowLocalPendingIndicator(false);
+          return;
+        }
+        await onSendMessage(
+          userMessageContent,
+          selectedModel,
+          paneId,
+          disableSystemPrompt,
+          disableToolUse,
+        );
+      } catch (error: unknown) {
         setShowLocalPendingIndicator(false);
-        return;
+        console.error("Failed to send message", {
+          paneId,
+          model: selectedModel,
+          disableSystemPrompt,
+          disableToolUse,
+          error,
+        });
       }
-      await onSendMessage(
-        userMessageContent,
-        selectedModel,
-        paneId,
-        disableSystemPrompt,
-        disableToolUse,
-      );
-    } catch (error: any) {
-      setShowLocalPendingIndicator(false);
-      console.error("Failed to send message", {
-        paneId,
-        model: selectedModel,
-        disableSystemPrompt,
-        disableToolUse,
-        error,
-      });
-    }
-  };
+    },
+    [
+      isStreaming,
+      userId,
+      onSendMessage,
+      selectedModel,
+      paneId,
+      disableSystemPrompt,
+      disableToolUse,
+    ],
+  );
 
   useEffect(() => {
     registerSendHandler(paneId, handleInternalSend);
@@ -556,6 +559,8 @@ export function ChatPane({
     unregisterSendHandler,
     registerResetStatesHandler,
     unregisterResetStatesHandler,
+    handleInternalSend,
+    resetLocalStreamingStates,
   ]);
 
   return (
@@ -583,12 +588,12 @@ export function ChatPane({
             <div
               id={`${paneId}-system-tooltip`}
               role="tooltip"
-              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
               style={{ borderRadius: "2px" }}
             >
               {disableSystemPrompt
-                ? "Press to restore the saved system prompts for tone, policy, and regulations."
-                : "Press to ignore saved system prompts and let the model answer without custom instructions."}
+                ? "Enable system prompt"
+                : "Disable system prompt"}
             </div>
           </div>
           <div className="group relative">
@@ -608,12 +613,10 @@ export function ChatPane({
             <div
               id={`${paneId}-agent-tooltip`}
               role="tooltip"
-              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
               style={{ borderRadius: "2px" }}
             >
-              {disableToolUse
-                ? "Press to let the agent rank and use available tools before answering."
-                : "Press to skip tool ranking and answer directly with the selected model."}
+              {disableToolUse ? "Enable tooling" : "Disable tooling"}
             </div>
           </div>
           <div className="relative" ref={modelMenuRef}>
@@ -634,7 +637,12 @@ export function ChatPane({
                 viewBox="0 0 24 24"
                 aria-hidden="true"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m6 9 6 6 6-6" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="m6 9 6 6 6-6"
+                />
               </svg>
             </button>
             {isModelMenuOpen && (

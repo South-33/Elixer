@@ -1,36 +1,75 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Authenticated, Unauthenticated, useQuery, useMutation } from "convex/react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
+import {
+  Authenticated,
+  Unauthenticated,
+  useQuery,
+  useMutation,
+} from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
 
-import { Sidebar, DEFAULT_LAW_PROMPT, DEFAULT_TONE_PROMPT, DEFAULT_POLICY_PROMPT } from "./Sidebar";
+import {
+  Sidebar,
+  DEFAULT_LAW_PROMPT,
+  DEFAULT_TONE_PROMPT,
+  DEFAULT_POLICY_PROMPT,
+} from "./Sidebar";
 import { ChatPane } from "./ChatPane";
 const AddPaneIcon = () => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+  <svg
+    className="w-6 h-6"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
+    ></path>
+  </svg>
 );
 const RemovePaneIcon = () => (
-  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+  <svg
+    className="w-6 h-6"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
+    ></path>
+  </svg>
 );
 
-// Example Messages Component
-const ExampleMessages = ({ onExampleClick }: { onExampleClick: (message: string) => void }) => {
-  const examples = [
-    "What is the 13th article of Cambodia Insurance Law?",
-    "Explain the key provisions of liability insurance in Cambodia",
-    "What is the current Tesla Stock Price, and what is the 12th article of Cambodia Insurance Law?"
-  ];
+const EXAMPLE_MESSAGES = [
+  "What is the 13th article of Cambodia Insurance Law?",
+  "Explain the key provisions of liability insurance in Cambodia",
+  "What is the current Tesla Stock Price, and what is the 12th article of Cambodia Insurance Law?",
+];
 
+const ExampleMessages = ({
+  onExampleClick,
+}: {
+  onExampleClick: (message: string) => void;
+}) => {
   return (
     <div className="w-full overflow-x-auto pb-4 pt-2 animate-fadeIn custom-scrollbar">
       <div className="flex gap-4 px-4 min-w-max justify-center">
-        {examples.map((example, index) => (
+        {EXAMPLE_MESSAGES.map((example) => (
           <button
-            key={index}
+            key={example}
             onClick={() => onExampleClick(example)}
             className="group relative flex items-center gap-3 px-4 py-3 bg-white border border-gray-300 shadow-sm hover:border-slate-500 hover:shadow-md transition-all duration-200 whitespace-nowrap flex-shrink-0"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: "2px" }}
           >
             <div className="w-1 h-3 bg-slate-300 group-hover:bg-teal-700 transition-colors" />
             <span className="text-sm text-slate-700 group-hover:text-slate-900 font-medium tracking-wide">
@@ -43,30 +82,33 @@ const ExampleMessages = ({ onExampleClick }: { onExampleClick: (message: string)
   );
 };
 
-
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [chatPanes, setChatPanes] = useState([{ id: 'default-pane' }]); // Start with one default pane
+  const [chatPanes, setChatPanes] = useState([{ id: "default-pane" }]);
 
   const clearPaneMessagesMutation = useMutation(api.chat.clearPaneMessages);
 
   const addChatPane = () => {
-    if (chatPanes.length < 4) { // Limit to 4 panes
-      setChatPanes(prevPanes => [...prevPanes, { id: `pane-${Date.now()}` }]);
+    if (chatPanes.length < 4) {
+      setChatPanes((prevPanes) => [...prevPanes, { id: `pane-${Date.now()}` }]);
     }
   };
 
   const removeChatPane = async (idToRemove: string) => {
-    if (chatPanes.length > 1) { // Always keep at least one pane
-      // Optimistically remove the pane from the UI
-      setChatPanes(prevPanes => prevPanes.filter(pane => pane.id !== idToRemove));
+    if (chatPanes.length > 1) {
+      setChatPanes((prevPanes) =>
+        prevPanes.filter((pane) => pane.id !== idToRemove),
+      );
 
-      const paneToRemove = chatPanes.find(pane => pane.id === idToRemove);
+      const paneToRemove = chatPanes.find((pane) => pane.id === idToRemove);
       if (paneToRemove) {
         try {
           await clearPaneMessagesMutation({ paneId: paneToRemove.id });
         } catch (error) {
-          console.error(`Failed to clear chat for pane ${paneToRemove.id} on backend:`, error);
+          console.error(
+            `Failed to clear chat for pane ${paneToRemove.id} on backend:`,
+            error,
+          );
         }
       }
     }
@@ -74,13 +116,13 @@ export default function App() {
 
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         setIsSidebarOpen(false);
       }
     };
-    window.addEventListener('keydown', handleEsc);
+    window.addEventListener("keydown", handleEsc);
     return () => {
-      window.removeEventListener('keydown', handleEsc);
+      window.removeEventListener("keydown", handleEsc);
     };
   }, []);
 
@@ -88,22 +130,13 @@ export default function App() {
     <div className="h-screen flex flex-col bg-[#F8F9FA] text-slate-800 font-sans">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-300 h-16 flex justify-between items-center px-6 shadow-sm">
         <div className="flex items-center gap-4">
-          {/* Sidebar toggle hidden for now
-          <Authenticated>
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 text-slate-600 hover:bg-gray-100 hover:text-black transition-colors rounded-sm focus:outline-none focus:ring-1 focus:ring-slate-300"
-              title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-            >
-              {isSidebarOpen ? <CloseIcon /> : <MenuIcon />}
-            </button>
-          </Authenticated>
-          */}
           <div className="flex flex-col">
             <h1 className="text-lg font-bold text-slate-900 tracking-[0.15em] uppercase leading-none">
               Elixir
             </h1>
-            <span className="text-[10px] text-slate-400 tracking-wider uppercase mt-0.5">AI Agent</span>
+            <span className="text-[10px] text-slate-400 tracking-wider uppercase mt-0.5">
+              AI Agent
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -119,7 +152,9 @@ export default function App() {
               </button>
               {chatPanes.length > 1 && (
                 <button
-                  onClick={() => removeChatPane(chatPanes[chatPanes.length - 1].id)}
+                  onClick={() =>
+                    removeChatPane(chatPanes[chatPanes.length - 1].id)
+                  }
                   className="p-2 text-slate-600 hover:text-red-700 hover:bg-red-50 transition-colors rounded-sm"
                   title="Remove Pane"
                 >
@@ -153,15 +188,18 @@ export default function App() {
           />
         </Authenticated>
       </div>
-
     </div>
   );
 }
 
-function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
-  isSidebarOpen: boolean,
-  setIsSidebarOpen: (isOpen: boolean) => void,
-  chatPanes: { id: string }[],
+function AuthenticatedContent({
+  isSidebarOpen,
+  setIsSidebarOpen,
+  chatPanes,
+}: {
+  isSidebarOpen: boolean;
+  setIsSidebarOpen: (isOpen: boolean) => void;
+  chatPanes: { id: string }[];
 }) {
   const user = useQuery(api.auth.loggedInUser);
   const [currentSidebarWidth, setCurrentSidebarWidth] = useState(0);
@@ -173,36 +211,81 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
 
   const systemPromptsQuery = useQuery(api.chat.getSystemPrompts);
 
-  const sendMessageMutation = useMutation(api.chat.sendMessage)
-    .withOptimisticUpdate(
-      (optimisticStore, args: { content: string; lawPrompt?: string; tonePrompt?: string; policyPrompt?: string; selectedModel?: string; paneId: string; disableSystemPrompt?: boolean; disableTools?: boolean; }) => {
-        if (user?._id) {
-          const currentMessages = optimisticStore.getQuery(api.chat.getMessages, { userId: user._id, paneId: args.paneId }) || [];
-          const timestamp = Date.now();
-          const optimisticUserMessage = {
-            _id: `optimistic-user-${timestamp}-${args.paneId}` as Id<"messages">,
-            _creationTime: timestamp,
-            role: "user",
-            content: args.content,
+  const sendMessageMutation = useMutation(
+    api.chat.sendMessage,
+  ).withOptimisticUpdate(
+    (
+      optimisticStore,
+      args: {
+        content: string;
+        lawPrompt?: string;
+        tonePrompt?: string;
+        policyPrompt?: string;
+        selectedModel?: string;
+        paneId: string;
+        disableSystemPrompt?: boolean;
+        disableTools?: boolean;
+      },
+    ) => {
+      if (user?._id) {
+        const currentMessages =
+          optimisticStore.getQuery(api.chat.getMessages, {
             userId: user._id,
             paneId: args.paneId,
-            disableSystemPrompt: args.disableSystemPrompt,
-            disableTools: args.disableTools,
-          };
-          optimisticStore.setQuery(api.chat.getMessages, { userId: user._id, paneId: args.paneId }, [...currentMessages, optimisticUserMessage]);
-        }
+          }) || [];
+        const timestamp = Date.now();
+        const optimisticUserMessage = {
+          _id: `optimistic-user-${timestamp}-${args.paneId}` as Id<"messages">,
+          _creationTime: timestamp,
+          role: "user",
+          content: args.content,
+          userId: user._id,
+          paneId: args.paneId,
+          disableSystemPrompt: args.disableSystemPrompt,
+          disableTools: args.disableTools,
+        };
+        optimisticStore.setQuery(
+          api.chat.getMessages,
+          { userId: user._id, paneId: args.paneId },
+          [...currentMessages, optimisticUserMessage],
+        );
       }
-    );
+    },
+  );
   const saveSystemPrompt = useMutation(api.chat.saveSystemPrompt);
   const clearChatMutation = useMutation(api.chat.clearChat);
 
   const [currentInputMessage, setCurrentInputMessage] = useState("");
-  const chatPaneSendHandlers = useRef<Record<string, (content: string) => Promise<void>>>({});
+  const chatPaneSendHandlers = useRef<
+    Record<string, (content: string) => Promise<void>>
+  >({});
   const [lawPrompt, setLawPrompt] = useState<string>("");
   const [tonePrompt, setTonePrompt] = useState<string>("");
   const [policyPrompt, setPolicyPrompt] = useState<string>("");
 
   const savePromptTimeoutRef = useRef<number | null>(null);
+
+  const registerSendHandler = useCallback(
+    (paneId: string, handler: (content: string) => Promise<void>) => {
+      chatPaneSendHandlers.current[paneId] = handler;
+    },
+    [],
+  );
+
+  const unregisterSendHandler = useCallback((paneId: string) => {
+    delete chatPaneSendHandlers.current[paneId];
+  }, []);
+
+  const registerResetStatesHandler = useCallback(
+    (paneId: string, handler: () => void) => {
+      chatPaneResetStatesHandlers.current[paneId] = handler;
+    },
+    [],
+  );
+
+  const unregisterResetStatesHandler = useCallback((paneId: string) => {
+    delete chatPaneResetStatesHandlers.current[paneId];
+  }, []);
 
   useEffect(() => {
     if (user && systemPromptsQuery !== undefined) {
@@ -217,7 +300,9 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
       } else {
         setLawPrompt(systemPromptsQuery.lawPrompt ?? DEFAULT_LAW_PROMPT);
         setTonePrompt(systemPromptsQuery.tonePrompt ?? DEFAULT_TONE_PROMPT);
-        setPolicyPrompt(systemPromptsQuery.policyPrompt ?? DEFAULT_POLICY_PROMPT);
+        setPolicyPrompt(
+          systemPromptsQuery.policyPrompt ?? DEFAULT_POLICY_PROMPT,
+        );
       }
     } else if (!user) {
       setLawPrompt("");
@@ -227,20 +312,38 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
   }, [user, systemPromptsQuery]);
 
   useEffect(() => {
-    const serverLawPrompt = systemPromptsQuery?.lawPrompt !== undefined ? systemPromptsQuery.lawPrompt : DEFAULT_LAW_PROMPT;
-    const serverTonePrompt = systemPromptsQuery?.tonePrompt !== undefined ? systemPromptsQuery.tonePrompt : DEFAULT_TONE_PROMPT;
-    const serverPolicyPrompt = systemPromptsQuery?.policyPrompt !== undefined ? systemPromptsQuery.policyPrompt : DEFAULT_POLICY_PROMPT;
+    const serverLawPrompt =
+      systemPromptsQuery?.lawPrompt !== undefined
+        ? systemPromptsQuery.lawPrompt
+        : DEFAULT_LAW_PROMPT;
+    const serverTonePrompt =
+      systemPromptsQuery?.tonePrompt !== undefined
+        ? systemPromptsQuery.tonePrompt
+        : DEFAULT_TONE_PROMPT;
+    const serverPolicyPrompt =
+      systemPromptsQuery?.policyPrompt !== undefined
+        ? systemPromptsQuery.policyPrompt
+        : DEFAULT_POLICY_PROMPT;
 
-    const promptsChangedByUser = lawPrompt !== serverLawPrompt ||
+    const promptsChangedByUser =
+      lawPrompt !== serverLawPrompt ||
       tonePrompt !== serverTonePrompt ||
       policyPrompt !== serverPolicyPrompt;
 
-    if (user && systemPromptsQuery !== undefined && (systemPromptsQuery === null || promptsChangedByUser)) {
+    if (
+      user &&
+      systemPromptsQuery !== undefined &&
+      (systemPromptsQuery === null || promptsChangedByUser)
+    ) {
       if (savePromptTimeoutRef.current !== null) {
         window.clearTimeout(savePromptTimeoutRef.current);
       }
       savePromptTimeoutRef.current = window.setTimeout(() => {
-        saveSystemPrompt({ lawPrompt, tonePrompt, policyPrompt });
+        void saveSystemPrompt({ lawPrompt, tonePrompt, policyPrompt }).catch(
+          (error) => {
+            console.error("Failed to save system prompts:", error);
+          },
+        );
       }, 1000);
     }
     return () => {
@@ -248,25 +351,41 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
         window.clearTimeout(savePromptTimeoutRef.current);
       }
     };
-  }, [lawPrompt, tonePrompt, policyPrompt, saveSystemPrompt, systemPromptsQuery, user]);
+  }, [
+    lawPrompt,
+    tonePrompt,
+    policyPrompt,
+    saveSystemPrompt,
+    systemPromptsQuery,
+    user,
+  ]);
 
-  const handleSendMessage = async (content: string, model: string, paneId: string, disableSystemPrompt: boolean, disableTools: boolean) => {
-    if (!user?._id) {
-      console.error("User not loaded, cannot send message.");
-      return;
-    }
+  const handleSendMessage = useCallback(
+    async (
+      content: string,
+      model: string,
+      paneId: string,
+      disableSystemPrompt: boolean,
+      disableTools: boolean,
+    ) => {
+      if (!user?._id) {
+        console.error("User not loaded, cannot send message.");
+        return;
+      }
 
-    await sendMessageMutation({
-      content,
-      lawPrompt: disableSystemPrompt ? undefined : lawPrompt,
-      tonePrompt: disableSystemPrompt ? undefined : tonePrompt,
-      policyPrompt: disableSystemPrompt ? undefined : policyPrompt,
-      selectedModel: model,
-      paneId,
-      disableSystemPrompt,
-      disableTools,
-    });
-  };
+      await sendMessageMutation({
+        content,
+        lawPrompt: disableSystemPrompt ? undefined : lawPrompt,
+        tonePrompt: disableSystemPrompt ? undefined : tonePrompt,
+        policyPrompt: disableSystemPrompt ? undefined : policyPrompt,
+        selectedModel: model,
+        paneId,
+        disableSystemPrompt,
+        disableTools,
+      });
+    },
+    [lawPrompt, policyPrompt, sendMessageMutation, tonePrompt, user?._id],
+  );
 
   const handleGlobalSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,7 +394,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
 
     setCurrentInputMessage("");
 
-    for (const paneId of chatPanes.map(pane => pane.id)) {
+    for (const paneId of chatPanes.map((pane) => pane.id)) {
       const sendHandler = chatPaneSendHandlers.current[paneId];
       if (sendHandler) {
         await sendHandler(userMessageContent);
@@ -285,7 +404,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
 
   const handleClearInput = () => {
     setCurrentInputMessage("");
-    for (const paneId of chatPanes.map(pane => pane.id)) {
+    for (const paneId of chatPanes.map((pane) => pane.id)) {
       const resetHandler = chatPaneResetStatesHandlers.current[paneId];
       if (resetHandler) {
         resetHandler();
@@ -299,7 +418,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
 
     setCurrentInputMessage(exampleText);
 
-    for (const paneId of chatPanes.map(pane => pane.id)) {
+    for (const paneId of chatPanes.map((pane) => pane.id)) {
       const sendHandler = chatPaneSendHandlers.current[paneId];
       if (sendHandler) {
         await sendHandler(exampleText);
@@ -309,12 +428,15 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
     setCurrentInputMessage("");
   };
 
-
   const handleClearChat = async () => {
-    if (window.confirm("Are you sure you want to clear all messages? This action cannot be undone.")) {
+    if (
+      window.confirm(
+        "Are you sure you want to clear all messages? This action cannot be undone.",
+      )
+    ) {
       try {
         await clearChatMutation();
-        for (const paneId of chatPanes.map(pane => pane.id)) {
+        for (const paneId of chatPanes.map((pane) => pane.id)) {
           const resetHandler = chatPaneResetStatesHandlers.current[paneId];
           if (resetHandler) {
             resetHandler();
@@ -327,29 +449,47 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
   };
 
   const hasActivePrompts = !!(lawPrompt || tonePrompt || policyPrompt);
-  const [paneStreamingStatus, setPaneStreamingStatus] = useState<Record<string, boolean>>({});
+  const [paneStreamingStatus, setPaneStreamingStatus] = useState<
+    Record<string, boolean>
+  >({});
 
-  const handlePaneStreamingStatusChange = React.useCallback((paneId: string, isStreaming: boolean) => {
-    setPaneStreamingStatus(prevStatus => ({
-      ...prevStatus,
-      [paneId]: isStreaming,
-    }));
-  }, []);
+  const handlePaneStreamingStatusChange = React.useCallback(
+    (paneId: string, isStreaming: boolean) => {
+      setPaneStreamingStatus((prevStatus) => ({
+        ...prevStatus,
+        [paneId]: isStreaming,
+      }));
+    },
+    [],
+  );
 
-  const isAnyPaneStreaming = Object.values(paneStreamingStatus).some(status => status);
+  const isAnyPaneStreaming = Object.values(paneStreamingStatus).some(
+    (status) => status,
+  );
 
-  const [paneHasMessages, setPaneHasMessages] = useState<Record<string, boolean>>({});
+  const [paneHasMessages, setPaneHasMessages] = useState<
+    Record<string, boolean>
+  >({});
 
-  const handlePaneMessagesStatusChange = React.useCallback((paneId: string, hasMessages: boolean) => {
-    setPaneHasMessages(prevStatus => ({
-      ...prevStatus,
-      [paneId]: hasMessages,
-    }));
-  }, []);
+  const handlePaneMessagesStatusChange = React.useCallback(
+    (paneId: string, hasMessages: boolean) => {
+      setPaneHasMessages((prevStatus) => ({
+        ...prevStatus,
+        [paneId]: hasMessages,
+      }));
+    },
+    [],
+  );
 
-  const hasAnyMessages = Object.values(paneHasMessages).some(status => status);
+  const hasAnyMessages = Object.values(paneHasMessages).some(
+    (status) => status,
+  );
   const handlePaneClearChat = async (paneId: string) => {
-    if (window.confirm("Are you sure you want to clear all messages in this panel? This action cannot be undone.")) {
+    if (
+      window.confirm(
+        "Are you sure you want to clear all messages in this panel? This action cannot be undone.",
+      )
+    ) {
       try {
         await clearPaneMessagesMutation({ paneId });
         const resetHandler = chatPaneResetStatesHandlers.current[paneId];
@@ -393,11 +533,12 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
           md:my-4 md:mr-4 md:rounded-lg md:shadow-lg
           transition-[margin-left] duration-300 ease-in-out
           `}
-        style={{ marginLeft: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
+        style={{
+          marginLeft: isSidebarOpen ? `${currentSidebarWidth}px` : "0px",
+        }}
       >
-
         <div className="flex-1 flex flex-col sm:flex-row pb-[90px] sm:pb-[50px] overflow-hidden divide-x divide-slate-200">
-          {chatPanes.map(pane => (
+          {chatPanes.map((pane) => (
             <ChatPane
               key={pane.id}
               userId={user?._id}
@@ -411,29 +552,19 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
               }}
               onStreamingStatusChange={handlePaneStreamingStatusChange}
               onMessagesStatusChange={handlePaneMessagesStatusChange}
-              registerSendHandler={(paneId, handler) => {
-                chatPaneSendHandlers.current[paneId] = handler;
-              }}
-              unregisterSendHandler={(paneId) => {
-                delete chatPaneSendHandlers.current[paneId];
-              }}
-              registerResetStatesHandler={(paneId, handler) => {
-                chatPaneResetStatesHandlers.current[paneId] = handler;
-              }}
-              unregisterResetStatesHandler={(paneId) => {
-                delete chatPaneResetStatesHandlers.current[paneId];
-              }}
+              registerSendHandler={registerSendHandler}
+              unregisterSendHandler={unregisterSendHandler}
+              registerResetStatesHandler={registerResetStatesHandler}
+              unregisterResetStatesHandler={unregisterResetStatesHandler}
             />
-
           ))}
         </div>
-
 
         {/* Example Messages - shown when there are no messages */}
         {!hasAnyMessages && (
           <div
             className="fixed bottom-[70px] sm:bottom-[66px] right-0 z-30 pb-2 bg-gradient-to-t from-white via-white to-transparent transition-[left] duration-300 ease-in-out"
-            style={{ left: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
+            style={{ left: isSidebarOpen ? `${currentSidebarWidth}px` : "0px" }}
           >
             <ExampleMessages onExampleClick={handleExampleClick} />
           </div>
@@ -442,7 +573,7 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
         <form
           onSubmit={handleGlobalSend}
           className="fixed bottom-0 right-0 z-40 p-4 border-t border-gray-300 bg-[#F2F2F2] transition-[left] duration-300 ease-in-out"
-          style={{ left: isSidebarOpen ? `${currentSidebarWidth}px` : '0px' }}
+          style={{ left: isSidebarOpen ? `${currentSidebarWidth}px` : "0px" }}
         >
           <div className="flex gap-0 shadow-sm border border-gray-400 bg-white">
             <input
@@ -457,14 +588,30 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
               <button
                 type="button"
                 onClick={handleClearInput}
-                className={`px-3 py-2 transition-colors border-l border-gray-400 ${isAnyPaneStreaming
-                  ? "text-orange-600 hover:text-red-600 hover:bg-red-50"
-                  : "text-slate-500 hover:text-red-600 hover:bg-red-50"
-                  }`}
-                title={isAnyPaneStreaming ? "Cancel and reset" : "Clear input and reset states"}
+                className={`px-3 py-2 transition-colors border-l border-gray-400 ${
+                  isAnyPaneStreaming
+                    ? "text-orange-600 hover:text-red-600 hover:bg-red-50"
+                    : "text-slate-500 hover:text-red-600 hover:bg-red-50"
+                }`}
+                title={
+                  isAnyPaneStreaming
+                    ? "Cancel and reset"
+                    : "Clear input and reset states"
+                }
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  ></path>
                 </svg>
               </button>
             )}
@@ -477,7 +624,6 @@ function AuthenticatedContent({ isSidebarOpen, setIsSidebarOpen, chatPanes }: {
             </button>
           </div>
         </form>
-
       </main>
     </>
   );

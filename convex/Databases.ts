@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { LawDatabase } from "./chatAI";
 import { api } from "./_generated/api";
 import { StorageId } from "convex/server";
 
@@ -16,12 +15,15 @@ export const linkStorageFileToDatabase = mutation({
     fileId: v.string(), // The Convex Storage file ID as a string
     isEnhanced: v.boolean(), // Whether this is an enhanced database
   },
-  handler: async (ctx, args): Promise<{ success: boolean; message: string; id?: string }> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ success: boolean; message: string; id?: string }> => {
     try {
       // Check if a database with this name already exists
       const existingDb = await ctx.db
         .query("Databases")
-        .withIndex("by_name", q => q.eq("name", args.name))
+        .withIndex("by_name", (q) => q.eq("name", args.name))
         .first();
 
       if (existingDb) {
@@ -73,16 +75,19 @@ export const uploadLawDatabase = mutation({
     file: v.any(), // The file to upload
     isEnhanced: v.boolean(), // Whether this is an enhanced database
   },
-  handler: async (ctx, args): Promise<{ success: boolean; message: string; id?: string }> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ success: boolean; message: string; id?: string }> => {
     try {
       // For file upload, we'd need to use a different approach with file objects
       // This function would be called from the client with a File object
       const fileId = args.file as StorageId;
-      
+
       // Check if a database with this name already exists
       const existingDb = await ctx.db
         .query("Databases")
-        .withIndex("by_name", q => q.eq("name", args.name))
+        .withIndex("by_name", (q) => q.eq("name", args.name))
         .first();
 
       if (existingDb) {
@@ -131,14 +136,28 @@ export const getLawDatabaseContentByName = query({
   args: {
     name: v.string(),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; database?: { id: string; name: string; displayName: string; content: any; isEnhanced: boolean; lastUpdated: number }; message?: string }> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    success: boolean;
+    database?: {
+      id: string;
+      name: string;
+      displayName: string;
+      content: any;
+      isEnhanced: boolean;
+      lastUpdated: number;
+    };
+    message?: string;
+  }> => {
     try {
       // Find the database entry
       const db = await ctx.db
         .query("Databases")
-        .withIndex("by_name", q => q.eq("name", args.name))
+        .withIndex("by_name", (q) => q.eq("name", args.name))
         .first();
-      
+
       if (!db) {
         return {
           success: false,
@@ -190,7 +209,10 @@ export const fetchAndCacheDatabaseContent = action({
     name: v.string(),
     fileId: v.string(),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; message?: string }> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ success: boolean; message?: string }> => {
     try {
       // Get the URL for the file
       const url = await ctx.storage.getUrl(args.fileId as StorageId);
@@ -256,13 +278,25 @@ export const getLawDatabaseByName = query({
   args: {
     name: v.string(),
   },
-  handler: async (ctx, args): Promise<Array<{ id: string; name: string; displayName: string; fileId: string; isEnhanced: boolean; lastUpdated: number }>> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      displayName: string;
+      fileId: string;
+      isEnhanced: boolean;
+      lastUpdated: number;
+    }>
+  > => {
     const databases = await ctx.db
       .query("Databases")
-      .withIndex("by_name", q => q.eq("name", args.name))
+      .withIndex("by_name", (q) => q.eq("name", args.name))
       .collect();
-      
-    return databases.map(db => ({
+
+    return databases.map((db) => ({
       id: db._id,
       name: db.name,
       displayName: db.displayName,
@@ -278,10 +312,20 @@ export const getLawDatabaseByName = query({
  */
 export const getAllDatabases = query({
   args: {},
-  handler: async (ctx): Promise<Array<{ id: string; name: string; displayName: string; isEnhanced: boolean; lastUpdated: string }>> => {
+  handler: async (
+    ctx,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      displayName: string;
+      isEnhanced: boolean;
+      lastUpdated: string;
+    }>
+  > => {
     const databases = await ctx.db.query("Databases").collect();
-    
-    return databases.map(db => ({
+
+    return databases.map((db) => ({
       id: db._id,
       name: db.name,
       displayName: db.displayName,
@@ -296,20 +340,32 @@ export const getAllDatabases = query({
  */
 export const listDatabases = query({
   args: {},
-  handler: async (ctx): Promise<{ success: boolean; message?: string; databases: Array<{ id: string; name: string; displayName: string; isEnhanced: boolean; lastUpdated: string }> }> => {
+  handler: async (
+    ctx,
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    databases: Array<{
+      id: string;
+      name: string;
+      displayName: string;
+      isEnhanced: boolean;
+      lastUpdated: string;
+    }>;
+  }> => {
     try {
       // Get databases directly from the database instead of calling getAllDatabases.handler
       const databases = await ctx.db.query("Databases").collect();
-      
+
       // Format the results
-      const formattedDatabases = databases.map(db => ({
+      const formattedDatabases = databases.map((db) => ({
         id: db._id,
         name: db.name,
         displayName: db.displayName,
         isEnhanced: db.isEnhanced,
         lastUpdated: new Date(db.lastUpdated).toISOString(),
       }));
-      
+
       return {
         success: true,
         databases: formattedDatabases,
